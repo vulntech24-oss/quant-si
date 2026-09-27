@@ -36,25 +36,25 @@ pub const SECRETS: &[SecretSpec] = &[
         name: "kite_access_token",
         provider: "Zerodha Kite Connect",
         label: "Access token (daily)",
-        help: "Kite access tokens expire every day. Paste today's token until the login flow is built.",
+        help: "Set by \"Login with Zerodha\" each day (tokens expire at 06:00 IST). You can also paste one.",
     },
     SecretSpec {
         name: "openai_api_key",
         provider: "OpenAI",
         label: "API key",
-        help: "Used by an OpenAI advisor once its adapter exists. Advisory only (INV-04).",
+        help: "For the OpenAI advisor (Settings → Advisory AI). Advisory only (INV-04).",
     },
     SecretSpec {
         name: "gemini_api_key",
         provider: "Google Gemini",
         label: "API key",
-        help: "Used by a Gemini advisor once its adapter exists. Advisory only (INV-04).",
+        help: "For the Gemini advisor (Settings → Advisory AI). Advisory only (INV-04).",
     },
     SecretSpec {
         name: "xai_api_key",
         provider: "xAI",
         label: "API key",
-        help: "Used by an xAI advisor once its adapter exists. Advisory only (INV-04).",
+        help: "For the xAI advisor (Settings → Advisory AI). Advisory only (INV-04).",
     },
     SecretSpec {
         name: "crypto_api_key",
@@ -67,6 +67,12 @@ pub const SECRETS: &[SecretSpec] = &[
         provider: "Crypto exchange",
         label: "API secret",
         help: "For the crypto venue once it is chosen and its adapter exists.",
+    },
+    SecretSpec {
+        name: "telegram_bot_token",
+        provider: "Telegram",
+        label: "Bot token",
+        help: "From @BotFather. Alerts and daily summaries go to the chat id in Settings → Notifications.",
     },
 ];
 

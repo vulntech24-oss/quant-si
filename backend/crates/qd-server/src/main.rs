@@ -96,29 +96,36 @@ async fn run() -> Result<(), String> {
         secrets_available = config.master_key.is_some(),
         "secrets store (set QD_MASTER_KEY or data_dir to enable)"
     );
-    let secrets = Arc::new(qd_store::settings::PgSecrets::new(
-        pool.clone(),
-        config.master_key.clone(),
-        stores.audit.clone(),
+    let runtime = Arc::new(qd_server::runtime::Runtime::new(
+        config.clone(),
+        stores.clone(),
+        clock.clone(),
     ));
-    let runtime = Arc::new(qd_server::runtime::Runtime {
-        config: config.clone(),
-        stores: stores.clone(),
-        clock: clock.clone(),
-    });
+    let secrets = runtime.secrets.clone();
     // Settings saved in the web UI are validated on every read; a bad one
     // stops the server here rather than failing later.
     runtime.effective().await.map_err(|e| e.to_string())?;
     let paper = Arc::new(qd_server::runtime::DynPaper(runtime.clone()));
     let ai: Arc<dyn qd_app::ports::AiAdvisory> =
         Arc::new(qd_server::runtime::DynAi(runtime.clone()));
+    let live = Arc::new(qd_server::kite::DynLive(runtime.clone()));
+    let kite = Arc::new(qd_server::kite::DynKite::new(runtime.clone(), live.clone()));
+    let notifier = Arc::new(
+        qd_server::notify::TelegramNotifier::new(runtime.clone(), qd_server::notify::TELEGRAM_BASE)
+            .map_err(|e| e.to_string())?,
+    );
 
-    // Reconciliation is against the paper venue when paper trading is on;
-    // with no venue at all, entries stay halted (INV-07).
+    // Reconciliation is against the paper venue when paper trading is on
+    // (with no venue at all, entries stay halted) and against Zerodha when a
+    // live book is configured (INV-07).
+    let reconcilers = qd_server::kite::AllReconcilers(vec![
+        paper.clone() as Arc<dyn qd_app::ports::Reconciler>,
+        live.clone() as Arc<dyn qd_app::ports::Reconciler>,
+    ]);
     let report = startup(
         &pool,
         stores.halts.as_ref(),
-        Some(paper.as_ref() as &dyn qd_app::ports::Reconciler),
+        Some(&reconcilers as &dyn qd_app::ports::Reconciler),
         Utc::now(),
     )
     .await
@@ -135,8 +142,21 @@ async fn run() -> Result<(), String> {
         runtime.clone(),
         paper_port.clone(),
         ai.clone(),
+        notifier.clone(),
         clock.clone(),
     );
+    qd_server::kite::spawn_schedules(
+        runtime.clone(),
+        kite.clone(),
+        live.clone(),
+        notifier.clone(),
+        clock.clone(),
+    );
+    let live_port: Option<Arc<dyn qd_app::ports::PaperTrading>> = config
+        .file
+        .live
+        .is_some()
+        .then(|| live.clone() as Arc<dyn qd_app::ports::PaperTrading>);
 
     let registry = qd_app::registry::StrategyRegistry::new(
         stores.registry.clone(),
@@ -156,6 +176,9 @@ async fn run() -> Result<(), String> {
         validator: Arc::new(qd_server::runtime::DynValidator(runtime.clone())),
         ai: Some(ai),
         reviewer: Arc::new(qd_server::runtime::DynReviewer(runtime.clone())),
+        live: live_port.clone(),
+        broker: Some(kite as Arc<dyn qd_app::ports::BrokerLink>),
+        notifier: Some(notifier.clone() as Arc<dyn qd_app::ports::Notifier>),
         evidence: stores.evidence.clone(),
         settings_admin: runtime.clone(),
         secrets,
@@ -167,6 +190,7 @@ async fn run() -> Result<(), String> {
             live_orders_compiled: qd_app::live::live_orders_compiled(),
             secure_cookies: config.file.environment == qd_app::live::Environment::Production,
             session_hours: config.file.session_hours,
+            live_account_id: config.file.live.as_ref().map(|l| l.account_id),
         },
         limiter: Arc::new(qd_api::auth::LoginLimiter::default()),
     };
@@ -174,6 +198,8 @@ async fn run() -> Result<(), String> {
         pool,
         halts: Arc::clone(&stores.halts) as Arc<dyn qd_app::ports::HaltStore>,
         paper: Some(paper_port),
+        live: live_port,
+        notifier: Some(notifier),
     };
     qd_server::http::spawn_alert_log(health.clone(), std::time::Duration::from_secs(300));
     let mut app = qd_api::router(api_state).merge(router(health));

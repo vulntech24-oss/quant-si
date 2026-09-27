@@ -4,8 +4,8 @@
 //! paper book, and derives alerts from it. The server exposes it as
 //! Prometheus text (`/metrics`, internal only), the API includes the alerts
 //! in `/api/status`, and a background task logs alert changes as JSON log
-//! events. External notification channels (email, chat) need provider docs
-//! and are not built.
+//! events; the server forwards them to Telegram when notifications are on.
+//! The live book (Zerodha), when configured, is watched like the paper book.
 
 use chrono::{DateTime, NaiveDate, Utc};
 use qd_domain::halt::HaltKind;
@@ -67,6 +67,8 @@ pub struct Health {
     pub entries_halted: bool,
     /// Paper book, when paper trading is configured.
     pub paper: Option<PaperHealth>,
+    /// Live book, when live trading is configured.
+    pub live: Option<PaperHealth>,
     /// Alerts, most severe first.
     pub alerts: Vec<Alert>,
 }
@@ -127,6 +129,7 @@ fn paper_health(state: &Value, now: DateTime<Utc>) -> PaperHealth {
 pub async fn collect(
     halts: &dyn HaltStore,
     paper: Option<&dyn PaperTrading>,
+    live: Option<&dyn PaperTrading>,
     now: DateTime<Utc>,
     settings: MonitorSettings,
 ) -> Health {
@@ -219,6 +222,41 @@ pub async fn collect(
             _ => {}
         }
     }
+    let live = match live {
+        None => None,
+        Some(l) => match l.state().await {
+            Ok(state) if state.get("configured") == Some(&Value::Bool(false)) => None,
+            Ok(state) => Some(paper_health(&state, now)),
+            Err(e) => {
+                alerts.push(Alert {
+                    severity: Severity::Critical,
+                    code: "live_state_unreadable",
+                    message: format!("The live book cannot be read: {e}"),
+                });
+                None
+            }
+        },
+    };
+    if let Some(l) = &live {
+        if !l.consistent {
+            alerts.push(Alert {
+                severity: Severity::Critical,
+                code: "live_book_inconsistent",
+                message: "The live book does not restore consistently; live runs are refused."
+                    .to_owned(),
+            });
+        }
+        if l.unprotected_positions > 0 {
+            alerts.push(Alert {
+                severity: Severity::Critical,
+                code: "live_unprotected_positions",
+                message: format!(
+                    "{} live position(s) have no working protective stop at the broker.",
+                    l.unprotected_positions
+                ),
+            });
+        }
+    }
     alerts.sort_by(|a, b| b.severity.cmp(&a.severity).then(a.code.cmp(b.code)));
     Health {
         at: now,
@@ -227,6 +265,7 @@ pub async fn collect(
         manual_rearm_halts: u32::try_from(manual).unwrap_or(u32::MAX),
         entries_halted: !known || active > 0,
         paper,
+        live,
         alerts,
     }
 }
@@ -306,6 +345,23 @@ pub fn prometheus(h: &Health) -> String {
             "qd_paper_working_orders",
             "Working paper orders.",
             p.working_orders.to_string(),
+        );
+    }
+    if let Some(l) = &h.live {
+        gauge(
+            "qd_live_book_consistent",
+            "Whether the live book restores consistently.",
+            flag(l.consistent).to_string(),
+        );
+        gauge(
+            "qd_live_open_positions",
+            "Open live positions.",
+            l.open_positions.to_string(),
+        );
+        gauge(
+            "qd_live_unprotected_positions",
+            "Live positions without a working protective stop.",
+            l.unprotected_positions.to_string(),
         );
     }
     out

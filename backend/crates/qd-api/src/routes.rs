@@ -68,6 +68,14 @@ pub fn router(state: ApiState) -> Router {
         .route("/paper", get(paper_state))
         .route("/paper/run", post(paper_run))
         .route("/account/live-armed", post(live_armed))
+        .route("/kite", get(kite_status))
+        .route("/kite/login", post(kite_login))
+        .route("/kite/callback", get(kite_callback))
+        .route("/kite/sync-bars", post(kite_sync_bars))
+        .route("/kite/sync-fills", post(kite_sync_fills))
+        .route("/live", get(live_state))
+        .route("/live/run", post(live_run))
+        .route("/notifications/test", post(notifications_test))
         .route("/events", get(events))
         .route("/openapi.yaml", get(openapi))
         .layer(middleware::from_fn(csrf_guard))
@@ -263,6 +271,7 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
     let health = qd_app::monitor::collect(
         state.halts.as_ref(),
         state.paper.as_deref(),
+        state.live.as_deref(),
         now,
         qd_app::monitor::MonitorSettings::default(),
     )
@@ -270,6 +279,8 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
     Ok(Json(json!({
         "alerts": health.alerts,
         "paper": health.paper,
+        "live": health.live,
+        "live_account_id": state.settings.live_account_id,
         "now": now,
         "environment": state.settings.environment,
         "account": account,
@@ -915,12 +926,178 @@ async fn live_armed(
     if body.armed {
         caller.require_step_up(state.clock.now())?;
     }
+    // With a live account configured, that is the account armed (ADR 0014).
+    let account = state
+        .settings
+        .live_account_id
+        .unwrap_or(state.settings.account_id);
     state
         .accounts
-        .set_live_armed(state.settings.account_id, body.armed, &caller.actor())
+        .set_live_armed(account, body.armed, &caller.actor())
         .await
         .map_err(|e| ApiError::Conflict(e.to_string()))?;
     Ok(Json(json!({ "armed": body.armed })))
+}
+
+// ---------- Zerodha Kite and live trading (ADR 0014) ----------
+
+fn broker(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::BrokerLink>, ApiError> {
+    state
+        .broker
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("the Zerodha connection is not available".to_owned()))
+}
+
+async fn kite_status(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    broker(&state)?.status().await.map(Json).map_err(internal)
+}
+
+/// Starts "Login with Zerodha": the owner is sent to Zerodha with a
+/// one-time state that the callback checks.
+async fn kite_login(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let url = broker(&state)?
+        .login_url(&caller.actor())
+        .await
+        .map_err(|e| ApiError::Conflict(e.0))?;
+    Ok(Json(json!({ "url": url })))
+}
+
+#[derive(Deserialize)]
+struct KiteCallback {
+    request_token: Option<String>,
+    state: Option<String>,
+    status: Option<String>,
+}
+
+/// Zerodha redirects here after a login. The session cookie is `SameSite=
+/// Strict`, so it does not come with this cross-site redirect: the one-time
+/// state proves the login was started by the owner.
+async fn kite_callback(
+    State(state): State<ApiState>,
+    Query(query): Query<KiteCallback>,
+) -> Response {
+    let result = match (&query.request_token, &query.state, query.status.as_deref()) {
+        (Some(token), Some(nonce), Some("success") | None) => match broker(&state) {
+            Ok(b) => b.complete_login(nonce, token).await.map_err(|e| e.0),
+            Err(e) => Err(e.to_string()),
+        },
+        _ => Err("Zerodha did not complete the login".to_owned()),
+    };
+    let target = match result {
+        Ok(_) => "/#/broker?login=ok".to_owned(),
+        Err(reason) => {
+            tracing::warn!(reason = %reason, "Zerodha login failed");
+            "/#/broker?login=failed".to_owned()
+        }
+    };
+    (
+        axum::http::StatusCode::SEE_OTHER,
+        [(header::LOCATION, target)],
+    )
+        .into_response()
+}
+
+async fn kite_sync_bars(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let b = broker(&state)?;
+    state
+        .audit
+        .record(&caller.actor(), "kite.sync_bars", json!({}))
+        .await
+        .map_err(internal)?;
+    b.sync_bars()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+/// Applies fills and places protection: risk-reducing only, so no step-up.
+async fn kite_sync_fills(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let b = broker(&state)?;
+    state
+        .audit
+        .record(&caller.actor(), "kite.sync_fills", json!({}))
+        .await
+        .map_err(internal)?;
+    b.sync_fills()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+fn live(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::PaperTrading>, ApiError> {
+    state
+        .live
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("live trading is not configured".to_owned()))
+}
+
+async fn live_state(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    live(&state)?.state().await.map(Json).map_err(internal)
+}
+
+/// A live daily cycle can place real orders: owner and step-up (INV-14's
+/// other conditions are checked again in the Order Gateway).
+async fn live_run(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<PaperRunBody>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    caller.require_step_up(state.clock.now())?;
+    if body.through > state.clock.now().date_naive() {
+        return Err(ApiError::BadRequest(
+            "through cannot be in the future".to_owned(),
+        ));
+    }
+    let runner = live(&state)?;
+    state
+        .audit
+        .record(
+            &caller.actor(),
+            "live.run",
+            json!({ "through": body.through }),
+        )
+        .await
+        .map_err(internal)?;
+    runner
+        .run_through(body.through)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+async fn notifications_test(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let notifier = state
+        .notifier
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("notifications are not available".to_owned()))?;
+    notifier
+        .notify("QuantDesk test message: notifications work.")
+        .await
+        .map_err(|e| ApiError::Conflict(e.0))?;
+    Ok(Json(json!({ "sent": true })))
 }
 
 async fn openapi() -> impl IntoResponse {

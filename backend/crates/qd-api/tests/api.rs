@@ -94,6 +94,44 @@ impl qd_app::ports::SettingsAdmin for FakeSettingsAdmin {
     }
 }
 
+/// Accepts only the login state "good-state"; the real link is tested in qd-server.
+struct FakeBrokerLink;
+
+#[async_trait::async_trait]
+impl qd_app::ports::BrokerLink for FakeBrokerLink {
+    async fn status(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({ "enabled": true }))
+    }
+    async fn login_url(&self, _: &str) -> Result<String, StoreError> {
+        Ok("https://kite.zerodha.com/connect/login?v=3&api_key=k".to_owned())
+    }
+    async fn complete_login(&self, state: &str, _: &str) -> Result<serde_json::Value, StoreError> {
+        if state == "good-state" {
+            Ok(serde_json::json!({ "user_id": "AB1234" }))
+        } else {
+            Err(StoreError("unknown or expired login state".to_owned()))
+        }
+    }
+    async fn sync_bars(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({ "instruments": [] }))
+    }
+    async fn sync_fills(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({}))
+    }
+}
+
+/// Records messages.
+#[derive(Default)]
+struct FakeNotifier(std::sync::Mutex<Vec<String>>);
+
+#[async_trait::async_trait]
+impl qd_app::ports::Notifier for FakeNotifier {
+    async fn notify(&self, text: &str) -> Result<(), StoreError> {
+        self.0.lock().unwrap().push(text.to_owned());
+        Ok(())
+    }
+}
+
 const OWNER_PASSWORD: &str = "correct horse battery staple";
 const VIEWER_PASSWORD: &str = "viewer password 123";
 
@@ -101,6 +139,7 @@ struct App {
     router: Router,
     stores: Stores,
     account: AccountId,
+    notifier: Arc<FakeNotifier>,
 }
 
 async fn app(pool: PgPool) -> App {
@@ -136,7 +175,11 @@ async fn app(pool: PgPool) -> App {
         )
         .await
         .unwrap();
+    let notifier = Arc::new(FakeNotifier::default());
     let state = ApiState {
+        live: None,
+        broker: Some(Arc::new(FakeBrokerLink)),
+        notifier: Some(notifier.clone()),
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),
@@ -175,6 +218,7 @@ async fn app(pool: PgPool) -> App {
             live_orders_compiled: false,
             secure_cookies: true,
             session_hours: 12,
+            live_account_id: None,
         },
         limiter: Arc::new(auth::LoginLimiter::default()),
     };
@@ -182,6 +226,7 @@ async fn app(pool: PgPool) -> App {
         router: router(state),
         stores,
         account,
+        notifier,
     }
 }
 
@@ -804,4 +849,110 @@ async fn settings_changes_need_the_owner_and_a_step_up(pool: PgPool) {
     )
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn zerodha_login_needs_the_owner_and_the_callback_needs_the_one_time_state(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let (status, _, _) = call(&app, "POST", "/api/kite/login", Some(&viewer), None, true).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = call(&app, "POST", "/api/kite/login", Some(&owner), None, false).await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "CSRF header required");
+    let (status, _, body) = call(&app, "POST", "/api/kite/login", Some(&owner), None, true).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        body["url"]
+            .as_str()
+            .unwrap()
+            .starts_with("https://kite.zerodha.com/")
+    );
+
+    // The redirect back from Zerodha carries no session cookie.
+    for (query, outcome) in [
+        (
+            "request_token=abc&state=good-state&status=success",
+            "login=ok",
+        ),
+        (
+            "request_token=abc&state=forged&status=success",
+            "login=failed",
+        ),
+        (
+            "request_token=abc&state=good-state&status=cancelled",
+            "login=failed",
+        ),
+        ("state=good-state", "login=failed"),
+    ] {
+        let (status, headers, _) = call(
+            &app,
+            "GET",
+            &format!("/api/kite/callback?{query}"),
+            None,
+            None,
+            false,
+        )
+        .await;
+        assert_eq!(status, StatusCode::SEE_OTHER, "{query}");
+        let location = headers.get(header::LOCATION).unwrap().to_str().unwrap();
+        assert!(location.ends_with(outcome), "{query} -> {location}");
+    }
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn invariant_14_a_live_run_needs_the_owner_and_a_step_up(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let body = serde_json::json!({ "through": "2026-03-13" });
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/live/run",
+        Some(&viewer),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, err) = call(
+        &app,
+        "POST",
+        "/api/live/run",
+        Some(&owner),
+        Some(body),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(err["code"], "step_up_required");
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn the_test_notification_is_owner_only(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/notifications/test",
+        Some(&viewer),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/notifications/test",
+        Some(&owner),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(app.notifier.0.lock().unwrap().len(), 1);
 }

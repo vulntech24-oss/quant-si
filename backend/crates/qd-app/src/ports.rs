@@ -507,3 +507,29 @@ pub trait SettingsAdmin: Send + Sync {
     /// Returns a section to its configuration-file default.
     async fn reset(&self, section: &str, actor: &str) -> Result<serde_json::Value, SettingsError>;
 }
+
+/// The live broker connection (Zerodha Kite): login, data and live runs.
+#[async_trait]
+pub trait BrokerLink: Send + Sync {
+    /// Connection status: configured, keys present, logged in as whom.
+    async fn status(&self) -> Result<serde_json::Value, StoreError>;
+    /// Starts a login: the URL to send the owner to (with a one-time state).
+    async fn login_url(&self, actor: &str) -> Result<String, StoreError>;
+    /// Finishes a login from the broker's redirect.
+    async fn complete_login(
+        &self,
+        state: &str,
+        request_token: &str,
+    ) -> Result<serde_json::Value, StoreError>;
+    /// Imports completed daily bars for instruments with a broker reference.
+    async fn sync_bars(&self) -> Result<serde_json::Value, StoreError>;
+    /// Applies broker fills now, protecting filled entries (market hours).
+    async fn sync_fills(&self) -> Result<serde_json::Value, StoreError>;
+}
+
+/// Messages to the owner outside the web UI (Telegram).
+#[async_trait]
+pub trait Notifier: Send + Sync {
+    /// Sends one plain-text message.
+    async fn notify(&self, text: &str) -> Result<(), StoreError>;
+}

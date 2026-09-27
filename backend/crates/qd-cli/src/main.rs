@@ -438,11 +438,11 @@ fn runtime(
 ) -> Result<std::sync::Arc<qd_server::runtime::Runtime>, String> {
     let config = qd_server::config::ServerConfig::load(config, &|k| std::env::var(k).ok())
         .map_err(|e| e.to_string())?;
-    Ok(std::sync::Arc::new(qd_server::runtime::Runtime {
+    Ok(std::sync::Arc::new(qd_server::runtime::Runtime::new(
         config,
-        stores: stores.clone(),
-        clock: std::sync::Arc::new(qd_server::SystemClock),
-    }))
+        stores.clone(),
+        std::sync::Arc::new(qd_server::SystemClock),
+    )))
 }
 
 async fn paper(

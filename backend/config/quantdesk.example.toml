@@ -39,8 +39,8 @@ start_date = "2026-10-01"       # first trading date processed
 
 # Advisory AI (ADR 0011). Shadow mode only: advice is journaled and scored,
 # and never changes orders, sizes, limits, parameters or halts (INV-04).
-# Disabled by default. The only advisor today is the deterministic checklist;
-# provider adapters (OpenAI, Gemini, xAI) come after their docs are read.
+# Disabled by default. The deterministic checklist always runs; hosted
+# advisors run when switched on here or in Settings and their API key is set.
 [ai]
 enabled = false
 # max_calls_per_day = 200        # per advisor
@@ -51,3 +51,41 @@ enabled = false
 # min_comfortable_evidence = 60
 # max_stop_distance = "0.10"
 # max_cost_share_of_reward = "0.20"
+# [ai.openai]                    # key: Settings → API keys → OpenAI
+# enabled = false
+# model = "gpt-6-astra"
+# [ai.gemini]
+# enabled = false
+# model = "gemini-3.8-flash"
+# [ai.xai]
+# enabled = false
+# model = "grok-4.7"
+
+# Zerodha Kite (ADR 0014). Also editable in Settings. Keys go in Settings →
+# API keys; log in daily with "Login with Zerodha" (tokens expire 06:00 IST).
+# [kite]
+# enabled = false
+# user_id = "AB1234"             # your Zerodha client id; other logins are refused
+# market_protection = -1         # MARKET/SL-M orders: -1 automatic, or 1-100 (%)
+# stop_limit_buffer = "0.01"     # GTT stop leg limit, 1% beyond the stop
+# variety = "auto"               # auto | regular | amo
+# sync_bars_utc = "11:00:00"     # daily bar import (16:30 IST)
+# history_days = 600
+# sync_fills_minutes = 5         # fill checks during market hours (live only)
+
+# Telegram (ADR 0014). Bot token in Settings → API keys.
+# [notifications]
+# enabled = false
+# telegram_chat_id = "123456789"
+# min_severity = "critical"      # or "warning"
+# daily_summary = true
+
+# Live trading at Zerodha (ADR 0014). Server file only: never editable in the
+# web UI. Real orders also need the live-orders build, environment =
+# "production", live_trading_enabled = true, verified costs, the live account
+# armed with your password, and a version at SmallCapital or Full (INV-14).
+# [live]
+# account_id = "00000000-0000-7000-8000-000000000002"   # an account of mode live
+# initial_equity = "100000"
+# start_date = "2026-11-02"
+# daily_run_utc = "11:30:00"     # after the bar import; absent = manual only

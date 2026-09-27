@@ -899,6 +899,8 @@ pub struct Stores {
     pub evidence: Arc<PgEvidence>,
     /// Settings saved from the web UI.
     pub settings: Arc<settings::PgSettings>,
+    /// The pool the adapters share.
+    pub pool: PgPool,
 }
 
 impl Stores {
@@ -916,6 +918,7 @@ impl Stores {
             locks: Arc::new(PgRunLock::new(pool.clone())),
             evidence: Arc::new(PgEvidence::new(pool.clone())),
             settings: Arc::new(settings::PgSettings::new(pool.clone())),
+            pool: pool.clone(),
         }
     }
 }

@@ -43,6 +43,8 @@ pub struct ApiSettings {
     pub secure_cookies: bool,
     /// Session lifetime in hours.
     pub session_hours: i64,
+    /// The live account, when live trading is configured (ADR 0014).
+    pub live_account_id: Option<AccountId>,
 }
 
 /// Everything the handlers use.
@@ -76,6 +78,12 @@ pub struct ApiState {
     pub settings_admin: Arc<dyn qd_app::ports::SettingsAdmin>,
     /// Write-only secrets (INV-15).
     pub secrets: Arc<dyn qd_app::ports::SecretStore>,
+    /// The live book (Zerodha), when configured.
+    pub live: Option<Arc<dyn PaperTrading>>,
+    /// The broker connection (Zerodha Kite login, data, fills).
+    pub broker: Option<Arc<dyn qd_app::ports::BrokerLink>>,
+    /// Owner notifications (Telegram).
+    pub notifier: Option<Arc<dyn qd_app::ports::Notifier>>,
     /// Paper review and calibration.
     pub reviewer: Arc<dyn qd_app::review::Reviewer>,
     /// Clock.

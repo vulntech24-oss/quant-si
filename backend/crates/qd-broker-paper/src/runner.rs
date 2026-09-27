@@ -43,7 +43,6 @@ use qd_domain::costs::CostModel;
 use qd_domain::halt::{Halt, HaltKind, HaltScope};
 use qd_domain::ids::{AccountId, HaltId, InstrumentId, SnapshotId, StrategyVersionId};
 use qd_domain::instrument::InstrumentSpec;
-use qd_domain::lifecycle::order::OrderIntentState;
 use qd_domain::lifecycle::strategy::StrategyStage;
 use qd_domain::market::Bar;
 use qd_domain::num::{Currency, Money};
@@ -51,7 +50,7 @@ use qd_domain::proposal::AccountMode;
 use qd_risk::config::RiskConfig;
 use rust_decimal::Decimal;
 use serde::Serialize;
-use serde_json::{Value, json};
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::venue::PaperBroker;
@@ -414,34 +413,7 @@ impl PaperRunner {
     /// The current book as JSON: account state, positions, working orders.
     pub async fn state_json(&self) -> Result<Value, PaperError> {
         let state = self.load_state().await?;
-        let consistent = state.check().map_err(|e| e.to_string()).err();
-        let orders: Vec<Value> = state
-            .intents
-            .iter()
-            .filter(|r| {
-                matches!(
-                    r.state,
-                    OrderIntentState::PendingSubmit
-                        | OrderIntentState::Submitted
-                        | OrderIntentState::PartiallyFilled
-                        | OrderIntentState::Unknown
-                )
-            })
-            .map(|r| {
-                json!({
-                    "intent": r.intent,
-                    "state": r.state,
-                    "filled": r.filled,
-                })
-            })
-            .collect();
-        Ok(json!({
-            "account": self.settings.account,
-            "last_day": state.last_day,
-            "positions": state.positions,
-            "working_orders": orders,
-            "inconsistency": consistent,
-        }))
+        Ok(runs::book_json(self.settings.account, &state))
     }
 }
 

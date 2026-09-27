@@ -144,6 +144,8 @@ async fn health_and_readiness_report_the_halt_state(pool: PgPool) {
         pool,
         halts: halts.clone() as Arc<dyn HaltStore>,
         paper: None,
+        live: None,
+        notifier: None,
     });
     let health = app
         .clone()

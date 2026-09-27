@@ -51,6 +51,7 @@ async fn a_healthy_book_raises_no_alert() {
     let h = collect(
         &InMemoryHaltStore::new(),
         Some(&paper),
+        None,
         now(),
         MonitorSettings::default(),
     )
@@ -97,7 +98,14 @@ async fn problems_raise_alerts_most_severe_first() {
         "working_orders": [],
         "inconsistency": "order ledger and positions disagree"
     }));
-    let h = collect(&halts, Some(&paper), now(), MonitorSettings::default()).await;
+    let h = collect(
+        &halts,
+        Some(&paper),
+        None,
+        now(),
+        MonitorSettings::default(),
+    )
+    .await;
     let codes: Vec<&str> = h.alerts.iter().map(|a| a.code).collect();
     assert_eq!(
         codes,
@@ -119,9 +127,41 @@ async fn problems_raise_alerts_most_severe_first() {
 
 #[tokio::test]
 async fn invariant_06_an_unreadable_kill_switch_is_a_critical_alert_and_halts() {
-    let h = collect(&BrokenHalts, None, now(), MonitorSettings::default()).await;
+    let h = collect(&BrokenHalts, None, None, now(), MonitorSettings::default()).await;
     assert!(h.entries_halted);
     assert!(!h.halt_state_known);
     assert_eq!(h.alerts[0].code, "halt_state_unknown");
     assert_eq!(h.alerts[0].severity, Severity::Critical);
+}
+
+#[tokio::test]
+async fn an_unprotected_live_position_is_a_critical_alert() {
+    let live = FakePaper(json!({
+        "last_day": null,
+        "positions": [ { "state": "unprotected" } ],
+        "working_orders": [],
+        "inconsistency": null
+    }));
+    let h = collect(
+        &InMemoryHaltStore::new(),
+        None,
+        Some(&live),
+        now(),
+        MonitorSettings::default(),
+    )
+    .await;
+    let codes: Vec<&str> = h.alerts.iter().map(|a| a.code).collect();
+    assert_eq!(codes, vec!["live_unprotected_positions"]);
+    assert!(prometheus(&h).contains("qd_live_unprotected_positions 1"));
+    // A live book not configured is not watched.
+    let off = FakePaper(json!({ "configured": false }));
+    let h = collect(
+        &InMemoryHaltStore::new(),
+        None,
+        Some(&off),
+        now(),
+        MonitorSettings::default(),
+    )
+    .await;
+    assert!(h.live.is_none() && h.alerts.is_empty());
 }

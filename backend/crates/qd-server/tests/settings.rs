@@ -24,11 +24,11 @@ fn runtime(pool: &PgPool) -> Arc<Runtime> {
         (k == "QD_DATABASE_URL").then(|| "postgres://unused".to_owned())
     })
     .unwrap();
-    Arc::new(Runtime {
+    Arc::new(Runtime::new(
         config,
-        stores: Stores::new(pool),
-        clock: Arc::new(qd_server::SystemClock),
-    })
+        Stores::new(pool),
+        Arc::new(qd_server::SystemClock),
+    ))
 }
 
 fn values(pairs: &[(&str, Value)]) -> Map<String, Value> {

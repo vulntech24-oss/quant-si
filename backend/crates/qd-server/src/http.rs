@@ -24,6 +24,10 @@ pub struct HealthState {
     pub halts: Arc<dyn HaltStore>,
     /// The paper book, when paper trading is configured.
     pub paper: Option<Arc<dyn qd_app::ports::PaperTrading>>,
+    /// The live book, when live trading is configured.
+    pub live: Option<Arc<dyn qd_app::ports::PaperTrading>>,
+    /// Where raised alerts are forwarded (Telegram, when switched on).
+    pub notifier: Option<Arc<crate::notify::TelegramNotifier>>,
 }
 
 #[derive(Serialize)]
@@ -103,6 +107,7 @@ async fn metrics(State(state): State<HealthState>) -> impl IntoResponse {
     let health = qd_app::monitor::collect(
         state.halts.as_ref(),
         state.paper.as_deref(),
+        state.live.as_deref(),
         Utc::now(),
         qd_app::monitor::MonitorSettings::default(),
     )
@@ -127,7 +132,7 @@ pub fn router(state: HealthState) -> Router {
 
 /// Logs alert changes as structured events every `interval`: a raised
 /// critical alert at error level, a warning at warn level, a cleared one at
-/// info. A log shipper can turn these into notifications.
+/// info. Raised alerts also go to Telegram when notifications are on.
 pub fn spawn_alert_log(state: HealthState, interval: std::time::Duration) {
     tokio::spawn(async move {
         let mut previous: std::collections::HashSet<qd_app::monitor::Alert> =
@@ -136,6 +141,7 @@ pub fn spawn_alert_log(state: HealthState, interval: std::time::Duration) {
             let health = qd_app::monitor::collect(
                 state.halts.as_ref(),
                 state.paper.as_deref(),
+                state.live.as_deref(),
                 Utc::now(),
                 qd_app::monitor::MonitorSettings::default(),
             )
@@ -149,6 +155,9 @@ pub fn spawn_alert_log(state: HealthState, interval: std::time::Duration) {
                     qd_app::monitor::Severity::Warning => {
                         tracing::warn!(alert = alert.code, message = %alert.message, "alert raised");
                     }
+                }
+                if let Some(n) = &state.notifier {
+                    n.alert(alert).await;
                 }
             }
             for alert in previous.difference(&current) {

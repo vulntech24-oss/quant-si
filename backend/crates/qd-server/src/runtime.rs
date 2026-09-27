@@ -2,7 +2,8 @@
 //! settings saved from the web UI override them, and every run reads the
 //! effective values. No restart is needed after a change.
 //!
-//! Editable sections: `paper`, `risk`, `ai`, `validation`, `review`. Each
+//! Editable sections: `paper`, `risk`, `ai`, `kite`, `notifications`,
+//! `validation`, `review`. Each
 //! save is validated through the same typed constructors the files use,
 //! needs the owner's step-up (checked by the API), is stored as a new
 //! append-only version, and is audited with old and new values.
@@ -32,10 +33,12 @@ use qd_risk::config::{RiskConfig, RiskConfigData};
 use qd_store::Stores;
 use serde_json::{Map, Value, json};
 
-use crate::config::{AiConfig, PaperConfig, ServerConfig};
+use crate::config::{AiConfig, KiteConfig, NotificationsConfig, PaperConfig, ServerConfig};
+use qd_app::ports::SecretReader;
+use qd_store::settings::PgSecrets;
 
 /// The editable sections, in display order.
-pub const SECTIONS: [(&str, &str, &str); 5] = [
+pub const SECTIONS: [(&str, &str, &str); 7] = [
     (
         "paper",
         "Paper trading",
@@ -50,6 +53,16 @@ pub const SECTIONS: [(&str, &str, &str); 5] = [
         "ai",
         "Advisory AI",
         "Shadow mode only: advice never changes orders, sizes, limits or halts (INV-04).",
+    ),
+    (
+        "kite",
+        "Zerodha Kite",
+        "Market data, daily login and order settings. Live orders also need the server's live settings (INV-14).",
+    ),
+    (
+        "notifications",
+        "Notifications",
+        "Telegram messages for alerts and daily summaries. The bot token is under API keys.",
     ),
     (
         "validation",
@@ -76,16 +89,44 @@ pub struct Effective {
     pub validation: ValidationCriteria,
     /// Paper-review criteria.
     pub review: ReviewCriteria,
+    /// Zerodha Kite connection.
+    pub kite: KiteConfig,
+    /// Notifications.
+    pub notifications: NotificationsConfig,
 }
 
-/// The server's runtime: file configuration, stores and clock.
+/// The server's runtime: file configuration, stores, secrets and clock.
 pub struct Runtime {
     /// Configuration from the files.
     pub config: ServerConfig,
     /// Stores.
     pub stores: Stores,
+    /// Encrypted secrets (read by server-side adapters only).
+    pub secrets: Arc<PgSecrets>,
+    /// The Kite API base ([`qd_broker_kite::client::API_BASE`]; tests use a fake).
+    pub kite_base: String,
     /// Clock.
     pub clock: Arc<dyn Clock>,
+}
+
+impl Runtime {
+    /// A runtime over the stores, with the secrets store keyed by the
+    /// configuration's master key.
+    #[must_use]
+    pub fn new(config: ServerConfig, stores: Stores, clock: Arc<dyn Clock>) -> Self {
+        let secrets = Arc::new(PgSecrets::new(
+            stores.pool.clone(),
+            config.master_key.clone(),
+            stores.audit.clone(),
+        ));
+        Self {
+            config,
+            stores,
+            secrets,
+            kite_base: qd_broker_kite::client::API_BASE.to_owned(),
+            clock,
+        }
+    }
 }
 
 impl std::fmt::Debug for Runtime {
@@ -155,6 +196,17 @@ fn validate_section(section: &str, value: &Value) -> Result<Value, String> {
             c.validate()?;
             serde_json::to_value(&c).map_err(|e| bad(&e))
         }
+        "kite" => {
+            let c: KiteConfig = serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
+            c.validate()?;
+            serde_json::to_value(&c).map_err(|e| bad(&e))
+        }
+        "notifications" => {
+            let c: NotificationsConfig =
+                serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
+            c.validate()?;
+            serde_json::to_value(&c).map_err(|e| bad(&e))
+        }
         other => Err(format!("unknown settings section {other}")),
     }
 }
@@ -178,6 +230,8 @@ impl Runtime {
             "ai" => serde_json::to_value(&c.file.ai).map_err(error),
             "validation" => serde_json::to_value(&c.validation).map_err(error),
             "review" => serde_json::to_value(&c.review).map_err(error),
+            "kite" => serde_json::to_value(&c.file.kite).map_err(error),
+            "notifications" => serde_json::to_value(&c.file.notifications).map_err(error),
             other => Err(StoreError(format!("unknown settings section {other}"))),
         }
     }
@@ -228,6 +282,8 @@ impl Runtime {
             ai: serde_json::from_value(get("ai")?).map_err(error)?,
             validation: serde_json::from_value(get("validation")?).map_err(error)?,
             review: serde_json::from_value(get("review")?).map_err(error)?,
+            kite: serde_json::from_value(get("kite")?).map_err(error)?,
+            notifications: serde_json::from_value(get("notifications")?).map_err(error)?,
         })
     }
 
@@ -277,8 +333,44 @@ impl Runtime {
         if !e.ai.enabled {
             return Ok(None);
         }
-        let advisors: Vec<Arc<dyn qd_ai::advisor::Advisor>> =
+        let mut advisors: Vec<Arc<dyn qd_ai::advisor::Advisor>> =
             vec![Arc::new(ChecklistAdvisor::new(e.ai.checklist.clone()))];
+        for (provider, config, key_name) in [
+            (
+                qd_ai_providers::Provider::OpenAi,
+                &e.ai.openai,
+                "openai_api_key",
+            ),
+            (
+                qd_ai_providers::Provider::Gemini,
+                &e.ai.gemini,
+                "gemini_api_key",
+            ),
+            (qd_ai_providers::Provider::Xai, &e.ai.xai, "xai_api_key"),
+        ] {
+            if !config.enabled {
+                continue;
+            }
+            let Some(key) = self.secret(key_name).await else {
+                tracing::warn!(
+                    provider = provider.code(),
+                    "advisor enabled without its API key; skipped"
+                );
+                continue;
+            };
+            match qd_ai_providers::ProviderAdvisor::new(
+                provider,
+                &config.model,
+                provider.default_base(),
+                key,
+                std::time::Duration::from_secs(e.ai.timeout_seconds),
+            ) {
+                Ok(a) => advisors.push(Arc::new(a)),
+                Err(err) => {
+                    tracing::warn!(provider = provider.code(), error = %err, "advisor not built")
+                }
+            }
+        }
         Ok(Some(AiService {
             orchestrator: AiOrchestrator::new(
                 advisors,
@@ -292,6 +384,75 @@ impl Runtime {
             ),
             reader: self.stores.journal.clone(),
         }))
+    }
+
+    /// A secret's value, if stored and readable. Server-side adapters only.
+    pub async fn secret(&self, name: &str) -> Option<String> {
+        match self.secrets.get(name).await {
+            Ok(value) => value.map(|v| v.expose().to_owned()),
+            Err(e) => {
+                tracing::warn!(secret = name, error = %e, "secret unreadable");
+                None
+            }
+        }
+    }
+
+    /// A Kite client with today's session, for the effective settings.
+    pub async fn kite_client(&self) -> Result<qd_broker_kite::client::KiteClient, StoreError> {
+        let e = self.effective().await?;
+        if !e.kite.enabled {
+            return Err(StoreError(
+                "the Zerodha connection is off (Settings → Zerodha Kite)".to_owned(),
+            ));
+        }
+        let key = self.secret("kite_api_key").await.ok_or_else(|| {
+            StoreError("the Kite API key is not set (Settings → API keys)".to_owned())
+        })?;
+        let token = self.secret("kite_access_token").await;
+        qd_broker_kite::client::KiteClient::new(
+            &self.kite_base,
+            &key,
+            token,
+            std::time::Duration::from_secs(15),
+        )
+        .map_err(error)
+    }
+
+    /// The live runner, when `[live]` is configured.
+    pub async fn live_runner(
+        &self,
+    ) -> Result<Option<qd_broker_kite::runner::LiveRunner>, StoreError> {
+        let Some(live) = &self.config.file.live else {
+            return Ok(None);
+        };
+        let e = self.effective().await?;
+        let s = &self.stores;
+        let deps = qd_broker_kite::runner::LiveDeps {
+            journal: s.journal.clone(),
+            reader: s.journal.clone(),
+            halts: s.halts.clone(),
+            market: s.market.clone(),
+            registry: self.registry(),
+            accounts: s.accounts.clone(),
+            costs: Arc::new(self.config.costs.clone()),
+            risk: e.risk,
+            evidence: Arc::new(StoreEvidenceLoader(s.evidence.clone())),
+            lock: s.locks.clone(),
+            clock: self.clock.clone(),
+            live: self.config.live,
+        };
+        let settings = qd_broker_kite::runner::LiveSettings {
+            account: live.account_id,
+            initial_equity: live.initial_equity,
+            start: live.start_date,
+            close_time_utc: live.close_time_utc,
+            slippage_ticks: live.slippage_ticks,
+            warm_up_days: live.warm_up_days,
+            calendar_version: "unversioned".to_owned(),
+        };
+        qd_broker_kite::runner::LiveRunner::new(deps, settings)
+            .map(Some)
+            .map_err(error)
     }
 
     /// The daily paper run time, if paper trading is on and scheduled.
@@ -518,7 +679,7 @@ fn set_path(root: &mut Value, key: &str, value: Value) {
 }
 
 /// Fields whose value may be empty (null) and what they hold then.
-const NULLABLE_KINDS: [(&str, &str); 1] = [("daily_run_utc", "time")];
+const NULLABLE_KINDS: [(&str, &str); 2] = [("daily_run_utc", "time"), ("sync_bars_utc", "time")];
 
 fn kind_of(key: &str, value: &Value) -> &'static str {
     let is_digits = |s: &str| s.chars().all(|c| c.is_ascii_digit());
@@ -578,6 +739,33 @@ fn describe(section: &str, key: &str) -> (String, Option<&'static str>) {
             Some("Advice is journaled and scored only; it never changes a decision.")
         }
         ("ai", "max_calls_per_day") => Some("Per advisor, per UTC day; caps provider cost."),
+        ("ai", "openai.enabled" | "gemini.enabled" | "xai.enabled") => Some(
+            "Also needs the provider's API key. Sends the decision packet only: no equity, sizes or keys.",
+        ),
+        ("ai", "openai.model" | "gemini.model" | "xai.model") => {
+            Some("Model name as the provider lists it; a new model is scored as a new advisor.")
+        }
+        ("kite", "enabled") => Some("Data import, daily login and fill checks at Zerodha."),
+        ("kite", "user_id") => Some("Your Zerodha client id; a login as anyone else is refused."),
+        ("kite", "market_protection") => Some(
+            "Required on market and stop-market orders: -1 lets Zerodha choose, or 1 to 100 (%).",
+        ),
+        ("kite", "stop_limit_buffer") => Some(
+            "The GTT stop leg is a limit order this far beyond the stop (0.01 = 1%), so it fills after a gap.",
+        ),
+        ("kite", "variety") => Some("auto: regular while the exchange is open, amo otherwise."),
+        ("kite", "sync_bars_utc") => {
+            Some("Daily bar import time (UTC); 11:00 UTC is 16:30 IST. Empty: manual only.")
+        }
+        ("kite", "history_days") => Some("Days of history fetched when an instrument has none."),
+        ("kite", "sync_fills_minutes") => Some(
+            "During market hours, fills are checked this often so protection goes out at once.",
+        ),
+        ("notifications", "enabled") => Some("Sends alerts and daily summaries to Telegram."),
+        ("notifications", "telegram_chat_id") => Some(
+            "Your chat id with the bot (send it a message, then read getUpdates), or @channel.",
+        ),
+        ("notifications", "min_severity") => Some("critical, or warning to also get warnings."),
         _ => None,
     };
     let label = key

@@ -23,6 +23,39 @@ use crate::registry::StrategyRegistry;
 use crate::restore::{RestoreError, RestoredState, STATE_KINDS};
 use crate::session::{InstrumentData, StrategySlot};
 
+/// A restored book as JSON: last day, positions, working orders and any
+/// inconsistency (the paper and live state endpoints).
+#[must_use]
+pub fn book_json(account: AccountId, state: &RestoredState) -> serde_json::Value {
+    use qd_domain::lifecycle::order::OrderIntentState as S;
+    let consistent = state.check().map_err(|e| e.to_string()).err();
+    let orders: Vec<serde_json::Value> = state
+        .intents
+        .iter()
+        .filter(|r| {
+            matches!(
+                r.state,
+                S::PendingSubmit | S::Submitted | S::PartiallyFilled | S::Unknown
+            )
+        })
+        .map(|r| {
+            serde_json::json!({
+                "intent": r.intent,
+                "state": r.state,
+                "filled": r.filled,
+                "broker_order_id": r.broker_order_id,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "account": account,
+        "last_day": state.last_day,
+        "positions": state.positions,
+        "working_orders": orders,
+        "inconsistency": consistent,
+    })
+}
+
 /// Journal entries read per page when restoring.
 const PAGE: i64 = 1000;
 
