@@ -7,7 +7,7 @@ import "./styles.css";
 import { ApiError, api, type Me, type Status } from "./api";
 import { clear, h } from "./dom";
 import { formatIst } from "./format";
-import { backtestView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, strategiesView, withStepUp } from "./views";
+import { backtestView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, strategiesView, validationView, withStepUp } from "./views";
 
 const root = document.getElementById("app");
 
@@ -30,6 +30,8 @@ const NAV: Array<[string, string]> = [
   ["#/paper", "Paper"],
   ["#/halts", "Kill switch"],
   ["#/strategies", "Strategies"],
+  ["#/validation", "Validation"],
+  ["#/review", "Review"],
   ["#/backtest", "Backtest"],
   ["#/journal", "Journal"],
 ];
@@ -53,6 +55,8 @@ async function render(ctx: Ctx): Promise<void> {
     if (route.startsWith("#/decisions/")) view = await decisionView(decodeURIComponent(route.slice("#/decisions/".length)));
     else if (route.startsWith("#/halts")) view = await haltsView(ctx, rerender);
     else if (route.startsWith("#/paper")) view = await paperView(ctx, rerender);
+    else if (route.startsWith("#/validation")) view = await validationView(ctx, rerender);
+    else if (route.startsWith("#/review")) view = await reviewView(ctx, rerender);
     else if (route.startsWith("#/strategies")) view = await strategiesView(ctx, rerender);
     else if (route.startsWith("#/backtest")) view = await backtestView(ctx);
     else if (route.startsWith("#/journal")) view = await journalView();

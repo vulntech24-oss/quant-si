@@ -142,6 +142,12 @@ export async function haltsView(ctx: Ctx, rerender: () => void): Promise<HTMLEle
 
 // ---------- strategies ----------
 
+async function latestPassedEvidence(version: string, kind: string): Promise<string | undefined> {
+  const records = await api.evidence(version);
+  const hit = records.find((r) => r["kind"] === kind && r["passed"] === true);
+  return typeof hit?.["id"] === "string" ? hit["id"] : undefined;
+}
+
 const NEXT_EVENTS: Record<string, Array<{ label: string; event: Record<string, unknown>; needsEvidence?: boolean }>> = {
   draft: [{ label: "Start research", event: { event: "start_research" } }],
   research: [{ label: "Pass research", event: { event: "pass_research" }, needsEvidence: true }, { label: "Reject", event: { event: "reject_research", reason: "rejected by owner" } }],
@@ -161,8 +167,11 @@ export async function strategiesView(ctx: Ctx, rerender: () => void): Promise<HT
     return h("div", { class: "row" }, ...options.map((o) => h("button", { class: "ghost", onclick: async () => {
       let event = o.event;
       if (o.needsEvidence) {
-        const evidence = window.prompt("Evidence id (UUID of the recorded validation evidence):");
-        if (!evidence) return;
+        const kind = o.event["to"] === "small_capital" || o.event["to"] === "full" ? "paper_review" : "validation";
+        let evidence: string | undefined;
+        try { evidence = await latestPassedEvidence(row.version.reference.version_id, kind); } catch (err) { message.textContent = errorText(err); return; }
+        if (!evidence) { message.textContent = `No passed ${kind.replace("_", " ")} is recorded for this version. Record one first.`; return; }
+        if (!window.confirm(`Cite ${kind.replace("_", " ")} ${evidence} for "${o.label}"?`)) return;
         event = { ...event, evidence };
       }
       try { await withStepUp(() => api.strategyEvent(row.version.reference.version_id, event)); rerender(); } catch (err) { message.textContent = errorText(err); }
@@ -219,6 +228,85 @@ function sparkline(values: string[]): SVGSVGElement {
   line.setAttribute("points", points);
   svg.append(line);
   return svg;
+}
+
+// ---------- validation and evidence ----------
+
+function checksTable(checks: Json[]): HTMLElement {
+  return h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Check", "Result", "Detail"].map((t) => h("th", {}, t)))), h("tbody", {}, ...checks.map((c) => h("tr", {}, h("td", {}, String(c["name"]).replace(/_/g, " ")), h("td", {}, c["passed"] === true ? h("span", { class: "chip long" }, "PASS") : h("span", { class: "chip short" }, "FAIL")), h("td", {}, str(c["detail"]) ?? "")))));
+}
+
+function evidenceTables(tables: Json[]): HTMLElement {
+  if (tables.length === 0) return h("p", { class: "empty" }, "No evidence tables: no out-of-sample trades.");
+  return h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Setup", "Trades", "P(target)", "P(stop)", "P(other)", "Other-exit R"].map((t) => h("th", {}, t)))), h("tbody", {}, ...tables.map((t) => h("tr", {}, h("td", {}, str(t["setup_type"]) ?? ""), h("td", { class: "mono right" }, str(t["count"]) ?? "0"), h("td", { class: "mono right" }, formatPercent(str(t["p_target"]))), h("td", { class: "mono right" }, formatPercent(str(t["p_stop"]))), h("td", { class: "mono right" }, formatPercent(str(t["p_time"]))), h("td", { class: "mono right" }, formatNumber(str(t["time_exit_r"])))))));
+}
+
+function evidenceCard(r: Json): HTMLElement {
+  const mc = get(r, "monte_carlo") as Json | null;
+  return h("div", { class: "card stack" },
+    h("div", { class: "row" }, h("span", { class: r["passed"] === true ? "chip long" : "chip short" }, r["passed"] === true ? "PASSED" : "FAILED"), h("strong", {}, String(r["kind"]).replace(/_/g, " ")), h("span", { class: "muted mono" }, String(r["id"])), h("span", { class: "muted" }, formatIst(String(r["created_at"])))),
+    h("div", { class: "metrics" }, metric("OOS trades", str(get(r, "oos.trades")) ?? "—"), metric("OOS expectancy", `${formatNumber(str(get(r, "oos.expectancy_r")))}R`), metric("Holdout trades", str(get(r, "holdout.trades")) ?? "—"), metric("Holdout expectancy", `${formatNumber(str(get(r, "holdout.expectancy_r")))}R`), mc ? metric("MC p95 drawdown", formatPercent(str(mc["max_drawdown_p95"]))) : null),
+    checksTable((get(r, "checks") as Json[] | null) ?? []),
+    evidenceTables((get(r, "evidence") as Json[] | null) ?? []));
+}
+
+export async function validationView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const [rows, instruments, records] = await Promise.all([api.strategies(), api.instruments(), api.evidence()]);
+  const message = h("p", { class: "error", role: "alert" });
+  const result = h("div", { class: "stack" });
+  const version = h("select", { "aria-label": "Strategy version" }, ...rows.map((r) => h("option", { value: r.version.reference.version_id }, `${r.version.reference.name} v${r.version.reference.version_number} (${r.stage.stage.replace(/_/g, " ")})`)));
+  const instrument = h("select", { "aria-label": "Instrument" }, h("option", { value: "" }, "All instruments with bars"), ...instruments.map((i) => h("option", { value: i.id }, `${i.symbol} (v${i.version})`)));
+  const from = h("input", { type: "date", "aria-label": "From" });
+  const to = h("input", { type: "date", "aria-label": "To" });
+  const equity = h("input", { value: "1000000", inputmode: "decimal", "aria-label": "Starting equity" });
+  const run = async (e: Event) => {
+    e.preventDefault();
+    message.textContent = "";
+    clear(result);
+    result.append(h("p", { class: "muted" }, "Validating… (walk-forward windows, holdout, Monte Carlo)"));
+    try {
+      // The new record is recorded server-side; the list below shows it first.
+      await api.validate({ version: version.value, instruments: instrument.value ? [instrument.value] : [], from: from.value, to: to.value, equity: equity.value });
+      rerender();
+    } catch (err) {
+      clear(result);
+      message.textContent = errorText(err);
+    }
+  };
+  return h("section", {}, h("h1", {}, "Validation and evidence"),
+    h("p", { class: "muted" }, "Walk-forward out-of-sample windows, then a holdout run once, then Monte Carlo on the out-of-sample trades. Every result, pass or fail, is recorded and cannot be edited. Only a passed validation can move a version to Paper; only a passed paper review can move it to a live stage."),
+    isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, version, instrument, from, to, equity, h("button", { class: "primary" }, "Validate")) : null,
+    message, result,
+    records.length === 0 ? h("p", { class: "empty" }, "No evidence recorded yet.") : h("div", { class: "stack" }, ...records.map(evidenceCard)));
+}
+
+// ---------- review and calibration ----------
+
+export async function reviewView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const data = await api.review();
+  const rows = await api.strategies();
+  const name = (id: unknown) => { const r = rows.find((x) => x.version.reference.version_id === id); return r ? `${r.version.reference.name} v${r.version.reference.version_number}` : String(id); };
+  const report = (get(data, "report") ?? {}) as Json;
+  const versions = (report["versions"] as Json[] | undefined) ?? [];
+  const checks = (get(data, "checks") as Json[] | undefined) ?? [];
+  const message = h("p", { class: "error", role: "alert" });
+  const shares = (v: unknown) => (Array.isArray(v) ? v.map((x) => formatPercent(str(x))).join(" / ") : "—");
+  const card = (v: Json) => {
+    const vc = (checks.find((c) => c["version"] === v["version"])?.["checks"] as Json[] | undefined) ?? [];
+    const bins = ((v["bins"] as Json[] | undefined) ?? []).filter((b) => Number(b["count"]) > 0);
+    return h("div", { class: "card stack" },
+      h("h2", {}, name(v["version"])),
+      h("div", { class: "metrics" }, metric("Entries", str(v["entries"]) ?? "0"), metric("Closed trades", str(v["trades"]) ?? "0"), metric("Predicted EV", `${formatNumber(str(v["predicted_ev_r"]))}R`), metric("Realized", `${formatNumber(str(v["realized_r"]))}R`), metric("Brier (target)", formatNumber(str(v["brier"]), 4))),
+      h("p", { class: "muted" }, `Target / stop / other — predicted ${shares(v["predicted"])}, realized ${shares(v["realized"])}`),
+      bins.length ? h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["P(target) bin", "Trades", "Predicted", "Realized"].map((t) => h("th", {}, t)))), h("tbody", {}, ...bins.map((b) => h("tr", {}, h("td", {}, `${formatPercent(str(b["from"]), 0)}–${formatPercent(str(b["to"]), 0)}`), h("td", { class: "mono right" }, str(b["count"]) ?? ""), h("td", { class: "mono right" }, formatPercent(str(b["predicted"]))), h("td", { class: "mono right" }, formatPercent(str(b["realized"]))))))) : null,
+      checksTable(vc),
+      isOwner(ctx) ? h("button", { class: "ghost", onclick: async () => { try { const r = await api.recordReview(String(v["version"])); window.alert(r["passed"] === true ? "Paper review recorded: PASSED." : "Paper review recorded: FAILED. It cannot back a promotion."); rerender(); } catch (err) { message.textContent = errorText(err); } } }, "Record paper review") : null);
+  };
+  return h("section", {}, h("h1", {}, "Review and calibration"),
+    h("p", { class: "muted" }, "Paper decisions against their outcomes. A recorded paper review that passes is the only evidence that can back a promotion to a live stage; live trading also needs every live-trading condition."),
+    h("div", { class: "card metrics" }, metric("Paper days", str(report["days"]) ?? "0"), metric("Max drawdown", formatPercent(str(report["max_drawdown"]))), metric("Operational incidents", str(report["operational_incidents"]) ?? "0")),
+    message,
+    versions.length === 0 ? h("p", { class: "empty" }, "No paper entry decisions yet.") : h("div", { class: "stack" }, ...versions.map(card)));
 }
 
 // ---------- paper trading ----------
