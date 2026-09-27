@@ -98,8 +98,26 @@ export async function decisionsView(): Promise<HTMLElement> {
   );
 }
 
+const STANCE_CLASS: Record<string, string> = { agree: "chip long", caution: "chip neutral", disagree: "chip short", abstain: "chip neutral" };
+
+function adviceCard(a: Json): HTMLElement {
+  const flags = (a["flags"] as string[] | undefined) ?? [];
+  return h("div", { class: "card stack" },
+    h("div", { class: "row" }, h("span", { class: STANCE_CLASS[String(a["stance"])] ?? "chip neutral" }, String(a["stance"]).toUpperCase()), h("strong", {}, String(a["advisor"])), h("span", { class: "muted" }, `confidence ${formatPercent(str(a["confidence"]), 0)} · ${formatIst(String(a["at"]))}`)),
+    h("p", {}, String(a["summary"])),
+    flags.length ? h("ul", { class: "reasons" }, ...flags.map((f) => h("li", { class: "opposes" }, f))) : null);
+}
+
+/** Advisory AI on a decision. Missing or disabled AI shows nothing. */
+async function adviceSection(decision: string): Promise<HTMLElement | null> {
+  let advice: Json[];
+  try { advice = await api.aiAdvice(decision); } catch { return null; }
+  if (advice.length === 0) return null;
+  return h("section", { class: "card" }, h("h2", {}, "AI review (advisory only)"), h("p", { class: "muted" }, "Commentary after the decision. It never changes the decision, the size, the limits or any order."), ...advice.map(adviceCard));
+}
+
 export async function decisionView(id: string): Promise<HTMLElement> {
-  const { summary: d, record } = await api.decision(id);
+  const [{ summary: d, record }, ai] = await Promise.all([api.decision(id), adviceSection(id)]);
   const p = get(record, "proposal");
   const a = get(record, "approval");
   const reasons = (get(p, "explanation.reasons") as Array<{ factor: string; value: unknown; direction: string }> | undefined) ?? [];
@@ -122,6 +140,7 @@ export async function decisionView(id: string): Promise<HTMLElement> {
     p
       ? section("Deep analysis", h("div", { class: "metrics" }, metric("P(target first)", formatPercent(str(get(p, "probabilities.p_target")))), metric("P(stop first)", formatPercent(str(get(p, "probabilities.p_stop")))), metric("P(time exit)", formatPercent(str(get(p, "probabilities.p_time")))), metric("Evidence", `${str(get(p, "probabilities.evidence_count")) ?? "?"} setups (${str(get(p, "probabilities.source")) ?? "?"})`), metric("Risk net / unit", formatNumber(str(get(p, "economics.risk_net")), 4)), metric("Reward net / unit", formatNumber(str(get(p, "economics.reward_net")), 4)), metric("Net RR", formatNumber(str(get(p, "economics.rr_net")))), metric("EV", `${formatNumber(str(get(p, "expected_value.in_r")))}R`)))
       : null,
+    ai,
     h("details", { class: "card" }, h("summary", {}, "Raw record"), h("pre", {}, JSON.stringify(record, null, 2))),
   );
 }
@@ -278,6 +297,20 @@ export async function validationView(ctx: Ctx, rerender: () => void): Promise<HT
     isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, version, instrument, from, to, equity, h("button", { class: "primary" }, "Validate")) : null,
     message, result,
     records.length === 0 ? h("p", { class: "empty" }, "No evidence recorded yet.") : h("div", { class: "stack" }, ...records.map(evidenceCard)));
+}
+
+// ---------- advisory AI ----------
+
+export async function aiView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const title = h("h1", {}, "AI review");
+  const intro = h("p", { class: "muted" }, "Advisory only, in shadow mode: advisors comment on entry decisions after the Risk Gate decided. Their advice never changes orders, sizes, limits, parameters or halts, and is scored against outcomes here.");
+  let scores: Json[];
+  let advice: Json[];
+  try { [scores, advice] = await Promise.all([api.aiScorecard(), api.aiAdvice()]); } catch (err) { return h("section", {}, title, intro, h("p", { class: "empty" }, errorText(err))); }
+  const message = h("p", { class: "error", role: "alert" });
+  const run = isOwner(ctx) ? h("button", { class: "primary", onclick: async () => { try { const r = await api.aiRun(); window.alert(`Advice written: ${str(r["advice_written"]) ?? "0"}; over budget: ${str(r["over_budget"]) ?? "0"}; failures: ${((r["failures"] as unknown[]) ?? []).length}`); rerender(); } catch (err) { message.textContent = errorText(err); } } }, "Advise on new entries") : null;
+  const table = scores.length === 0 ? h("p", { class: "empty" }, "No advice scored yet.") : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Advisor", "Advised", "Scored", "Right", "Agree trades", "Mean R (agree)", "Doubt trades", "Mean R (doubt)"].map((t) => h("th", {}, t)))), h("tbody", {}, ...scores.map((s) => h("tr", {}, h("td", {}, String(s["advisor"])), h("td", { class: "mono right" }, str(s["advised"]) ?? "0"), h("td", { class: "mono right" }, str(s["scored"]) ?? "0"), h("td", { class: "mono right" }, str(s["right"]) ?? "0"), h("td", { class: "mono right" }, str(s["agree_trades"]) ?? "0"), h("td", { class: "mono right" }, `${formatNumber(str(s["agree_mean_r"]))}R`), h("td", { class: "mono right" }, str(s["doubt_trades"]) ?? "0"), h("td", { class: "mono right" }, `${formatNumber(str(s["doubt_mean_r"]))}R`)))));
+  return h("section", {}, title, intro, run, message, h("h2", {}, "Scorecard"), table, h("h2", {}, "Recent advice"), advice.length === 0 ? h("p", { class: "empty" }, "No advice yet.") : h("div", { class: "stack" }, ...advice.slice(0, 30).map((a) => h("div", { class: "stack" }, h("a", { href: `#/decisions/${encodeURIComponent(String(a["decision"]))}` }, `Decision ${String(a["decision"])}`), adviceCard(a)))));
 }
 
 // ---------- review and calibration ----------
