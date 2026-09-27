@@ -1,0 +1,23 @@
+# Rust build output
+/backend/target/
+
+# Secrets and local configuration (INV-15). Commit only *.env.example files.
+.env
+.env.*
+!.env.example
+*.env
+!*.env.example
+
+# Local data, caches and logs
+/data/
+/local/
+*.log
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Frontend (once added)
+node_modules/
+dist/
