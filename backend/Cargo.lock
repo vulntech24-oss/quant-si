@@ -313,6 +313,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "qd-risk"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "proptest",
+ "qd-domain",
+ "qd-strategy",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
+name = "qd-strategy"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "proptest",
+ "qd-domain",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "quick-error"
 version = "1.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

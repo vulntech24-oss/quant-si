@@ -1,0 +1,18 @@
+# Clippy configuration for a pure crate (same bans as qd-domain, ADR 0002).
+#
+# Spec §5.4: strategy, risk and decision code never read the system clock;
+# time is always passed in. These bans make that a compile-time (clippy) error.
+#
+# Pure crates build chrono without its `clock` feature, so `Utc::now` and
+# `Local::now` do not exist here on their own. They become reachable once another
+# workspace crate enables `clock` (Cargo unifies features), hence `allow-invalid`.
+disallowed-methods = [
+    { path = "chrono::Utc::now", reason = "domain code never reads the clock; pass the time in (spec §5.4)", allow-invalid = true },
+    { path = "chrono::Local::now", reason = "domain code never reads the clock; pass the time in (spec §5.4)", allow-invalid = true },
+    { path = "std::time::SystemTime::now", reason = "domain code never reads the clock; pass the time in (spec §5.4)" },
+    { path = "std::time::Instant::now", reason = "domain code never reads the clock; pass the time in (spec §5.4)" },
+    { path = "uuid::Uuid::now_v7", reason = "reads the clock; use the id types' new_at(time) instead (spec §5.4)" },
+]
+
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

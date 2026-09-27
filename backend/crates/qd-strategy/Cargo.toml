@@ -1,0 +1,21 @@
+[package]
+name = "qd-strategy"
+version = "0.1.0"
+description = "QuantDesk feature engine, regime classifier and strategies (pure)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono.workspace = true
+qd-domain.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rust_decimal_macros.workspace = true
+
+[lints]
+workspace = true
