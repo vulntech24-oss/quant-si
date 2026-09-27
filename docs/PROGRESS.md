@@ -10,8 +10,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 1 | Domain core `qd-domain` | **Done** (2026-09-27) |
 | 2 | `qd-risk`, `qd-strategy`, cost model | **Done** (2026-09-27) |
 | 3 | `qd-app` ports and use cases, `qd-backtest` | **Done** (2026-09-27) |
-| 4 | `qd-store`, `qd-server`, `qd-cli` | Next |
-| 5 | `qd-api` and frontend integration | Not started (needs §10) |
+| 4 | `qd-store`, `qd-server`, `qd-cli` | **Done** (2026-09-27) |
+| 5 | `qd-api` and frontend integration | Next (§10 missing: ADR will record the approach) |
 | 6 | Market data adapters, paper broker | Not started (needs §4 items 1, 5, 11) |
 | 7 | Validation pipeline and review reports | Not started |
 | 8 | AI orchestrator (advisory) | Not started (needs §4 item 8) |
@@ -147,6 +147,52 @@ New invariant tests: `invariant_02_an_active_halt_blocks_the_entry_at_the_gatewa
 `invariant_14_live_orders_are_blocked_by_default`,
 `invariant_14_every_live_condition_is_required`.
 
+## Phase 4: persistence, server, CLI (2026-09-27)
+
+Built:
+
+- `backend/migrations`: schema with database-enforced append-only history
+  (INV-16), point-in-time bars, versioned instrument specs, immutable strategy
+  versions and stage events, audited accounts.
+- `qd-store`: PostgreSQL journal, halt store (re-validated on read), market
+  data (instruments, point-in-time bars), strategy registry store, audit log,
+  accounts (live arming audited, impossible on non-live accounts).
+- `qd-app/registry.rs`: the Strategy Registry use case (stage = replay of
+  stored events through the state machine).
+- `qd-domain`: halts can be read back from storage through their validating
+  constructors (`HaltRecord`).
+- `qd-server`: validated configuration (secrets from the environment only,
+  redacted), safe defaults, refusal to start with unsafe live settings, the
+  conservative startup sequence, `/health` and `/ready`.
+- `qd-cli` (`qd`): migrate, accounts, instruments, bar import, strategy
+  registry, halts, journal, research backtest.
+- CI: PostgreSQL service; a second test run with `live-orders` compiled in.
+
+Decisions and assumptions: ADR 0007.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check` (BSD-3-Clause and Zlib added
+  to the license allow-list for sqlx/axum dependencies).
+- `cargo test --workspace` with `DATABASE_URL` set: 150 tests; with
+  `live-orders`: qd-app and qd-server 23 tests.
+- End-to-end smoke run on a fresh local PostgreSQL 16: `qd migrate`, account,
+  instrument, 600-bar CSV import, strategy registration and stage events (an
+  illegal transition was refused), manual halt, research backtest (18 trades
+  on synthetic data), then `qd-server`: `/health` ok, `/ready` showed entries
+  halted by the startup and manual halts; no secret in the logs.
+
+New invariant tests: `invariant_16_history_tables_reject_updates_deletes_and_truncates`,
+`invariant_07_halts_survive_in_the_store_and_are_revalidated`,
+`invariant_07_stored_halts_are_revalidated_when_read_back`,
+`invariant_09_bar_corrections_are_invisible_to_earlier_snapshots`,
+`invariant_10_versions_are_immutable_and_stages_replay`,
+`invariant_14_only_live_accounts_can_be_armed_and_arming_is_audited`,
+`invariant_15_the_database_url_comes_from_the_environment_and_is_redacted`,
+`invariant_14_live_trading_outside_production_or_with_unverified_costs_refuses_to_start`,
+`invariant_07_without_a_broker_entries_stay_halted_after_startup`,
+`invariant_07_startup_clears_only_after_clean_reconciliation`.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -166,16 +212,19 @@ New invariant tests: `invariant_02_an_active_halt_blocks_the_entry_at_the_gatewa
 - Backtests over dates before 2026-01-01 fail closed until historical cost
   schedule versions exist; backtests support one currency only (ADR 0006).
 - The gateway's journal-failure latch clears only on restart (ADR 0006).
+- Tests need a PostgreSQL reachable through `DATABASE_URL` (ADR 0007).
+- Redis is deferred until a concrete need (ADR 0007).
+- Positions are not yet persisted: the server's book starts empty, so any
+  broker position at startup is a reconciliation mismatch (Phase 6).
 - `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
   from validation (Phase 7); until then it cannot pass the evidence gate.
 
-## Next steps (Phase 4)
+## Next steps (Phase 5)
 
-1. `qd-store`: PostgreSQL schema and migrations (journal, order events, halts,
-   positions, strategy versions and stage transitions, audit log) with
-   append-only enforcement by database triggers (INV-16); repositories
-   implementing the `qd-app` ports.
-2. `qd-server`: configuration (paper by default), wiring, startup sequence
-   (startup halt until reconciliation and health checks pass, INV-07), refusal
-   to start in production with any fake or unverified-for-live setting.
-3. `qd-cli`: migrate, import bars, backtest, halt/re-arm, reconcile.
+1. `qd-api`: authentication (owner and read-only roles, step-up for live
+   arming and promotions), OpenAPI, endpoints for decisions (post-risk
+   headline and reason), proposals, positions, orders, journal, halts
+   (create, re-arm), strategy registry, backtests, health; SSE for updates.
+2. Frontend integration (spec §10 missing): record the approach in an ADR and
+   rebuild the Stitch screens against the API with the §6.3 labels, NO TRADE
+   states and a paper/live indicator.

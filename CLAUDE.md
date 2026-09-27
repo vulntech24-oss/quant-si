@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 3 (application layer, backtesting) done; Phase 4 next**.
+- Current phase: **Phase 4 (persistence, server, CLI) done; Phase 5 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -22,9 +22,14 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace
 cargo deny check            # install once: cargo install cargo-deny --locked
-# once SQLx query macros exist:
-cargo sqlx prepare --workspace --check
 ```
+
+Tests need PostgreSQL: `export DATABASE_URL=postgres://USER@localhost:5432/DB` (the user
+must be able to create databases; `#[sqlx::test]` makes one per test). Queries are
+runtime-checked, so `cargo sqlx prepare` does not apply (ADR 0007).
+
+Run: `qd migrate` then `qd-server` with `QD_CONFIG` (see `config/quantdesk.example.toml`)
+and `QD_DATABASE_URL`. `qd --help` lists admin commands.
 
 Never disable a test or lint to get green. Allow a lint locally only with a
 comment explaining why.
@@ -70,17 +75,24 @@ backend/                     Cargo workspace (ADR 0002)
     src/positions.rs         Position Manager: OCO protection, exits, reconciliation
     src/live.rs              live gate (INV-14); `live-orders` feature, off by default
     src/memory.rs            in-memory journal and halt store (backtests, tests)
+    src/registry.rs          Strategy Registry (stage = replay of stored events)
   crates/qd-backtest/        SimClock, SimBroker (simulate_fill), run_backtest, metrics
+  crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
+  crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
+  crates/qd-cli/             bin `qd`: migrate, accounts, instruments, bars, strategy, halts, backtest
+  migrations/                SQL schema; history tables are append-only by trigger (INV-16)
   config/                    data, not code
     costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
     risk.toml                §4 default risk configuration
+    quantdesk.example.toml   server settings (no secrets)
+    instruments/examples/    example instrument spec (illustrative terms)
 design/stitch-reference/     Stitch export: visual reference only, not requirements
 docs/                        spec, ADRs, progress log
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-broker-paper,
-qd-marketdata, qd-store, qd-api, qd-server, qd-cli.
+Target crates not yet created (§5.3): qd-api, qd-ai, qd-broker-kite, qd-broker-paper,
+qd-marketdata.
 Create a crate only when it has real code.
 
 ## Rules of thumb
