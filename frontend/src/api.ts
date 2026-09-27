@@ -55,6 +55,7 @@ export interface Status {
   halt_state_known: boolean;
   entries_halted: boolean;
   active_halts: HaltView[];
+  alerts?: Array<{ severity: "critical" | "warning"; code: string; message: string }>;
 }
 
 export interface DecisionSummary {

@@ -81,3 +81,7 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
 .modal::backdrop { backdrop-filter: blur(8px); background: rgba(248, 249, 250, 0.8); }
 .spark { width: 100%; height: 100px; }
 .spark polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+
+/* Operational alerts under the top bar. */
+.alerts { display: flex; flex-direction: column; gap: 6px; padding: 8px 24px; }
+.alerts .chip { display: block; margin: 0; white-space: normal; }

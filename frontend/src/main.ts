@@ -25,6 +25,12 @@ function haltBadge(status: Status | null): HTMLElement {
     : h("span", { class: "chip long" }, "Entries allowed");
 }
 
+function alertBanner(status: Status | null): HTMLElement | null {
+  const alerts = status?.alerts ?? [];
+  if (alerts.length === 0) return null;
+  return h("div", { class: "alerts", role: "alert" }, ...alerts.map((a) => h("p", { class: a.severity === "critical" ? "chip short" : "chip neutral" }, `${a.severity === "critical" ? "CRITICAL" : "Warning"}: ${a.message}`)));
+}
+
 const NAV: Array<[string, string]> = [
   ["#/decisions", "Decisions"],
   ["#/paper", "Paper"],
@@ -41,6 +47,7 @@ async function render(ctx: Ctx): Promise<void> {
   if (!root) return;
   const route = location.hash || "#/decisions";
   const main = h("main", {}, h("p", { class: "muted" }, "Loading…"));
+  const banner = alertBanner(ctx.status);
   const header = h(
     "header",
     { class: "topbar" },
@@ -49,7 +56,7 @@ async function render(ctx: Ctx): Promise<void> {
     h("div", { class: "user" }, h("span", { class: "muted" }, `${ctx.me.username} (${ctx.me.role})`), liveArmToggle(ctx), h("button", { class: "ghost", onclick: async () => { await api.logout(); location.reload(); } }, "Log out")),
   );
   clear(root);
-  root.append(header, main, h("footer", { class: "muted small" }, ctx.status ? `Environment: ${ctx.status.environment} · times in IST · updated ${formatIst(ctx.status.now)}` : ""));
+  root.append(header, ...(banner ? [banner] : []), main, h("footer", { class: "muted small" }, ctx.status ? `Environment: ${ctx.status.environment} · times in IST · updated ${formatIst(ctx.status.now)}` : ""));
   const rerender = () => void render(ctx);
   try {
     let view: HTMLElement;
