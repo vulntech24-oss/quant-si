@@ -24,6 +24,7 @@ use qd_broker_kite::client::KiteError;
 use qd_broker_kite::market::{
     completed_through, daily_candles, instruments, kite_ref, token_index,
 };
+use qd_domain::calendar::{DataIssue, check_bars};
 use qd_domain::instrument::{InstrumentKind, InstrumentSpec, Venue};
 use qd_domain::market::Bar;
 use serde_json::{Value, json};
@@ -118,9 +119,36 @@ pub async fn sync_bars(rt: &Runtime) -> Result<Value, StoreError> {
         let continuous = spec.kind == InstrumentKind::Future;
         match daily_candles(&client, &token, from, to, continuous, to).await {
             Ok(bars) => {
-                let new: Vec<Bar> = bars.into_iter().filter(|b| b.date() >= from).collect();
+                let mut new: Vec<Bar> = bars.into_iter().filter(|b| b.date() >= from).collect();
+                let issues = check_bars(
+                    stored.last(),
+                    &new,
+                    rt.config.calendars.get(&spec.calendar_id),
+                    e.data.limits(),
+                );
+                // A suspect jump holds back that bar and every later one.
+                let first_jump = issues.iter().find_map(|i| match i {
+                    DataIssue::PriceJump { date, .. } => Some(*date),
+                    _ => None,
+                });
+                let mut held_back = 0;
+                if let (true, Some(jump)) = (e.data.hold_suspect_bars, first_jump) {
+                    let before = new.len();
+                    new.retain(|b| b.date() < jump);
+                    held_back = before - new.len();
+                }
                 let inserted = rt.stores.market.insert_bars(spec.id, &new, now).await?;
-                report.push(json!({ "symbol": spec.symbol, "inserted": inserted, "through": to }));
+                let notable: Vec<&DataIssue> = issues
+                    .iter()
+                    .filter(|i| !matches!(i, DataIssue::CalendarUnknown { .. }))
+                    .collect();
+                report.push(json!({
+                    "symbol": spec.symbol,
+                    "inserted": inserted,
+                    "through": to,
+                    "held_back": held_back,
+                    "issues": notable,
+                }));
             }
             Err(KiteError::Token(m)) => return Err(StoreError(format!("Kite session: {m}"))),
             Err(err) => report.push(json!({ "symbol": spec.symbol, "error": err.to_string() })),
@@ -428,7 +456,31 @@ pub fn spawn_schedules(
                 if now.time() >= at && bars_done != Some(today) {
                     bars_done = Some(today);
                     match kite.sync_bars().await {
-                        Ok(r) => tracing::info!(report = %r, "Kite bar import complete"),
+                        Ok(r) => {
+                            tracing::info!(report = %r, "Kite bar import complete");
+                            let flagged: Vec<String> = r
+                                .get("instruments")
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                                .filter(|i| {
+                                    i.get("issues")
+                                        .and_then(Value::as_array)
+                                        .is_some_and(|a| !a.is_empty())
+                                })
+                                .filter_map(|i| {
+                                    i.get("symbol").and_then(Value::as_str).map(str::to_owned)
+                                })
+                                .collect();
+                            if !flagged.is_empty() {
+                                notifier
+                                    .notify_if_enabled(&format!(
+                                        "QuantDesk: data issues in today's bars for {}; see Data in the web UI.",
+                                        flagged.join(", ")
+                                    ))
+                                    .await;
+                            }
+                        }
                         Err(err) => {
                             tracing::error!(error = %err, "Kite bar import failed");
                             notifier
@@ -462,7 +514,20 @@ pub fn spawn_schedules(
                     }
                 }
             }
-            let open = exchange_open(&Venue::Nse, now) || exchange_open(&Venue::Mcx, now);
+            // Skip exchange holidays; an uncovered date counts as open.
+            let ist_today = now
+                .with_timezone(&qd_broker_kite::market::ist())
+                .date_naive();
+            let trading = |id: &str| {
+                runtime
+                    .config
+                    .calendars
+                    .get(&qd_domain::instrument::CalendarId(id.to_owned()))
+                    .and_then(|c| c.is_trading_day(ist_today))
+                    .unwrap_or(true)
+            };
+            let open = (exchange_open(&Venue::Nse, now) && trading("nse"))
+                || (exchange_open(&Venue::Mcx, now) && trading("mcx"));
             let due = last_fills
                 .is_none_or(|t| now - t >= Duration::minutes(i64::from(e.kite.sync_fills_minutes)));
             if open && due {

@@ -37,6 +37,7 @@ COPY --from=backend /src/backend/target/release/qd /usr/local/bin/qd
 COPY --from=frontend /src/frontend/dist /usr/share/quantdesk/frontend
 COPY backend/config/risk.toml backend/config/validation.toml backend/config/review.toml /etc/quantdesk/
 COPY backend/config/costs /etc/quantdesk/costs
+COPY backend/config/calendars /etc/quantdesk/calendars
 COPY deploy/quantdesk.toml /etc/quantdesk/quantdesk.toml
 # State directory for the generated secrets master key; a named volume
 # mounted here inherits this ownership.

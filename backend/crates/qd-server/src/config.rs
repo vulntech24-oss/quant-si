@@ -68,6 +68,13 @@ pub struct ConfigFile {
     pub risk_config: PathBuf,
     /// Paths to cost schedule files, relative to this file.
     pub cost_schedules: Vec<PathBuf>,
+    /// Exchange calendars, relative to this file. Default
+    /// `calendars/india.toml` (ADR 0015).
+    #[serde(default = "default_calendars")]
+    pub calendars: Vec<PathBuf>,
+    /// Data-quality limits for bar imports (Settings → Data quality).
+    #[serde(default)]
+    pub data: DataConfig,
     /// Validation criteria, relative to this file. Default `validation.toml`.
     #[serde(default = "default_validation_criteria")]
     pub validation_criteria: PathBuf,
@@ -440,6 +447,56 @@ pub struct PaperConfig {
     pub daily_run_utc: Option<chrono::NaiveTime>,
 }
 
+fn default_calendars() -> Vec<PathBuf> {
+    vec![PathBuf::from("calendars/india.toml")]
+}
+
+const fn default_true_data() -> bool {
+    true
+}
+
+/// Data-quality limits for bar imports (ADR 0015).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct DataConfig {
+    /// A close more than this fraction from the previous close is suspect.
+    #[serde(with = "rust_decimal::serde::str")]
+    pub max_close_jump: rust_decimal::Decimal,
+    /// Hold back suspect bars (and every later one) from automatic imports
+    /// until you review them.
+    #[serde(default = "default_true_data")]
+    pub hold_suspect_bars: bool,
+}
+
+impl Default for DataConfig {
+    fn default() -> Self {
+        Self {
+            max_close_jump: qd_domain::calendar::QualityLimits::default().max_close_jump,
+            hold_suspect_bars: true,
+        }
+    }
+}
+
+impl DataConfig {
+    /// Range checks.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.max_close_jump < rust_decimal::Decimal::new(5, 2)
+            || self.max_close_jump > rust_decimal::Decimal::ONE
+        {
+            return Err("data.max_close_jump must be between 0.05 and 1".to_owned());
+        }
+        Ok(())
+    }
+
+    /// The limits.
+    #[must_use]
+    pub const fn limits(&self) -> qd_domain::calendar::QualityLimits {
+        qd_domain::calendar::QualityLimits {
+            max_close_jump: self.max_close_jump,
+        }
+    }
+}
+
 fn default_validation_criteria() -> PathBuf {
     PathBuf::from("validation.toml")
 }
@@ -500,6 +557,8 @@ pub struct ServerConfig {
     pub review: qd_app::review::ReviewCriteria,
     /// Master key for the secrets store (ADR 0013); `None` disables it.
     pub master_key: Option<qd_store::settings::MasterKey>,
+    /// Exchange calendars (ADR 0015).
+    pub calendars: qd_domain::calendar::Calendars,
     /// Directory the config file is in (relative paths resolve against it).
     pub base_dir: PathBuf,
 }
@@ -643,6 +702,19 @@ impl ServerConfig {
         }
         file.ai.validate().map_err(ConfigError::Unsafe)?;
         file.kite.validate().map_err(ConfigError::Unsafe)?;
+        file.data.validate().map_err(ConfigError::Unsafe)?;
+        let mut calendar_data = Vec::new();
+        for calendar_path in &file.calendars {
+            let set: qd_domain::calendar::CalendarSet = parse(&base.join(calendar_path))?;
+            calendar_data.extend(set.calendars);
+        }
+        let calendars = qd_domain::calendar::Calendars::new(qd_domain::calendar::CalendarSet {
+            calendars: calendar_data,
+        })
+        .map_err(|e| ConfigError::Parse {
+            path: base.to_owned(),
+            detail: e.to_string(),
+        })?;
         file.notifications.validate().map_err(ConfigError::Unsafe)?;
         if let Some(live) = &file.live {
             if live.initial_equity <= rust_decimal::Decimal::ZERO
@@ -680,6 +752,7 @@ impl ServerConfig {
             validation,
             review,
             master_key,
+            calendars,
             base_dir: base.to_owned(),
         };
         config.validate()?;

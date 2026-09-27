@@ -33,6 +33,16 @@ async fn fake(State(seen): State<Seen>, uri: Uri, body: String) -> axum::Json<Va
             "data": {"user_id": "AB1234", "access_token": "tok1"},
         }));
     }
+    if path == "/instruments/historical/7/day" {
+        // Tue 22 Sep 2026 has no bar, and 24 Sep jumps 38%.
+        return axum::Json(json!({"status": "success", "data": {"candles": [
+            ["2026-09-18T00:00:00+0530", 100, 101, 99, 100, 10],
+            ["2026-09-21T00:00:00+0530", 100, 102, 99, 101, 10],
+            ["2026-09-23T00:00:00+0530", 101, 102, 100, 101.5, 10],
+            ["2026-09-24T00:00:00+0530", 140, 141, 139, 140, 10],
+            ["2026-09-25T00:00:00+0530", 140, 142, 139, 141, 10],
+        ]}}));
+    }
     if path.ends_with("/sendMessage") {
         let chat: Value = serde_json::from_str(&body).unwrap();
         if chat["chat_id"] == "999" {
@@ -244,4 +254,46 @@ async fn telegram_messages_go_to_the_configured_chat_when_switched_on(pool: PgPo
         err.0.contains("chat not found") && !err.0.contains("123:abc"),
         "{err}"
     );
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn the_kite_import_reports_gaps_and_holds_back_suspect_bars(pool: PgPool) {
+    let (base, _seen) = start().await;
+    let rt = runtime(&pool, &base).await;
+    let mut spec: qd_domain::instrument::InstrumentSpecData = toml::from_str(include_str!(
+        "../../../config/instruments/examples/example-equity.toml"
+    ))
+    .unwrap();
+    spec.broker_refs = vec![qd_domain::instrument::BrokerRef {
+        broker: "kite".to_owned(),
+        symbol: "EXAMPLE".to_owned(),
+        token: Some("7".to_owned()),
+    }];
+    let spec = qd_domain::instrument::InstrumentSpec::new(spec).unwrap();
+    rt.stores.market.add_instrument(&spec).await.unwrap();
+    rt.update(
+        "kite",
+        &values(&[("enabled", json!(true)), ("user_id", json!("AB1234"))]),
+        "owner",
+    )
+    .await
+    .unwrap();
+    secret(&rt, "kite_api_key", "key1").await;
+    secret(&rt, "kite_access_token", "tok1").await;
+
+    let report = qd_server::kite::sync_bars(&rt).await.unwrap();
+    let row = &report["instruments"][0];
+    assert_eq!(row["inserted"], 3, "{report}");
+    assert_eq!(
+        row["held_back"], 2,
+        "the jump and every later bar wait for review"
+    );
+    let issues: Vec<&str> = row["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["issue"].as_str().unwrap())
+        .collect();
+    assert_eq!(issues, vec!["missing_day", "price_jump"]);
+    assert_eq!(row["issues"][0]["date"], "2026-09-22");
 }

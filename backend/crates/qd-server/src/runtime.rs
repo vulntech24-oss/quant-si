@@ -33,12 +33,14 @@ use qd_risk::config::{RiskConfig, RiskConfigData};
 use qd_store::Stores;
 use serde_json::{Map, Value, json};
 
-use crate::config::{AiConfig, KiteConfig, NotificationsConfig, PaperConfig, ServerConfig};
+use crate::config::{
+    AiConfig, DataConfig, KiteConfig, NotificationsConfig, PaperConfig, ServerConfig,
+};
 use qd_app::ports::SecretReader;
 use qd_store::settings::PgSecrets;
 
 /// The editable sections, in display order.
-pub const SECTIONS: [(&str, &str, &str); 7] = [
+pub const SECTIONS: [(&str, &str, &str); 8] = [
     (
         "paper",
         "Paper trading",
@@ -58,6 +60,11 @@ pub const SECTIONS: [(&str, &str, &str); 7] = [
         "kite",
         "Zerodha Kite",
         "Market data, daily login and order settings. Live orders also need the server's live settings (INV-14).",
+    ),
+    (
+        "data",
+        "Data quality",
+        "Checks on every bar import: gaps against the exchange calendar and suspect price jumps.",
     ),
     (
         "notifications",
@@ -93,6 +100,8 @@ pub struct Effective {
     pub kite: KiteConfig,
     /// Notifications.
     pub notifications: NotificationsConfig,
+    /// Data-quality limits.
+    pub data: DataConfig,
 }
 
 /// The server's runtime: file configuration, stores, secrets and clock.
@@ -201,6 +210,11 @@ fn validate_section(section: &str, value: &Value) -> Result<Value, String> {
             c.validate()?;
             serde_json::to_value(&c).map_err(|e| bad(&e))
         }
+        "data" => {
+            let c: DataConfig = serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
+            c.validate()?;
+            serde_json::to_value(&c).map_err(|e| bad(&e))
+        }
         "notifications" => {
             let c: NotificationsConfig =
                 serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
@@ -232,6 +246,7 @@ impl Runtime {
             "review" => serde_json::to_value(&c.review).map_err(error),
             "kite" => serde_json::to_value(&c.file.kite).map_err(error),
             "notifications" => serde_json::to_value(&c.file.notifications).map_err(error),
+            "data" => serde_json::to_value(&c.file.data).map_err(error),
             other => Err(StoreError(format!("unknown settings section {other}"))),
         }
     }
@@ -284,6 +299,7 @@ impl Runtime {
             review: serde_json::from_value(get("review")?).map_err(error)?,
             kite: serde_json::from_value(get("kite")?).map_err(error)?,
             notifications: serde_json::from_value(get("notifications")?).map_err(error)?,
+            data: serde_json::from_value(get("data")?).map_err(error)?,
         })
     }
 
@@ -760,6 +776,12 @@ fn describe(section: &str, key: &str) -> (String, Option<&'static str>) {
         ("kite", "history_days") => Some("Days of history fetched when an instrument has none."),
         ("kite", "sync_fills_minutes") => Some(
             "During market hours, fills are checked this often so protection goes out at once.",
+        ),
+        ("data", "max_close_jump") => Some(
+            "A close this far from the previous one (0.20 = 20%) is suspect: a split, a bonus or a bad print.",
+        ),
+        ("data", "hold_suspect_bars") => Some(
+            "Automatic imports stop at a suspect bar until you review it and upload the data yourself.",
         ),
         ("notifications", "enabled") => Some("Sends alerts and daily summaries to Telegram."),
         ("notifications", "telegram_chat_id") => Some(

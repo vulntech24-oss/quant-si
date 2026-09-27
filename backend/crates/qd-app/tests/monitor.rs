@@ -165,3 +165,45 @@ async fn an_unprotected_live_position_is_a_critical_alert() {
     .await;
     assert!(h.live.is_none() && h.alerts.is_empty());
 }
+
+#[tokio::test]
+async fn staleness_counts_trading_days_when_the_calendar_covers_them() {
+    let set: qd_domain::calendar::CalendarSet =
+        toml::from_str(include_str!("../../../config/calendars/india.toml")).unwrap();
+    let calendars = qd_domain::calendar::Calendars::new(set).unwrap();
+    let settings = MonitorSettings {
+        calendar: calendars
+            .get(&qd_domain::instrument::CalendarId("nse".to_owned()))
+            .cloned(),
+        ..MonitorSettings::default()
+    };
+    // Last day Thursday 1 Oct 2026; Friday 2 Oct is a holiday.
+    let paper = FakePaper(json!({
+        "last_day": { "date": "2026-10-01" },
+        "positions": [],
+        "working_orders": [],
+        "inconsistency": null
+    }));
+    let at = |d| Utc.with_ymd_and_hms(2026, 10, d, 6, 0, 0).unwrap();
+    let codes = |h: qd_app::monitor::Health| h.alerts.iter().map(|a| a.code).collect::<Vec<_>>();
+    // Tuesday: only Monday is unprocessed, although five calendar days passed.
+    let h = collect(
+        &InMemoryHaltStore::new(),
+        Some(&paper),
+        None,
+        at(6),
+        settings.clone(),
+    )
+    .await;
+    assert!(codes(h).is_empty());
+    // Wednesday: Monday and Tuesday are unprocessed.
+    let h = collect(
+        &InMemoryHaltStore::new(),
+        Some(&paper),
+        None,
+        at(7),
+        settings,
+    )
+    .await;
+    assert_eq!(codes(h), vec!["paper_stale"]);
+}

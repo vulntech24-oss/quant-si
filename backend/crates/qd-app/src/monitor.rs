@@ -74,10 +74,14 @@ pub struct Health {
 }
 
 /// Alert thresholds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonitorSettings {
-    /// A paper book whose last day is older than this is stale.
+    /// Without a calendar: a paper book whose last day is older than this
+    /// many calendar days is stale.
     pub stale_after_days: i64,
+    /// The paper book's exchange calendar. With it, the book is stale once
+    /// two or more trading days before today are unprocessed (ADR 0015).
+    pub calendar: Option<qd_domain::calendar::TradingCalendar>,
 }
 
 impl Default for MonitorSettings {
@@ -85,8 +89,22 @@ impl Default for MonitorSettings {
         // Covers a weekend plus a holiday.
         Self {
             stale_after_days: 4,
+            calendar: None,
         }
     }
+}
+
+/// Trading days missed since `last` (before today), when the calendar covers them.
+fn missed_trading_days(
+    settings: &MonitorSettings,
+    last: NaiveDate,
+    today: NaiveDate,
+) -> Option<usize> {
+    settings
+        .calendar
+        .as_ref()?
+        .trading_days_between(last, today)
+        .map(|d| d.len())
 }
 
 const OPEN_STATES: [&str; 5] = ["opening", "open", "protected", "unprotected", "exiting"];
@@ -206,8 +224,19 @@ pub async fn collect(
                 ),
             });
         }
+        let missed = p
+            .last_day
+            .and_then(|last| missed_trading_days(&settings, last, now.date_naive()));
         match p.age_days {
-            Some(age) if age > settings.stale_after_days => alerts.push(Alert {
+            Some(_) if missed.is_some_and(|m| m >= 2) => alerts.push(Alert {
+                severity: Severity::Warning,
+                code: "paper_stale",
+                message: format!(
+                    "{} trading day(s) have not been processed; import bars and run paper trading.",
+                    missed.unwrap_or_default()
+                ),
+            }),
+            Some(age) if missed.is_none() && age > settings.stale_after_days => alerts.push(Alert {
                 severity: Severity::Warning,
                 code: "paper_stale",
                 message: format!(

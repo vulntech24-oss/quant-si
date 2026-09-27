@@ -277,7 +277,7 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
         state.paper.as_deref(),
         state.live.as_deref(),
         now,
-        qd_app::monitor::MonitorSettings::default(),
+        state.monitor.clone(),
     )
     .await;
     Ok(Json(json!({

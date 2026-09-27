@@ -163,7 +163,15 @@ async fn run() -> Result<(), String> {
         stores.audit.clone(),
         stores.evidence.clone(),
     );
+    let monitor = qd_app::monitor::MonitorSettings {
+        calendar: config
+            .calendars
+            .get(&qd_domain::instrument::CalendarId("nse".to_owned()))
+            .cloned(),
+        ..qd_app::monitor::MonitorSettings::default()
+    };
     let api_state = qd_api::ApiState {
+        monitor: monitor.clone(),
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),
@@ -200,6 +208,7 @@ async fn run() -> Result<(), String> {
         paper: Some(paper_port),
         live: live_port,
         notifier: Some(notifier),
+        monitor,
     };
     qd_server::http::spawn_alert_log(health.clone(), std::time::Duration::from_secs(300));
     let mut app = qd_api::router(api_state).merge(router(health));

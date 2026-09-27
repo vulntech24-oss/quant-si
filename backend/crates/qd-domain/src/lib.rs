@@ -14,6 +14,7 @@
 //! - [`market`]: daily bars and point-in-time bar series.
 //! - [`plan`]: tick-rounded, validated trade plans.
 //! - [`economics`]: per-unit economics, outcome probabilities, expected value.
+//! - [`calendar`]: exchange trading calendars and data-quality checks for daily bars.
 //! - [`costs`]: the versioned, data-driven cost model.
 //! - [`sizing`]: position sizing steps that do not depend on portfolio state.
 //! - [`portfolio`]: open risk, daily P&L, drawdown, R-multiple.
@@ -30,6 +31,7 @@
 )]
 
 pub mod action;
+pub mod calendar;
 pub mod costs;
 pub mod economics;
 pub mod halt;

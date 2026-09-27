@@ -146,6 +146,7 @@ async fn health_and_readiness_report_the_halt_state(pool: PgPool) {
         paper: None,
         live: None,
         notifier: None,
+        monitor: qd_app::monitor::MonitorSettings::default(),
     });
     let health = app
         .clone()
