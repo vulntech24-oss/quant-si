@@ -2,7 +2,7 @@
 // why, trade details, risk, deep analysis and raw data. Headlines are always
 // the post-risk verdict (INV-17).
 
-import { ApiError, api, type DecisionSummary, type HaltView, type Me, type SecretRow, type SettingsField, type SettingsSection, type Status, type StrategyRow } from "./api";
+import { ApiError, api, type DecisionSummary, type HaltView, type KiteStatus, type Me, type SecretRow, type SettingsField, type SettingsSection, type Status, type StrategyRow } from "./api";
 import { clear, h } from "./dom";
 import { formatIst, formatNumber, formatPercent } from "./format";
 import { actionLabel, reasonText } from "./labels";
@@ -486,16 +486,144 @@ export async function paperView(ctx: Ctx, rerender: () => void): Promise<HTMLEle
       message.textContent = errorText(err);
     }
   };
+  return h("section", {}, title, intro, inconsistency ? h("p", { class: "error", role: "alert" }, `The book cannot be trusted: ${inconsistency}. Entries are halted until you investigate.`) : null, isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, h("label", {}, "Process through ", through), h("button", { class: "primary" }, "Run paper day(s)")) : null, message, result, ...bookSections(lastDay, positions, orders, symbol, "No paper day processed yet."));
+}
+
+/** Book metrics, open positions and working orders (paper and live). */
+function bookSections(lastDay: Json | null, positions: Json[], orders: Json[], symbol: (id: unknown) => string, emptyText: string): HTMLElement[] {
   const book = lastDay
     ? h("div", { class: "card metrics" }, metric("Last day", str(lastDay["date"]) ?? "—"), metric("Equity", formatNumber(str(lastDay["equity"]))), metric("Realized net", formatNumber(str(get(lastDay, "book.realized_net")))), metric("Peak equity", formatNumber(str(get(lastDay, "book.high_water_mark")))), metric("Losses in a row", str(get(lastDay, "book.consecutive_losses")) ?? "0"))
-    : h("p", { class: "empty" }, "No paper day processed yet.");
+    : h("p", { class: "empty" }, emptyText);
   const positionsTable = positions.length === 0
     ? h("p", { class: "empty" }, "No open positions.")
     : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Instrument", "Side", "State", "Qty", "Entry", "Stop", "Target", "Bars held"].map((t) => h("th", {}, t)))), h("tbody", {}, ...positions.map((p) => h("tr", {}, h("td", {}, symbol(p["instrument"])), h("td", {}, str(p["side"]) ?? ""), h("td", {}, h("span", { class: p["state"] === "unprotected" ? "chip short" : "chip neutral" }, String(p["state"]))), h("td", { class: "mono right" }, formatNumber(str(p["quantity"]), 0)), h("td", { class: "mono right" }, formatNumber(str(p["entry_price"]))), h("td", { class: "mono right" }, formatNumber(str(p["stop"]))), h("td", { class: "mono right" }, formatNumber(str(p["target"]))), h("td", { class: "mono right" }, str(p["bars_held"]) ?? "0")))));
   const ordersTable = orders.length === 0
     ? h("p", { class: "empty" }, "No working orders.")
     : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Instrument", "Action", "Purpose", "Type", "Qty", "Limit", "Trigger", "State"].map((t) => h("th", {}, t)))), h("tbody", {}, ...orders.map((o) => h("tr", {}, h("td", {}, symbol(get(o, "intent.instrument"))), h("td", {}, actionLabel(String(get(o, "intent.action")))), h("td", {}, String(get(o, "intent.purpose.purpose") ?? "").replace(/_/g, " ")), h("td", {}, String(get(o, "intent.terms.order_type") ?? "").replace(/_/g, " ")), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.quantity")), 0)), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.terms.limit")))), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.terms.trigger")))), h("td", {}, String(o["state"]).replace(/_/g, " "))))));
-  return h("section", {}, title, intro, inconsistency ? h("p", { class: "error", role: "alert" }, `The book cannot be trusted: ${inconsistency}. Entries are halted until you investigate.`) : null, isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, h("label", {}, "Process through ", through), h("button", { class: "primary" }, "Run paper day(s)")) : null, message, result, book, h("h2", {}, "Open positions"), positionsTable, h("h2", {}, "Working orders"), ordersTable);
+  return [book, h("h2", {}, "Open positions"), positionsTable, h("h2", {}, "Working orders"), ordersTable];
+}
+
+// ---------- Zerodha and live trading ----------
+
+/** The outcome of a "Login with Zerodha" redirect, from the location hash. */
+export function loginOutcome(hash: string): "ok" | "failed" | null {
+  const query = hash.split("?")[1] ?? "";
+  const value = new URLSearchParams(query).get("login");
+  return value === "ok" || value === "failed" ? value : null;
+}
+
+/** What is still missing before Zerodha can be used, in order. */
+export function kiteMissing(k: KiteStatus): string[] {
+  const missing: string[] = [];
+  if (!k.api_key_set) missing.push("Enter the Kite API key (Settings → API keys).");
+  if (!k.api_secret_set) missing.push("Enter the Kite API secret (Settings → API keys).");
+  if (!k.user_id) missing.push("Enter your Zerodha client id (Settings → Zerodha Kite).");
+  if (!k.enabled) missing.push("Switch the connection on (Settings → Zerodha Kite).");
+  if (!k.access_token_set) missing.push("Log in with Zerodha (today's session).");
+  return missing;
+}
+
+/** Every INV-14 condition for real orders, and whether it holds. */
+export function liveConditions(k: KiteStatus, status: Status | null): Array<[string, boolean]> {
+  return [
+    ["Server build includes live orders", k.live_orders_compiled],
+    ["Live book configured on the server", k.live_configured],
+    ["Live trading enabled on the server (production only)", k.live_trading_enabled],
+    ["Live account armed with your password", status?.live_account?.live_armed === true],
+    ["Logged in with Zerodha today", k.access_token_set],
+  ];
+}
+
+export async function brokerView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const title = h("h1", {}, "Broker · Zerodha");
+  let kite: KiteStatus;
+  try {
+    kite = await api.kite();
+  } catch (err) {
+    return h("section", {}, title, h("p", { class: "empty" }, errorText(err)));
+  }
+  const outcome = loginOutcome(location.hash);
+  const notice = outcome === "ok"
+    ? h("p", { class: "chip long" }, "Logged in with Zerodha. Today's session is stored on the server.")
+    : outcome === "failed"
+      ? h("p", { class: "error", role: "alert" }, "The Zerodha login did not complete. Check the client id in Settings and try again; the server log has the reason.")
+      : null;
+  const message = h("p", { class: "error", role: "alert" });
+  const result = h("div", { class: "stack" });
+  const act = (label: string, action: () => Promise<unknown>, done: (r: unknown) => string, className = "ghost") =>
+    h("button", { class: className, onclick: async () => {
+      message.textContent = "";
+      clear(result);
+      result.append(h("p", { class: "muted" }, "Working…"));
+      try {
+        const r = await action();
+        clear(result);
+        result.append(h("p", {}, done(r)));
+      } catch (err) {
+        clear(result);
+        message.textContent = errorText(err);
+      }
+    } }, label);
+  const missing = kiteMissing(kite);
+  const owner = isOwner(ctx);
+  const setup = h("div", { class: "card stack" },
+    h("h2", {}, "Connection"),
+    h("p", { class: "muted" }, `Register the redirect URL ${location.origin}${kite.redirect_path} in the Kite developer console. Sessions expire every day at 06:00 IST.`),
+    missing.length === 0 ? h("p", { class: "chip long" }, "Ready: keys set, connection on, session stored.") : h("ul", {}, ...missing.map((m) => h("li", {}, m))),
+    kite.last_login ? h("p", { class: "muted" }, `Last login: ${kite.last_login.user_id} at ${formatIst(kite.last_login.at)}`) : null,
+    owner ? h("div", { class: "row wrap" },
+      h("button", { class: "primary", onclick: async () => {
+        message.textContent = "";
+        try { location.assign((await api.kiteLogin()).url); } catch (err) { message.textContent = errorText(err); }
+      } }, "Login with Zerodha"),
+      act("Import daily bars now", () => api.kiteSyncBars(), (r) => {
+        const rows = (get(r, "instruments") as Json[] | undefined) ?? [];
+        const inserted = rows.reduce((n, row) => n + Number(row["inserted"] ?? 0), 0);
+        const errors = rows.filter((row) => row["error"]).length;
+        return `Imported ${inserted} bar(s) for ${rows.length} instrument(s)${errors ? `; ${errors} failed (see the server log)` : ""}.`;
+      }),
+      act("Send a test Telegram message", () => api.testNotification(), () => "Sent. Check Telegram."),
+    ) : null,
+  );
+  const conditions = liveConditions(kite, ctx.status);
+  const live = h("div", { class: "card stack" },
+    h("h2", {}, "Live trading"),
+    h("p", { class: "muted" }, "Real orders go out only when every condition holds (INV-14). Exits and protective orders are never blocked by a halt. Stop and target are one GTT at Zerodha."),
+    h("ul", { class: "checklist" }, ...conditions.map(([label, ok]) => h("li", {}, h("span", { class: ok ? "chip long" : "chip neutral" }, ok ? "yes" : "no"), " ", label))),
+  );
+  const sections: Array<HTMLElement | null> = [title, notice, setup, live, message, result];
+  if (kite.live_configured) {
+    const account = ctx.status?.live_account;
+    if (owner && account) {
+      live.append(h("div", { class: "row wrap" },
+        h("button", { class: account.live_armed ? "danger" : "ghost", onclick: async () => {
+          const arming = !account.live_armed;
+          if (arming && !window.confirm("Arm LIVE trading with real money on the live account?")) return;
+          try { await withStepUp(() => api.setLiveArmed(arming)); await ctx.refreshStatus(); rerender(); } catch (err) { message.textContent = errorText(err); }
+        } }, account.live_armed ? "Live armed · disarm" : "Arm live account"),
+        act("Check fills now", () => api.kiteSyncFills(), (r) => `Fills applied: ${String(get(r, "refresh.fills") ?? 0)}; unprotected positions: ${String(get(r, "unprotected") ?? 0)}.`),
+        act("Run today's live cycle", () => withStepUp(() => api.liveRun(new Date().toISOString().slice(0, 10))), (r) => {
+          const processed = str(get(r, "processed"));
+          const demoted = (get(r, "demoted") as string[] | undefined) ?? [];
+          return `${processed ? `Processed ${processed}.` : "Nothing new to process."}${demoted.length ? ` Demoted to Paper after a breach: ${demoted.join(", ")}.` : ""}`;
+        }, "danger"),
+      ));
+    }
+    try {
+      const state = await api.live();
+      const instruments = await api.instruments();
+      const symbol = (id: unknown) => instruments.find((i) => i.id === id)?.symbol ?? String(id);
+      const positions = ((get(state, "positions") as Json[] | undefined) ?? []).filter((p) => OPEN_STATES.has(String(p["state"])));
+      const orders = (get(state, "working_orders") as Json[] | undefined) ?? [];
+      const inconsistency = str(get(state, "inconsistency"));
+      sections.push(h("h2", {}, "Live book"), inconsistency ? h("p", { class: "error", role: "alert" }, `The live book cannot be trusted: ${inconsistency}.`) : null, ...bookSections(get(state, "last_day") as Json | null, positions, orders, symbol, "No live day processed yet."));
+    } catch (err) {
+      sections.push(h("p", { class: "error" }, errorText(err)));
+    }
+  } else {
+    live.append(h("p", { class: "muted" }, "No live book is configured on the server ([live] in the server file; see the operator guide)."));
+  }
+  return h("section", {}, ...sections);
 }
 
 // ---------- journal ----------

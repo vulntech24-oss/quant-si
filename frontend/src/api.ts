@@ -56,6 +56,20 @@ export interface Status {
   entries_halted: boolean;
   active_halts: HaltView[];
   alerts?: Array<{ severity: "critical" | "warning"; code: string; message: string }>;
+  live_account?: { id: string; name: string; mode: "backtest" | "paper" | "live"; currency: string; live_armed: boolean } | null;
+}
+
+export interface KiteStatus {
+  enabled: boolean;
+  user_id: string;
+  api_key_set: boolean;
+  api_secret_set: boolean;
+  access_token_set: boolean;
+  last_login: { user_id: string; at: string } | null;
+  live_configured: boolean;
+  live_trading_enabled: boolean;
+  live_orders_compiled: boolean;
+  redirect_path: string;
 }
 
 export interface DecisionSummary {
@@ -153,5 +167,12 @@ export const api = {
   clearSecret: (name: string) => request<{ name: string; set: boolean }>("DELETE", `/secrets/${encodeURIComponent(name)}`),
   paper: () => request<Record<string, unknown>>("GET", "/paper"),
   paperRun: (through: string) => request<Record<string, unknown>>("POST", "/paper/run", { through }),
+  kite: () => request<KiteStatus>("GET", "/kite"),
+  kiteLogin: () => request<{ url: string }>("POST", "/kite/login"),
+  kiteSyncBars: () => request<Record<string, unknown>>("POST", "/kite/sync-bars"),
+  kiteSyncFills: () => request<Record<string, unknown>>("POST", "/kite/sync-fills"),
+  live: () => request<Record<string, unknown>>("GET", "/live"),
+  liveRun: (through: string) => request<Record<string, unknown>>("POST", "/live/run", { through }),
+  testNotification: () => request<{ sent: boolean }>("POST", "/notifications/test"),
   setLiveArmed: (armed: boolean) => request<{ armed: boolean }>("POST", "/account/live-armed", { armed }),
 };

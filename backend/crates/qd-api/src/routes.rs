@@ -266,6 +266,10 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
         ),
         Err(_) => (false, Vec::new()),
     };
+    let live_account = match state.settings.live_account_id {
+        Some(id) => state.accounts.account(id).await.map_err(internal)?,
+        None => None,
+    };
     // Unknown halt state counts as halted (INV-06).
     let entries_halted = !known || !active.is_empty();
     let health = qd_app::monitor::collect(
@@ -280,7 +284,7 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
         "alerts": health.alerts,
         "paper": health.paper,
         "live": health.live,
-        "live_account_id": state.settings.live_account_id,
+        "live_account": live_account,
         "now": now,
         "environment": state.settings.environment,
         "account": account,

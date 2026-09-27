@@ -72,7 +72,23 @@ paths:
   /api/paper/run:
     post: {summary: "Process paper trading days through a date, body {through: YYYY-MM-DD} (owner; 409 when busy, not configured, or the book cannot be restored)"}
   /api/account/live-armed:
-    post: {summary: Arm (owner, step-up) or disarm (owner) live trading for the account}
+    post: {summary: Arm (owner, step-up) or disarm (owner) live trading for the live account (the configured account when no live book exists)}
+  /api/kite:
+    get: {summary: "Zerodha connection status: switches, which keys are set (never their values), last login"}
+  /api/kite/login:
+    post: {summary: "Start Login with Zerodha (owner); returns {url} with a one-time state valid 10 minutes"}
+  /api/kite/callback:
+    get: {summary: "Zerodha's redirect (request_token, state, status); no session needed; 303 to /#/broker?login=ok|failed"}
+  /api/kite/sync-bars:
+    post: {summary: Import completed daily bars from Kite for instruments with a kite broker reference (owner)}
+  /api/kite/sync-fills:
+    post: {summary: Apply Kite fills to the live book and place protection (owner; risk-reducing)}
+  /api/live:
+    get: {summary: "The live book: last day, positions, working orders with broker ids ({configured: false} without one)"}
+  /api/live/run:
+    post: {summary: "Run the live daily cycle, body {through: YYYY-MM-DD} (owner, step-up; orders still need every INV-14 condition)"}
+  /api/notifications/test:
+    post: {summary: Send a Telegram test message (owner)}
   /api/events:
     get: {summary: Server-sent events for new journal entries}
   /api/openapi.yaml:
