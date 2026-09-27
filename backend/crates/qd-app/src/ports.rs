@@ -125,3 +125,34 @@ pub trait EvidenceSource: Send + Sync {
     /// Evidence for a version's setup type, if any exists.
     fn evidence(&self, version: StrategyVersionId, setup_type: &str) -> Option<Evidence>;
 }
+
+/// Historical market data: instrument specs and point-in-time daily bars.
+#[async_trait]
+pub trait HistoricalMarketData: Send + Sync {
+    /// Every instrument spec version effective on `date`.
+    async fn instruments(
+        &self,
+        date: chrono::NaiveDate,
+    ) -> Result<Vec<qd_domain::instrument::InstrumentSpec>, StoreError>;
+    /// Daily bars in `[from, to]` as known at `known_at`: corrections ingested
+    /// later are invisible (INV-09).
+    async fn daily_bars(
+        &self,
+        instrument: InstrumentId,
+        from: chrono::NaiveDate,
+        to: chrono::NaiveDate,
+        known_at: DateTime<Utc>,
+    ) -> Result<Vec<qd_domain::market::Bar>, StoreError>;
+}
+
+/// The append-only audit log of human and system actions.
+#[async_trait]
+pub trait AuditLog: Send + Sync {
+    /// Appends one record.
+    async fn record(
+        &self,
+        actor: &str,
+        action: &str,
+        detail: serde_json::Value,
+    ) -> Result<(), StoreError>;
+}

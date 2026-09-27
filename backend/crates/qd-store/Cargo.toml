@@ -1,30 +1,26 @@
 [package]
-name = "qd-app"
+name = "qd-store"
 version = "0.1.0"
-description = "QuantDesk use cases and ports: proposals, decisions, Order Gateway, Position Manager"
+description = "QuantDesk PostgreSQL adapters for the qd-app ports"
 edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 
-[features]
-# INV-14: live orders are compiled out unless this feature is enabled.
-live-orders = []
-
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
+qd-app.workspace = true
 qd-domain.workspace = true
-qd-risk.workspace = true
-qd-strategy.workspace = true
 rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
 thiserror.workspace = true
-tokio.workspace = true
+uuid.workspace = true
 
 [dev-dependencies]
 rust_decimal_macros.workspace = true
-toml.workspace = true
+tokio.workspace = true
 
 [lints]
 workspace = true

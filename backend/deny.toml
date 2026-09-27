@@ -14,8 +14,10 @@ confidence-threshold = 0.9
 # dependency needs another permissive license.
 allow = [
     "Apache-2.0",
+    "BSD-3-Clause", # subtle, matchit (via sqlx, axum)
     "MIT",
     "Unicode-3.0",
+    "Zlib",         # foldhash (via hashbrown)
 ]
 
 [licenses.private]

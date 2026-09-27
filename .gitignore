@@ -21,3 +21,6 @@
 # Frontend (once added)
 node_modules/
 dist/
+
+# Local server configuration (copy of config/quantdesk.example.toml)
+/backend/config/quantdesk.toml

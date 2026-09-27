@@ -1,0 +1,27 @@
+# EXAMPLE instrument spec (illustrative terms, not a real contract). Copy and
+# fill in the real exchange terms before use; every field is validated.
+id = "0199a000-0000-7000-8000-000000000101"
+version = 1
+effective_from = "2020-01-01"
+symbol = "EXAMPLE-EQ"
+venue = "nse"
+asset_class = "equity"
+kind = "cash_equity"
+currency = "INR"
+tick_size = "0.05"
+lot_size = "1"
+multiplier = "1"
+quantity_step = "1"
+min_quantity = "1"
+calendar_id = "nse"
+correlation_bucket = "india_equity"
+broker_refs = []
+
+[capabilities]
+can_short_overnight = false
+supports_market_orders = true
+requires_market_protection = true
+protection_modes = ["broker_oco"]
+products = ["delivery"]
+order_types = ["limit", "stop_limit", "stop_market", "market"]
+validities = ["day", "good_till_cancelled"]

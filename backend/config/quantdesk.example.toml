@@ -1,0 +1,22 @@
+# QuantDesk server configuration (non-secret settings only).
+#
+# Copy to quantdesk.toml. The database URL is read from the QD_DATABASE_URL
+# environment variable and must never be written here (INV-15).
+
+# "development" (default) or "production".
+environment = "development"
+
+# Keep local; production sits behind the reverse proxy (see deploy/).
+bind = "127.0.0.1:8080"
+database_max_connections = 10
+
+# Live trading is off. Turning it on also needs environment = "production",
+# a build with the live-orders feature, verified cost schedules, an armed live
+# account and a strategy version at SmallCapital or Full (INV-14).
+live_trading_enabled = false
+
+# The trading account this server operates (create it with `qd account create`).
+account_id = "00000000-0000-7000-8000-000000000001"
+
+risk_config = "risk.toml"
+cost_schedules = ["costs/india-zerodha.toml"]

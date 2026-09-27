@@ -8,6 +8,7 @@
 //! - [`positions`]: the Position Manager.
 //! - [`journal`]: Decision Journal entries.
 //! - [`live`]: the live-trading gate (INV-14).
+//! - [`registry`]: the Strategy Registry (immutable versions, stage history).
 //! - [`memory`]: in-memory journal and halt store for backtests and tests.
 
 pub mod decision;
@@ -18,3 +19,4 @@ pub mod memory;
 pub mod orders;
 pub mod ports;
 pub mod positions;
+pub mod registry;

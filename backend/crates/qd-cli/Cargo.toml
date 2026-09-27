@@ -1,0 +1,32 @@
+[package]
+name = "qd-cli"
+version = "0.1.0"
+description = "QuantDesk admin CLI: migrate, import, backtest, halts, strategies"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "qd"
+path = "src/main.rs"
+
+[dependencies]
+chrono = { workspace = true, features = ["clock"] }
+clap.workspace = true
+csv.workspace = true
+qd-app.workspace = true
+qd-backtest.workspace = true
+qd-domain.workspace = true
+qd-risk.workspace = true
+qd-server.workspace = true
+qd-store.workspace = true
+qd-strategy.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+toml.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

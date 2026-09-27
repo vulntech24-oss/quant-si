@@ -1,0 +1,36 @@
+[package]
+name = "qd-server"
+version = "0.1.0"
+description = "QuantDesk server: configuration, wiring, startup sequence, HTTP"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[features]
+# INV-14: forwards to qd-app; without it the server cannot place live orders.
+live-orders = ["qd-app/live-orders"]
+
+[dependencies]
+axum.workspace = true
+chrono = { workspace = true, features = ["clock"] }
+qd-app.workspace = true
+qd-domain.workspace = true
+qd-risk.workspace = true
+qd-store.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+rust_decimal.workspace = true
+tower = { version = "0.5", default-features = false, features = ["util"] }
+
+[lints]
+workspace = true
