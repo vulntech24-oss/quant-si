@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 6 (paper trading, restore from the journal) done; Phase 7 next**.
+- Current phase: **Phase 7 (validation, evidence, review) done; Phase 8 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -79,6 +79,7 @@ backend/                     Cargo workspace (ADR 0002)
     src/regime.rs            regime-v1 classifier
     src/strategy.rs          Strategy trait, run_strategy (features → regime → strategy)
     src/trend_pullback.rs    trend-pullback-1.0.0 (long only)
+    src/catalog.rs           implementations in the build, matched by logic version + parameters
   crates/qd-app/             use cases + ports (async)
     src/ports.rs             Clock, Journal, HaltStore, BrokerOrderExecutor, BrokerAccountReader, EvidenceSource
     src/orders.rs            OrderIntent, EntryAuthorization, BrokerOrderRequest (crate-private constructors)
@@ -90,8 +91,11 @@ backend/                     Cargo workspace (ADR 0002)
     src/registry.rs          Strategy Registry (stage = replay of stored events)
     src/session.rs           daily trading cycle shared by backtest and paper (INV-08)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
+    src/evidence.rs          evidence records (INV-11), evidence tables, stored evidence source
+    src/review.rs            predicted-vs-realized review, calibration, paper-review evidence
   crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
-  crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics
+  crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics,
+                             validation (walk-forward/OOS/holdout), montecarlo, validator
   crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
   crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
@@ -105,6 +109,8 @@ backend/                     Cargo workspace (ADR 0002)
   config/                    data, not code
     costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
     risk.toml                §4 default risk configuration
+    validation.toml          validation protocol and pass criteria (ADR 0010)
+    review.toml              paper-review pass criteria (ADR 0010)
     quantdesk.example.toml   server settings (no secrets)
     instruments/examples/    example instrument spec (illustrative terms)
 frontend/                    Vite + strict TypeScript, no framework (ADR 0008)
@@ -130,6 +136,8 @@ Create a crate only when it has real code.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
+- Promotions cite recorded evidence that the registry checks: a passed validation up to
+  Paper, a passed paper review for live stages (ADR 0010). Never weaken these checks.
 - The journal is the source of truth for trading state; never add mutable position or
   order tables. Every Position Manager change journals a snapshot (ADR 0009).
 - Only the Decision Engine can create an `EntryAuthorization`; only the Order Gateway

@@ -13,8 +13,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 4 | `qd-store`, `qd-server`, `qd-cli` | **Done** (2026-09-27) |
 | 5 | `qd-api` and frontend integration | **Done** (2026-09-27) |
 | 6 | Paper trading, restore from the journal (provider adapters blocked) | **Done** (2026-09-27) |
-| 7 | Validation pipeline and review reports | Next |
-| 8 | AI orchestrator (advisory) | Not started (needs §4 item 8) |
+| 7 | Validation, evidence, Monte Carlo, review and calibration | **Done** (2026-09-27) |
+| 8 | AI orchestrator (advisory) | Next (needs §4 item 8; provider docs) |
 | 9 | Kite live order executor (`live-orders`) | Not started (needs §4 items 5–7) |
 
 ## Phase 0: audit (2026-09-27)
@@ -289,6 +289,55 @@ New invariant tests: `invariant_08_a_restarted_paper_run_matches_an_uninterrupte
 `invariant_05_the_journal_alone_rebuilds_the_book_and_the_order_ledger`,
 `invariant_06_restore_keeps_unanswered_orders_unknown_and_refuses_lost_snapshots`.
 
+## Phase 7: validation, evidence, Monte Carlo, review (2026-09-27)
+
+Built:
+
+- `qd-backtest::validation`: walk-forward out-of-sample windows, a holdout
+  run once at the end, evidence tables from out-of-sample trades only, and
+  checks recorded with their values.
+- `qd-backtest::montecarlo`: seeded bootstrap of R-multiples (drawdown and
+  return percentiles, share of paths reaching the hard-halt drawdown).
+- `qd-backtest::validator`: validation of registered versions over stored
+  bars. Evidence is recorded, pass or fail, and audited.
+- `qd-app::evidence`: evidence records, `EvidenceStore`, conservative
+  evidence tables, and `StoredEvidence` / `StoreEvidenceLoader` so paper
+  decisions use the latest passed validation.
+- The registry checks cited evidence:
+  - validation for research and Paper;
+  - a paper review for live stages.
+- `qd-app::review`: predicted-vs-realized review (shares, Brier score,
+  calibration bins, EV vs realized R, drawdown, operational incidents),
+  paper-review criteria, and recorded paper reviews.
+- Setup type and decision id now travel on positions and trades.
+- `qd-strategy::catalog`: the implementations in the build, matched to
+  registry versions by logic version and parameters.
+- `migrations/..._evidence.sql` (append-only), `config/validation.toml`,
+  `config/review.toml`.
+- API: `POST /api/validations`, `GET /api/evidence[/{id}]`, `GET /api/review`,
+  `POST /api/review/{version}/record`. CLI: `qd strategy validate|review|evidence`.
+  Frontend: Validation and Review screens; promotions cite recorded evidence.
+
+Decisions and assumptions: ADR 0010.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, tests, build.
+- `cargo test --workspace`: 177 tests; the `live-orders` run passes.
+- End-to-end test on PostgreSQL:
+  - a failed validation is recorded and cannot back a stage event;
+  - a passed one promotes to Paper but not to a live stage;
+  - paper trading then enters trades using the stored evidence tables;
+  - a failed paper review cannot promote to SmallCapital, and a passed one can.
+- Mutation check: removing the "evidence must have passed" check fails the
+  end-to-end test.
+- Smoke run: `qd strategy validate` on the smoke database recorded a failed
+  validation with every reason (too little history after warm-up), and
+  `qd strategy review` ran.
+
+New invariant tests: `invariant_11_stage_events_need_recorded_passing_evidence_of_the_right_kind`,
+`invariant_11_validation_evidence_promotes_and_feeds_paper_decisions`.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -313,24 +362,25 @@ New invariant tests: `invariant_08_a_restarted_paper_run_matches_an_uninterrupte
 - **Provider adapters are blocked:** the build environment cannot reach
   kite.trade, Binance or NSE (see `docs/integrations/`). Bars come in through
   CSV import until the owner allows those hosts.
-- Paper decisions are all NO TRADE until Phase 7 produces evidence tables.
+- Paper decisions are NO TRADE until a version passes validation (ADR 0010).
+- Validation and review thresholds are conservative starting points
+  (`config/validation.toml`, `config/review.toml`); the owner should review them.
 - Costs the cost model cannot quote are booked as zero in backtest and paper
   (ADR 0009); revisit with verified schedules.
 - Manual entries (through the Decision Engine and Risk Gate) are not built yet.
-- `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
-  from validation (Phase 7); until then it cannot pass the evidence gate.
+- `trend-pullback-1.0.0` has no evidence on real data yet: it needs real
+  bars (CSV import) and a passed validation.
 
 - Login throttling is in memory and resets on restart (ADR 0008).
 - A startup halt from a failed boot stays active until the owner re-arms it
   (ADR 0008).
 
-## Next steps (Phase 7)
+## Next steps (Phase 8)
 
-1. Walk-forward, out-of-sample and holdout validation of a strategy version
-   over stored bars, producing recorded evidence (the evidence id a
-   promotion needs, INV-11).
-2. Evidence tables per version and setup type (probabilities, time-exit R,
-   counts), stored and served through `EvidenceSource`, so paper decisions
-   can pass the evidence gate.
-3. Monte Carlo on trade sequences (drawdown and ruin distributions).
-4. Review and calibration: predicted vs realized outcomes from the journal.
+1. AI orchestrator (advisory only, INV-04): read each provider's current docs
+   first (OpenAI, Gemini, xAI) and record them in `docs/integrations/`.
+   Keys come from the server environment only (INV-15).
+2. Shadow mode: AI commentary is stored beside decisions and never changes
+   orders, sizes, limits, parameters, credentials or halts. Its advice is
+   scored later against outcomes, like the review does for probabilities.
+3. Budget limits per provider (§4 item 8), disabled by default.
