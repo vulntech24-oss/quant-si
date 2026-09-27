@@ -93,6 +93,8 @@ paths:
     get: {summary: "The live book: last day, positions, working orders with broker ids ({configured: false} without one)"}
   /api/live/run:
     post: {summary: "Run the live daily cycle, body {through: YYYY-MM-DD} (owner, step-up; orders still need every INV-14 condition)"}
+  /api/portfolio:
+    get: {summary: "Portfolio view of a book (query book=paper|live): equity curve with drawdown, exposure by bucket and asset class, P&L per strategy"}
   /api/notifications/test:
     post: {summary: Send a Telegram test message (owner)}
   /api/events:

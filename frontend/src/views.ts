@@ -119,6 +119,7 @@ async function adviceSection(decision: string): Promise<HTMLElement | null> {
 export async function decisionView(id: string): Promise<HTMLElement> {
   const [{ summary: d, record }, ai] = await Promise.all([api.decision(id), adviceSection(id)]);
   const p = get(record, "proposal");
+  const chart = p && d.as_of_date ? await decisionChart(d.instrument_id, d.as_of_date, p) : null;
   const a = get(record, "approval");
   const reasons = (get(p, "explanation.reasons") as Array<{ factor: string; value: unknown; direction: string }> | undefined) ?? [];
   const costs = (get(a, "costs.lines") as Array<{ name: string; amount: string }> | undefined) ?? [];
@@ -134,6 +135,7 @@ export async function decisionView(id: string): Promise<HTMLElement> {
     p
       ? section("Trade plan", h("div", { class: "metrics" }, metric("Entry", `${formatNumber(str(get(p, "plan.entry.price")))} (${str(get(p, "plan.entry.order_type"))?.replace(/_/g, " ") ?? ""})`), metric("Stop", formatNumber(str(get(p, "plan.stop")))), metric("Target", formatNumber(str(get(p, "plan.target")))), metric("Time exit", `${str(get(p, "plan.max_holding_days")) ?? "—"} trading days`)))
       : null,
+    chart,
     a
       ? section("Risk", h("div", { class: "metrics" }, metric("Quantity", formatNumber(str(get(a, "quantity")), 0)), metric("Planned risk", formatNumber(str(get(a, "planned_risk.amount")))), metric("Risk budget", formatNumber(str(get(a, "risk_budget.amount")))), metric("Stage multiplier", formatNumber(str(get(a, "stage_multiplier")))), metric("Costs", formatNumber(str(get(a, "costs.total")))), metric("Costs verified", get(a, "costs_verified") ? "yes" : "NO (unverified rates)")), h("table", { class: "table" }, h("tbody", {}, ...costs.map((c) => h("tr", {}, h("td", {}, c.name.replace(/_/g, " ")), h("td", { class: "mono right" }, formatNumber(c.amount)))))))
       : null,
@@ -727,4 +729,126 @@ export async function dataView(ctx: Ctx, rerender: () => void): Promise<HTMLElem
     h("h1", {}, "Data"),
     h("p", { class: "muted" }, "Instruments and their daily bars. Every import is checked against the exchange holiday calendar for gaps and for suspect price jumps; a corrected bar is stored as a new version (INV-09)."),
     message, result, table, owner ? add : null);
+}
+
+// ---------- charts (coordinates only, never money: floats are fine here) ----------
+
+const SVG = "http://www.w3.org/2000/svg";
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string>): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+  return el;
+}
+
+export interface ChartBar { date: string; open: string; high: string; low: string; close: string }
+export interface ChartLevel { label: string; price: string; kind: "entry" | "stop" | "target" }
+
+/** Pixel geometry of a candle chart: y grows downward; prices stay strings for labels. */
+export function chartGeometry(bars: ChartBar[], levels: ChartLevel[], width: number, height: number) {
+  const prices = [...bars.flatMap((b) => [Number(b.high), Number(b.low)]), ...levels.map((l) => Number(l.price))];
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const pad = (max - min || 1) * 0.05;
+  const lo = min - pad;
+  const span = max + pad - lo;
+  const y = (p: string) => height - ((Number(p) - lo) / span) * height;
+  const step = width / Math.max(bars.length, 1);
+  return {
+    candles: bars.map((b, i) => ({
+      date: b.date,
+      x: i * step + step / 2,
+      width: Math.max(step * 0.6, 1),
+      high: y(b.high),
+      low: y(b.low),
+      top: Math.min(y(b.open), y(b.close)),
+      bottom: Math.max(y(b.open), y(b.close)),
+      up: Number(b.close) >= Number(b.open),
+    })),
+    levels: levels.map((l) => ({ ...l, y: y(l.price) })),
+    xOf: (date: string) => { const i = bars.findIndex((b) => b.date >= date); return i < 0 ? width : i * step + step / 2; },
+  };
+}
+
+function priceChart(bars: ChartBar[], levels: ChartLevel[], decisionDate: string | null): SVGSVGElement {
+  const [w, hgt] = [720, 280];
+  const g = chartGeometry(bars, levels, w, hgt);
+  const root = svg("svg", { viewBox: `0 0 ${w + 90} ${hgt}`, class: "price-chart", role: "img", "aria-label": `Price chart with ${levels.map((l) => `${l.label} ${l.price}`).join(", ")}` });
+  for (const c of g.candles) {
+    root.append(svg("line", { x1: String(c.x), x2: String(c.x), y1: String(c.high), y2: String(c.low), class: "wick" }));
+    root.append(svg("rect", { x: String(c.x - c.width / 2), y: String(c.top), width: String(c.width), height: String(Math.max(c.bottom - c.top, 1)), class: c.up ? "candle up" : "candle down" }));
+  }
+  if (decisionDate) {
+    const x = g.xOf(decisionDate);
+    root.append(svg("line", { x1: String(x), x2: String(x), y1: "0", y2: String(hgt), class: "decision-line" }));
+  }
+  for (const l of g.levels) {
+    root.append(svg("line", { x1: "0", x2: String(w), y1: String(l.y), y2: String(l.y), class: `level ${l.kind}` }));
+    const label = svg("text", { x: String(w + 4), y: String(l.y + 4), class: `level-label ${l.kind}` });
+    label.textContent = `${l.label} ${l.price}`;
+    root.append(label);
+  }
+  return root;
+}
+
+function shiftDate(date: string, days: number): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function decisionChart(instrument: string, asOf: string, plan: unknown): Promise<HTMLElement | null> {
+  const levels: ChartLevel[] = [];
+  for (const [label, kind, path] of [["Entry", "entry", "plan.entry.price"], ["Stop", "stop", "plan.stop"], ["Target", "target", "plan.target"]] as const) {
+    const price = str(get(plan, path));
+    if (price) levels.push({ label, kind, price });
+  }
+  try {
+    const bars = await api.bars(instrument, shiftDate(asOf, -120), shiftDate(asOf, 45));
+    if (bars.length === 0) return null;
+    return h("section", { class: "card" }, h("h2", {}, "Chart"), h("p", { class: "muted small" }, "Daily bars around the decision; the vertical line marks the decision date. Bars after it are shown for review only; the decision saw none of them."), priceChart(bars, levels, asOf));
+  } catch {
+    return null;
+  }
+}
+
+function equityChart(points: Array<{ date: string; equity: string; drawdown: string }>): HTMLElement {
+  if (points.length < 2) return h("p", { class: "empty" }, "Not enough days for a curve yet.");
+  const [w, hgt, ddH] = [720, 200, 80];
+  const eq = points.map((p) => Number(p.equity));
+  const min = Math.min(...eq);
+  const span = Math.max(...eq) - min || 1;
+  const x = (i: number) => (i / (points.length - 1)) * w;
+  const root = svg("svg", { viewBox: `0 0 ${w} ${hgt + ddH + 10}`, class: "price-chart", role: "img", "aria-label": "Equity curve and drawdown" });
+  root.append(svg("polyline", { points: points.map((p, i) => `${x(i)},${hgt - ((Number(p.equity) - min) / span) * hgt}`).join(" "), class: "equity" }));
+  const worst = Math.min(...points.map((p) => Number(p.drawdown))) || -1;
+  const area = points.map((p, i) => `${x(i)},${hgt + 10 + (Number(p.drawdown) / worst) * ddH}`);
+  root.append(svg("polygon", { points: [`0,${hgt + 10}`, ...area, `${w},${hgt + 10}`].join(" "), class: "drawdown" }));
+  return h("div", { class: "card" }, root);
+}
+
+export async function portfolioView(): Promise<HTMLElement> {
+  const book = new URLSearchParams(location.hash.split("?")[1] ?? "").get("book") === "live" ? "live" : "paper";
+  const tabs = h("div", { class: "row" }, ...(["paper", "live"] as const).map((b) => h("a", { href: `#/portfolio?book=${b}`, class: b === book ? "chip long strong" : "chip neutral" }, b === "paper" ? "Paper book" : "Live book")));
+  let view: Json;
+  try {
+    view = await api.portfolio(book);
+  } catch (err) {
+    return h("section", {}, h("h1", {}, "Portfolio"), tabs, h("p", { class: "empty" }, errorText(err)));
+  }
+  const curve = (get(view, "equity_curve") as Array<{ date: string; equity: string; drawdown: string }> | undefined) ?? [];
+  const exposure = (get(view, "exposure") as Json[] | undefined) ?? [];
+  const strategies = (get(view, "strategies") as Json[] | undefined) ?? [];
+  const last = curve[curve.length - 1];
+  return h("section", {},
+    h("h1", {}, "Portfolio"),
+    tabs,
+    h("div", { class: "card metrics" }, metric("Equity", formatNumber(last?.equity ?? null)), metric("Drawdown now", formatPercent(str(get(view, "current_drawdown")))), metric("Worst drawdown", formatPercent(str(get(view, "max_drawdown")))), metric("Days", String(curve.length))),
+    h("h2", {}, "Equity and drawdown"),
+    equityChart(curve),
+    h("h2", {}, "Open exposure by bucket"),
+    exposure.length === 0 ? h("p", { class: "empty" }, "No open positions.") : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Bucket", "Asset class", "Positions", "Notional", "Risk to stops"].map((t) => h("th", {}, t)))), h("tbody", {}, ...exposure.map((e) => h("tr", {}, h("td", {}, String(e["bucket"]).replace(/_/g, " ")), h("td", {}, String(e["asset_class"]).replace(/_/g, " ")), h("td", { class: "mono right" }, String(e["positions"])), h("td", { class: "mono right" }, formatNumber(str(e["notional"]))), h("td", { class: "mono right" }, formatNumber(str(e["open_risk"]))))))),
+    h("h2", {}, "Results per strategy"),
+    strategies.length === 0 ? h("p", { class: "empty" }, "No closed trades yet.") : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Strategy", "Trades", "Wins", "Net P&L", "Mean R"].map((t) => h("th", {}, t)))), h("tbody", {}, ...strategies.map((s) => h("tr", {}, h("td", {}, String(s["strategy"])), h("td", { class: "mono right" }, String(s["trades"])), h("td", { class: "mono right" }, String(s["wins"])), h("td", { class: "mono right" }, formatNumber(str(s["net_pnl"]))), h("td", { class: "mono right" }, formatNumber(str(s["mean_r"]))))))),
+  );
 }

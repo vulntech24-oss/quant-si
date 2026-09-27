@@ -76,6 +76,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/kite/sync-bars", post(kite_sync_bars))
         .route("/kite/sync-fills", post(kite_sync_fills))
         .route("/live", get(live_state))
+        .route("/portfolio", get(portfolio_view))
         .route("/live/run", post(live_run))
         .route("/notifications/test", post(notifications_test))
         .route("/events", get(events))
@@ -1160,6 +1161,31 @@ async fn live_run(
         .map_err(internal)?;
     runner
         .run_through(body.through)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+#[derive(Deserialize)]
+struct BookQuery {
+    book: String,
+}
+
+async fn portfolio_view(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Query(query): Query<BookQuery>,
+) -> Result<Json<Value>, ApiError> {
+    if !matches!(query.book.as_str(), "paper" | "live") {
+        return Err(ApiError::BadRequest(
+            "book must be paper or live".to_owned(),
+        ));
+    }
+    state
+        .portfolio
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("portfolio view is not available".to_owned()))?
+        .view(&query.book)
         .await
         .map(Json)
         .map_err(|e| ApiError::Conflict(e.0))

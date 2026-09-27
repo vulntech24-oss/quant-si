@@ -179,6 +179,8 @@ export const api = {
   addInstrument: (toml: string) => request<Record<string, unknown>>("POST", "/instruments", { toml }),
   importBars: (id: string, csv: string, acceptJumps: boolean) => request<{ rows_written: number; issues: DataIssue[] }>("POST", `/instruments/${encodeURIComponent(id)}/bars`, { csv, accept_jumps: acceptJumps }),
   barQuality: (id: string) => request<{ symbol: string; bars: number; first: string | null; last: string | null; issues: DataIssue[] }>("GET", `/instruments/${encodeURIComponent(id)}/quality`),
+  portfolio: (book: "paper" | "live") => request<Record<string, unknown>>("GET", `/portfolio?book=${book}`),
+  bars: (id: string, from: string, to: string) => request<Array<{ date: string; open: string; high: string; low: string; close: string; volume: string }>>("GET", `/instruments/${encodeURIComponent(id)}/bars?from=${from}&to=${to}`),
   kite: () => request<KiteStatus>("GET", "/kite"),
   kiteLogin: () => request<{ url: string }>("POST", "/kite/login"),
   kiteSyncBars: () => request<Record<string, unknown>>("POST", "/kite/sync-bars"),

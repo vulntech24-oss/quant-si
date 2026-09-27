@@ -523,3 +523,37 @@ async fn invariant_10_a_version_whose_parameters_differ_from_the_code_is_not_run
     assert_eq!(report.skipped_versions.len(), 1, "{report:?}");
     assert!(report.skipped_versions[0].contains("parameters"));
 }
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn the_portfolio_view_reads_equity_drawdown_and_pnl_per_strategy_from_the_journal(
+    pool: PgPool,
+) {
+    use qd_app::ports::PortfolioReader;
+    let w = world(pool).await;
+    let acct = account(&w.stores, AccountMode::Paper).await;
+    runner(&w, acct, Arc::new(FakeEvidence))
+        .run(day(599))
+        .await
+        .unwrap();
+    let portfolio = qd_app::book_view::JournalPortfolio {
+        reader: w.stores.journal.clone(),
+        market: w.stores.market.clone(),
+        clock: Arc::new(FixedClock),
+        books: vec![("paper".to_owned(), acct)],
+    };
+    let view = portfolio.view("paper").await.unwrap();
+    let curve = view["equity_curve"].as_array().unwrap();
+    assert_eq!(curve.len(), days(&w.pool, acct).await.len());
+    let dd: Vec<Decimal> = curve
+        .iter()
+        .map(|p| p["drawdown"].as_str().unwrap().parse().unwrap())
+        .collect();
+    assert!(dd.iter().all(|d| *d <= Decimal::ZERO));
+    let max: Decimal = view["max_drawdown"].as_str().unwrap().parse().unwrap();
+    assert_eq!(max, dd.iter().copied().min().unwrap());
+    let strategies = view["strategies"].as_array().unwrap();
+    assert_eq!(strategies.len(), 1, "{view}");
+    assert_eq!(strategies[0]["strategy"], "Trend pullback v1");
+    assert!(strategies[0]["trades"].as_u64().unwrap() > 0);
+    assert!(portfolio.view("live").await.is_err());
+}

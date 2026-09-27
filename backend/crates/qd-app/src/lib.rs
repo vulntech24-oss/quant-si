@@ -16,8 +16,10 @@
 //! - [`secrets`]: the catalog of secrets the owner can enter in the web UI.
 //! - [`session`]: the daily trading cycle shared by backtest and paper (INV-08).
 //! - [`restore`]: rebuilding trading state from the journal after a restart.
+//! - [`book_view`]: equity curve, drawdown, exposure and P&L per strategy.
 //! - [`runs`]: loading state, strategy slots and instruments for a run.
 
+pub mod book_view;
 pub mod decision;
 pub mod evidence;
 pub mod gateway;

@@ -94,3 +94,15 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
 .secret-row { display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(260px, 1.2fr); gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border, #e5e7eb); }
 @media (max-width: 800px) { .secret-row { grid-template-columns: 1fr; } }
 .checklist { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.35rem; }
+.price-chart { width: 100%; height: auto; display: block; }
+.price-chart .wick { stroke: var(--muted, #888); stroke-width: 1; }
+.price-chart .candle.up { fill: var(--long, #1a7f37); }
+.price-chart .candle.down { fill: var(--short, #cf222e); }
+.price-chart .level { stroke-width: 1.5; stroke-dasharray: 6 4; }
+.price-chart .level.entry, .price-chart .level-label.entry { stroke: #0969da; fill: #0969da; }
+.price-chart .level.stop, .price-chart .level-label.stop { stroke: var(--short, #cf222e); fill: var(--short, #cf222e); }
+.price-chart .level.target, .price-chart .level-label.target { stroke: var(--long, #1a7f37); fill: var(--long, #1a7f37); }
+.price-chart .level-label { font-size: 12px; stroke: none; }
+.price-chart .decision-line { stroke: var(--muted, #888); stroke-dasharray: 2 3; }
+.price-chart .equity { fill: none; stroke: #0969da; stroke-width: 2; }
+.price-chart .drawdown { fill: var(--short, #cf222e); opacity: 0.35; }

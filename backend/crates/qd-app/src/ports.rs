@@ -559,3 +559,10 @@ pub trait DataAdmin: Send + Sync {
     /// Data-quality issues in an instrument's recent stored bars.
     async fn quality(&self, instrument: InstrumentId) -> Result<serde_json::Value, StoreError>;
 }
+
+/// The portfolio view of a book (ADR 0015).
+#[async_trait]
+pub trait PortfolioReader: Send + Sync {
+    /// Equity curve, drawdown, exposure and P&L per strategy for `paper` or `live`.
+    async fn view(&self, book: &str) -> Result<serde_json::Value, StoreError>;
+}

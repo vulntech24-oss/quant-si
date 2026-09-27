@@ -173,6 +173,20 @@ async fn run() -> Result<(), String> {
     let api_state = qd_api::ApiState {
         monitor: monitor.clone(),
         data: Some(Arc::new(qd_server::data::DataService(runtime.clone()))),
+        portfolio: Some(Arc::new(qd_app::book_view::JournalPortfolio {
+            reader: stores.journal.clone(),
+            market: stores.market.clone(),
+            clock: clock.clone(),
+            books: std::iter::once(("paper".to_owned(), config.file.account_id))
+                .chain(
+                    config
+                        .file
+                        .live
+                        .as_ref()
+                        .map(|l| ("live".to_owned(), l.account_id)),
+                )
+                .collect(),
+        })),
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),
