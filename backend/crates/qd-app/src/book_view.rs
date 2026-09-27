@@ -130,7 +130,7 @@ pub fn book_view(
         }
     }
     let mut exposure: Vec<Exposure> = groups.into_values().collect();
-    exposure.sort_by(|a, b| b.notional.cmp(&a.notional));
+    exposure.sort_by_key(|e| std::cmp::Reverse(e.notional));
 
     let mut per: BTreeMap<String, (u32, u32, Decimal, Decimal)> = BTreeMap::new();
     for t in days.iter().flat_map(|d| &d.trades) {
@@ -161,7 +161,7 @@ pub fn book_view(
             },
         })
         .collect();
-    strategies.sort_by(|a, b| b.net_pnl.cmp(&a.net_pnl));
+    strategies.sort_by_key(|s| std::cmp::Reverse(s.net_pnl));
     BookView {
         equity_curve,
         max_drawdown,
