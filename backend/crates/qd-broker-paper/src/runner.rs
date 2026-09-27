@@ -24,7 +24,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::{Duration, NaiveDate, NaiveTime, TimeZone, Utc};
-use qd_app::decision::{DecisionEngine, EvidencePolicy, StrategyVersionInfo};
+use qd_app::decision::{DecisionEngine, EvidencePolicy};
 use qd_app::gateway::{GatewayAccount, OrderGateway};
 use qd_app::live::LivePolicy;
 use qd_app::ports::{
@@ -33,19 +33,19 @@ use qd_app::ports::{
 };
 use qd_app::positions::reconcile_book;
 use qd_app::registry::StrategyRegistry;
-use qd_app::restore::{RestoreError, RestoredState, STATE_KINDS};
+use qd_app::restore::{RestoreError, RestoredState};
+use qd_app::runs;
 use qd_app::session::{
     AccountBook, DayRecord, InstrumentData, SessionClock, SessionError, SessionParts,
     SessionSettings, StrategySlot, TradingSession,
 };
 use qd_domain::costs::CostModel;
-use qd_domain::economics::SlippageAssumption;
 use qd_domain::halt::{Halt, HaltKind, HaltScope};
 use qd_domain::ids::{AccountId, HaltId, InstrumentId, SnapshotId, StrategyVersionId};
-use qd_domain::instrument::{InstrumentKind, InstrumentSpec, ProductType};
+use qd_domain::instrument::InstrumentSpec;
 use qd_domain::lifecycle::order::OrderIntentState;
 use qd_domain::lifecycle::strategy::StrategyStage;
-use qd_domain::market::{Bar, BarSeries};
+use qd_domain::market::Bar;
 use qd_domain::num::{Currency, Money};
 use qd_domain::proposal::AccountMode;
 use qd_risk::config::RiskConfig;
@@ -110,6 +110,16 @@ pub struct PaperDeps {
     pub lock: Arc<dyn RunLock>,
     /// Wall clock.
     pub clock: Arc<dyn Clock>,
+}
+
+impl From<runs::LoadError> for PaperError {
+    fn from(e: runs::LoadError) -> Self {
+        match e {
+            runs::LoadError::Store(e) => Self::Store(e),
+            runs::LoadError::Restore(e) => Self::Restore(e),
+            runs::LoadError::Invalid(e) => Self::Invalid(e),
+        }
+    }
 }
 
 /// Why a paper run failed.
@@ -208,17 +218,6 @@ impl std::fmt::Debug for PaperRunner {
     }
 }
 
-/// Journal entries read per page when restoring.
-const PAGE: i64 = 1000;
-
-fn product_for(spec: &InstrumentSpec) -> ProductType {
-    if spec.kind == InstrumentKind::Future {
-        ProductType::Margin
-    } else {
-        ProductType::Delivery
-    }
-}
-
 impl PaperRunner {
     /// Creates the runner.
     pub fn new(deps: PaperDeps, settings: PaperSettings) -> Result<Self, PaperError> {
@@ -236,20 +235,9 @@ impl PaperRunner {
 
     /// Rebuilds the account's trading state from the journal (not checked).
     pub async fn load_state(&self) -> Result<RestoredState, PaperError> {
-        let mut values = Vec::new();
-        let mut after = 0;
-        loop {
-            let page = self.deps.reader.replay(&STATE_KINDS, after, PAGE).await?;
-            let Some(last) = page.last() else { break };
-            after = last.seq;
-            let full = i64::try_from(page.len()).unwrap_or(0) >= PAGE;
-            values.extend(page.into_iter().map(|e| e.entry));
-            if !full {
-                break;
-            }
-        }
-        RestoredState::from_entries(self.settings.account, values.iter())
-            .map_err(PaperError::Restore)
+        runs::load_state(self.deps.reader.as_ref(), self.settings.account)
+            .await
+            .map_err(PaperError::from)
     }
 
     async fn halt_on_restore_failure(&self, error: &RestoreError) {
@@ -286,53 +274,13 @@ impl PaperRunner {
     }
 
     async fn slots(&self) -> Result<(Vec<StrategySlot<'_>>, Vec<String>), PaperError> {
-        let mut slots = Vec::new();
-        let mut skipped = Vec::new();
-        let versions = self
-            .deps
-            .registry
-            .versions()
-            .await
-            .map_err(|e| PaperError::Store(StoreError(e.to_string())))?;
-        for v in versions {
-            let stage = self
-                .deps
-                .registry
-                .stage(v.reference.version_id)
-                .await
-                .map_err(|e| PaperError::Store(StoreError(e.to_string())))?;
-            if stage != StrategyStage::Paper {
-                continue;
-            }
-            let label = format!("{} v{}", v.reference.name, v.reference.version_number);
-            let Some(entry) = self
-                .catalog
-                .iter()
-                .find(|c| c.strategy.logic_version() == v.reference.logic_version)
-            else {
-                skipped.push(format!("{label}: logic version not in this build"));
-                continue;
-            };
-            if entry.parameters != v.parameters {
-                skipped.push(format!(
-                    "{label}: registered parameters differ from the logic version's"
-                ));
-                continue;
-            }
-            let slippage = SlippageAssumption::new("slip-v1", Decimal::ZERO)
-                .map_err(|e| PaperError::Invalid(e.to_string()))?;
-            slots.push(StrategySlot {
-                strategy: entry.strategy.as_ref(),
-                info: StrategyVersionInfo {
-                    reference: v.reference.clone(),
-                    stage,
-                    rr_floor: v.rr_floor,
-                    slippage,
-                },
-                slippage_ticks: Some(self.settings.slippage_ticks),
-            });
-        }
-        Ok((slots, skipped))
+        Ok(runs::stage_slots(
+            &self.deps.registry,
+            &self.catalog,
+            &[StrategyStage::Paper],
+            self.settings.slippage_ticks,
+        )
+        .await?)
     }
 
     async fn instruments(
@@ -340,37 +288,8 @@ impl PaperRunner {
         through: NaiveDate,
         known_at: chrono::DateTime<Utc>,
     ) -> Result<(Vec<InstrumentSpec>, Vec<InstrumentData>), PaperError> {
-        let mut latest: HashMap<InstrumentId, InstrumentSpec> = HashMap::new();
-        for spec in self.deps.market.instruments(through).await? {
-            let newer = latest
-                .get(&spec.id)
-                .is_none_or(|s| spec.version > s.version);
-            if newer {
-                latest.insert(spec.id, spec);
-            }
-        }
-        let mut specs: Vec<InstrumentSpec> = latest.into_values().collect();
-        specs.sort_by_key(|s| s.id);
         let from = self.settings.start - Duration::days(self.settings.warm_up_days);
-        let mut data = Vec::new();
-        for spec in &specs {
-            let bars = self
-                .deps
-                .market
-                .daily_bars(spec.id, from, through, known_at)
-                .await?;
-            let Some(last) = bars.last().map(Bar::date) else {
-                continue;
-            };
-            let series = BarSeries::new(spec.id, last, bars)
-                .map_err(|e| PaperError::Invalid(e.to_string()))?;
-            data.push(InstrumentData {
-                spec: spec.clone(),
-                product: product_for(spec),
-                series,
-            });
-        }
-        Ok((specs, data))
+        Ok(runs::load_instruments(self.deps.market.as_ref(), from, through, known_at).await?)
     }
 
     /// Processes every trading day after the last processed one, through `through`.

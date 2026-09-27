@@ -15,6 +15,7 @@ confidence-threshold = 0.9
 allow = [
     "Apache-2.0",
     "BSD-3-Clause", # subtle, matchit (via sqlx, axum)
+    "ISC",          # ring, rustls-webpki, untrusted (TLS for provider APIs via reqwest)
     "MIT",
     "Unicode-3.0",
     "Zlib",         # foldhash (via hashbrown)

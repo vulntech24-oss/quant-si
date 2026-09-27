@@ -16,6 +16,7 @@
 //! - [`secrets`]: the catalog of secrets the owner can enter in the web UI.
 //! - [`session`]: the daily trading cycle shared by backtest and paper (INV-08).
 //! - [`restore`]: rebuilding trading state from the journal after a restart.
+//! - [`runs`]: loading state, strategy slots and instruments for a run.
 
 pub mod decision;
 pub mod evidence;
@@ -30,5 +31,6 @@ pub mod positions;
 pub mod registry;
 pub mod restore;
 pub mod review;
+pub mod runs;
 pub mod secrets;
 pub mod session;

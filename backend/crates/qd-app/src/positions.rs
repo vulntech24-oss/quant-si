@@ -318,6 +318,26 @@ impl PositionManager {
         }
     }
 
+    /// A protective order ended without a fill (at a live broker: a GTT leg
+    /// that failed or was cancelled outside QuantDesk). A protected position
+    /// left without a working stop becomes unprotected; returns it.
+    pub async fn on_protection_ended(&self, intent: OrderIntentId) -> Option<PositionId> {
+        let id = lock(&self.by_intent).get(&intent).copied()?;
+        let protected = lock(&self.positions)
+            .get(&id)
+            .is_some_and(|p| p.state == PositionState::Protected);
+        let has_stop = self
+            .gateway
+            .working_intents(id)
+            .iter()
+            .any(|i| i.purpose() == OrderPurpose::ProtectiveStop);
+        if !protected || has_stop {
+            return None;
+        }
+        self.transition(id, PositionEvent::ProtectionLost).await;
+        Some(id)
+    }
+
     /// Applies a fill the gateway accepted.
     pub async fn on_fill(&self, report: &FillReport, trading_date: NaiveDate) -> PositionUpdate {
         let mut update = PositionUpdate::default();

@@ -46,7 +46,7 @@ jobs:
       - name: Tests
         run: cargo test --workspace
       - name: Tests (live-orders feature compiled in, still disabled by configuration)
-        run: cargo test -p qd-app -p qd-server --features qd-app/live-orders
+        run: cargo test -p qd-app -p qd-server -p qd-broker-kite --features qd-app/live-orders,qd-broker-kite/live-orders
       - name: cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
         with:

@@ -97,7 +97,9 @@ pub struct BarEvents {
     pub expired: Vec<OrderIntentId>,
 }
 
-/// A venue that fills orders from completed daily bars (backtest and paper).
+/// A venue whose order events the session reads bar by bar: the simulated
+/// venues of backtests and paper trading fill orders from the bar; a live
+/// broker adapter reports what the broker did on that bar's date.
 pub trait SimulatedVenue: BrokerAccountReader {
     /// Processes one completed bar for an instrument.
     fn process_bar(&self, instrument: InstrumentId, bar: &Bar) -> BarEvents;
@@ -487,9 +489,29 @@ impl TradingSession {
                 }
             }
         }
-        if let Ok(venue_positions) = self.venue.positions().await {
-            day.mismatches =
-                u32::try_from(self.positions.reconcile(&venue_positions).len()).unwrap_or(u32::MAX);
+        let reconciliation = match self.venue.positions().await {
+            Ok(venue_positions) => {
+                let mismatches = self.positions.reconcile(&venue_positions).len();
+                day.mismatches = u32::try_from(mismatches).unwrap_or(u32::MAX);
+                (mismatches > 0)
+                    .then(|| format!("{mismatches} position mismatch(es) with the broker"))
+            }
+            Err(e) => Some(format!("broker positions unreadable: {e}")),
+        };
+        // A live book that disagrees with the broker, or cannot be checked,
+        // must not add risk (INV-06): halt entries until a human looks.
+        if let (AccountMode::Live, Some(problem)) = (self.settings.mode, reconciliation) {
+            if let Ok(halt) = qd_domain::halt::Halt::new(
+                HaltId::new_at(now),
+                qd_domain::halt::HaltKind::Operational,
+                qd_domain::halt::HaltScope::Account(self.book.id),
+                format!("live reconciliation failed on {date}: {problem}"),
+                now,
+                None,
+                true,
+            ) {
+                let _ = self.halts.record(&halt).await;
+            }
         }
 
         // Decisions at the close, for instruments without an active position.
@@ -599,8 +621,29 @@ impl TradingSession {
         for expired in events.expired {
             if self.gateway.on_expired(expired).await.is_ok() {
                 self.positions.on_entry_ended(expired).await;
+                if self.positions.on_protection_ended(expired).await.is_some() {
+                    day.unprotected = day.unprotected.saturating_add(1);
+                }
             }
         }
+    }
+
+    /// Applies venue events outside the daily cycle (a live broker's fills
+    /// during the day, so protection is placed as soon as an entry fills).
+    /// Returns the day record fragment with the counts.
+    pub async fn apply_events_now(&self, events: BarEvents, date: NaiveDate) -> DayRecord {
+        let mut day = DayRecord {
+            account: self.book.id,
+            date,
+            equity: Decimal::ZERO,
+            book: self.book.clone(),
+            trades: Vec::new(),
+            decisions: BTreeMap::new(),
+            unprotected: 0,
+            mismatches: 0,
+        };
+        self.apply_events(events, date, &mut day).await;
+        day
     }
 
     async fn risk_state(
