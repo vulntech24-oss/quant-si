@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 2 (Risk Gate, cost model, first strategy) done; Phase 3 next**.
+- Current phase: **Phase 3 (application layer, backtesting) done; Phase 4 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -62,6 +62,15 @@ backend/                     Cargo workspace (ADR 0002)
     src/regime.rs            regime-v1 classifier
     src/strategy.rs          Strategy trait, run_strategy (features → regime → strategy)
     src/trend_pullback.rs    trend-pullback-1.0.0 (long only)
+  crates/qd-app/             use cases + ports (async)
+    src/ports.rs             Clock, Journal, HaltStore, BrokerOrderExecutor, BrokerAccountReader, EvidenceSource
+    src/orders.rs            OrderIntent, EntryAuthorization, BrokerOrderRequest (crate-private constructors)
+    src/decision.rs          Trade Proposal Engine + Decision Engine (journal before authorization)
+    src/gateway.rs           Order Gateway: the only order path
+    src/positions.rs         Position Manager: OCO protection, exits, reconciliation
+    src/live.rs              live gate (INV-14); `live-orders` feature, off by default
+    src/memory.rs            in-memory journal and halt store (backtests, tests)
+  crates/qd-backtest/        SimClock, SimBroker (simulate_fill), run_backtest, metrics
   config/                    data, not code
     costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
     risk.toml                §4 default risk configuration
@@ -70,8 +79,8 @@ docs/                        spec, ADRs, progress log
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-app, qd-backtest, qd-ai, qd-broker-kite,
-qd-broker-paper, qd-marketdata, qd-store, qd-api, qd-server, qd-cli.
+Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-broker-paper,
+qd-marketdata, qd-store, qd-api, qd-server, qd-cli.
 Create a crate only when it has real code.
 
 ## Rules of thumb
@@ -82,6 +91,8 @@ Create a crate only when it has real code.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
+- Only the Decision Engine can create an `EntryAuthorization`; only the Order Gateway
+  can create a `BrokerOrderRequest`. Keep those constructors `pub(crate)`.
 - No `todo!`, `unimplemented!`, `dbg!`, `unwrap`, `expect` in runtime code.
 - Never place a real order. Never ask for secret values; name the `.env` variables.
 - Read the provider's current docs before any integration; record them in
