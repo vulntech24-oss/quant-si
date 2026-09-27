@@ -116,6 +116,7 @@ impl Placement {
 #[derive(Clone, Debug)]
 struct Tracked {
     instrument: InstrumentId,
+    action: TradeAction,
     quantity: Decimal,
     reported: Decimal,
     placement: Placement,
@@ -443,6 +444,8 @@ fn parse_book(data: &Value) -> HashMap<String, BookOrder> {
 pub struct RefreshReport {
     /// Fills queued.
     pub fills: usize,
+    /// One line per fill, e.g. `BUY 10 NSE:INFY @ 1500.5 (entry)`.
+    pub fill_notes: Vec<String>,
     /// Orders that ended without a (further) fill.
     pub ended: usize,
     /// Problems worth a human's attention.
@@ -515,6 +518,7 @@ impl KiteBroker {
                     r.intent.id(),
                     Tracked {
                         instrument: r.intent.instrument(),
+                        action: r.intent.action(),
                         quantity: r.intent.quantity().value(),
                         reported: r.filled.value(),
                         placement: Placement::parse(id),
@@ -538,6 +542,7 @@ impl KiteBroker {
             leg.id,
             Tracked {
                 instrument: leg.instrument,
+                action: leg.action,
                 quantity: leg.quantity.value(),
                 reported: Decimal::ZERO,
                 placement,
@@ -719,6 +724,20 @@ impl KiteBroker {
                 if let Some(fill) = fill {
                     t.reported = o.filled;
                     report.fills += 1;
+                    let symbol = self.specs.get(&t.instrument).map_or_else(
+                        || t.instrument.to_string(),
+                        |(k, _)| format!("{}:{}", k.exchange, k.tradingsymbol),
+                    );
+                    let role = match t.action {
+                        TradeAction::OpenLong | TradeAction::OpenShort => "entry",
+                        TradeAction::CloseLong | TradeAction::CloseShort => "exit",
+                    };
+                    report.fill_notes.push(format!(
+                        "{} {} {symbol} @ {} ({role})",
+                        transaction_type(t.action),
+                        fill.quantity.value().normalize(),
+                        fill.price.value().normalize()
+                    ));
                     self.lock()
                         .pending
                         .entry(t.instrument)
@@ -789,6 +808,7 @@ impl KiteBroker {
                         intent.id(),
                         Tracked {
                             instrument: intent.instrument(),
+                            action: intent.action(),
                             quantity: intent.quantity().value(),
                             reported: Decimal::ZERO,
                             placement: Placement::Order(order_id.clone()),

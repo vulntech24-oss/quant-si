@@ -706,6 +706,14 @@ async fn entries_go_out_as_amo_orders_and_a_fill_gets_one_two_leg_gtt(pool: PgPo
         .await
         .unwrap();
     assert_eq!(report.refresh.fills, 1, "{report:?}");
+    assert_eq!(
+        report.refresh.fill_notes,
+        vec![format!(
+            "BUY {} NSE:TESTEQ @ {} (entry)",
+            order["quantity"],
+            trigger.normalize()
+        )]
+    );
     assert_eq!(report.unprotected, 0, "{report:?}");
     let gtts = requests(&state, "POST", "/gtt/triggers");
     assert_eq!(gtts.len(), 1, "stop and target are one OCO order");

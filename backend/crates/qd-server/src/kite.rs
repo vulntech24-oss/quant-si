@@ -501,6 +501,21 @@ pub fn spawn_schedules(
                     match live.run_through(today).await {
                         Ok(r) => {
                             tracing::info!(report = %r, "live run complete");
+                            let notes: Vec<&str> = r
+                                .pointer("/refresh/fill_notes")
+                                .and_then(Value::as_array)
+                                .into_iter()
+                                .flatten()
+                                .filter_map(Value::as_str)
+                                .collect();
+                            if !notes.is_empty() {
+                                notifier
+                                    .notify_if_enabled(&format!(
+                                        "QuantDesk fills at Zerodha:\n{}",
+                                        notes.join("\n")
+                                    ))
+                                    .await;
+                            }
                             if e.notifications.daily_summary {
                                 notifier.notify_if_enabled(&summary("live run", &r)).await;
                             }
@@ -533,7 +548,24 @@ pub fn spawn_schedules(
             if open && due {
                 last_fills = Some(now);
                 match live.sync().await {
-                    Ok(r) => tracing::info!(report = %r, "live fill check complete"),
+                    Ok(r) => {
+                        tracing::info!(report = %r, "live fill check complete");
+                        let notes: Vec<&str> = r
+                            .pointer("/refresh/fill_notes")
+                            .and_then(Value::as_array)
+                            .into_iter()
+                            .flatten()
+                            .filter_map(Value::as_str)
+                            .collect();
+                        if !notes.is_empty() {
+                            notifier
+                                .notify_if_enabled(&format!(
+                                    "QuantDesk fills at Zerodha:\n{}",
+                                    notes.join("\n")
+                                ))
+                                .await;
+                        }
+                    }
                     Err(err) => {
                         tracing::warn!(error = %err, "live fill check failed");
                         if warned != Some(today) {
