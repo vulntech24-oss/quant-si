@@ -176,12 +176,8 @@ async fn run() -> Result<(), String> {
             .cloned(),
         ..qd_app::monitor::MonitorSettings::default()
     };
-    let api_state = qd_api::ApiState {
-        monitor: monitor.clone(),
-        data: Some(Arc::new(qd_server::data::DataService(runtime.clone()))),
-        search: Some(Arc::new(qd_server::runtime::DynSearch(runtime.clone()))),
-        totp: Some(runtime.secrets.clone() as Arc<dyn qd_app::ports::TotpStore>),
-        portfolio: Some(Arc::new(qd_app::book_view::JournalPortfolio {
+    let portfolio: Arc<dyn qd_app::ports::PortfolioReader> =
+        Arc::new(qd_app::book_view::JournalPortfolio {
             reader: stores.journal.clone(),
             market: stores.market.clone(),
             clock: clock.clone(),
@@ -194,7 +190,25 @@ async fn run() -> Result<(), String> {
                         .map(|l| ("live".to_owned(), l.account_id)),
                 )
                 .collect(),
-        })),
+        });
+    let agent = Arc::new(qd_server::agent::DynAgent {
+        runtime: runtime.clone(),
+        market: Arc::new(qd_server::agent::KiteMarket::new(runtime.clone())),
+        portfolio: Some(portfolio.clone()),
+    });
+    qd_server::agent::spawn_schedule(
+        runtime.clone(),
+        agent.clone(),
+        notifier.clone(),
+        clock.clone(),
+    );
+    let api_state = qd_api::ApiState {
+        monitor: monitor.clone(),
+        data: Some(Arc::new(qd_server::data::DataService(runtime.clone()))),
+        search: Some(Arc::new(qd_server::runtime::DynSearch(runtime.clone()))),
+        totp: Some(runtime.secrets.clone() as Arc<dyn qd_app::ports::TotpStore>),
+        portfolio: Some(portfolio),
+        agent: Some(agent as Arc<dyn qd_app::ports::AgentControl>),
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),

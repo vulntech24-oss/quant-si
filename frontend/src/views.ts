@@ -995,3 +995,130 @@ export async function securityView(ctx: Ctx, rerender: () => void): Promise<HTML
   } }, "Log out everywhere");
   return h("section", {}, h("h1", {}, "Security"), message, factor, h("div", { class: "card stack" }, h("h2", {}, "Active sessions"), list, everywhere));
 }
+
+// ---------- AI agent (ADR 0016) ----------
+
+/** What the owner still has to set up before the agent can run, in order. */
+export function agentSetupMissing(status: Record<string, unknown>): string[] {
+  const missing: string[] = [];
+  if (status["enabled"] !== true) missing.push("Switch the agent on in Settings → AI agent.");
+  if (status["key_set"] !== true) missing.push(`Enter the ${str(status["provider"]) ?? "provider"} API key in Settings → API keys.`);
+  return missing;
+}
+
+/** One prediction outcome as text: pending, or right/wrong with the move. */
+export function outcomeText(outcome: Record<string, unknown> | null | undefined): string {
+  if (!outcome) return "open";
+  const verdict = outcome["correct"] === true ? "right" : "wrong";
+  const levels = str(outcome["levels"]);
+  const move = formatPercent(str(outcome["return_pct"]));
+  return `${verdict} (${levels && levels !== "neither" ? `${levels} hit, ` : ""}${move} by ${str(outcome["as_of"]) ?? "?"})`;
+}
+
+/** Pretty JSON for the trace, shown with textContent only. */
+export function traceText(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2) ?? "";
+  } catch {
+    return String(value);
+  }
+}
+
+function scoreMetrics(card: Record<string, unknown>): HTMLElement {
+  return h("div", { class: "metrics" },
+    metric("Predictions", str(card["predictions"]) ?? "0"),
+    metric("Scored", str(card["evaluated"]) ?? "0"),
+    metric("Accuracy", card["accuracy"] ? formatPercent(str(card["accuracy"])) : "—"),
+    metric("Brier", card["brier"] ? formatNumber(str(card["brier"]), 4) : "—"),
+    metric("Closed trades", str(card["trades"]) ?? "0"),
+    metric("Trade net P&L", formatNumber(str(card["trade_net_pnl"]))),
+    metric("Mean R", card["trade_mean_r"] ? `${formatNumber(str(card["trade_mean_r"]))}R` : "—"));
+}
+
+function runCard(run: Record<string, unknown>): HTMLElement {
+  const steps = (run["steps"] as Array<Record<string, unknown>> | undefined) ?? [];
+  const decisions = (run["decisions"] as unknown[] | undefined) ?? [];
+  return h("div", { class: "card stack" },
+    h("div", { class: "row" },
+      h("strong", {}, `${str(run["run_kind"]) ?? "run"} · ${str(run["status"]) ?? ""}`),
+      h("span", { class: "muted" }, ` ${formatIst(String(run["started_at"] ?? ""))} · ${str(run["model"]) ?? ""} · ${str(run["book"]) ?? ""} book · ${steps.length} tool call(s)`)),
+    run["error"] ? h("p", { class: "error" }, String(run["error"])) : null,
+    h("p", { class: "prewrap" }, str(run["summary"]) ?? ""),
+    decisions.length ? h("p", {}, "Trade decisions: ", ...decisions.map((d) => h("a", { href: `#/decisions/${encodeURIComponent(String(d))}`, class: "mono" }, `${String(d).slice(0, 13)}… `))) : null,
+    steps.length ? h("details", {}, h("summary", {}, "Tool trace"),
+      h("ol", { class: "stack" }, ...steps.map((s) => h("li", {},
+        h("strong", {}, str(s["tool"]) ?? ""), h("span", { class: "muted" }, ` ${str(s["millis"]) ?? "0"} ms`),
+        h("pre", { class: "mono small" }, `args: ${traceText(s["arguments"])}`),
+        h("pre", { class: "mono small" }, `result: ${traceText(s["result"])}`))))) : null);
+}
+
+export async function agentView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const title = h("h1", {}, "AI agent");
+  const intro = h("p", { class: "muted" }, "The desk's AI researches the market on the web, reads quotes and candles, predicts, and requests trades with its own allocation. QuantDesk's Risk Gate has the final word: it can cut the size or answer NO TRADE, and halts, loss limits and live-trading conditions always apply. Every prediction is scored.");
+  let status: Record<string, unknown>;
+  let runs: Array<Record<string, unknown>>;
+  let predictions: Array<{ prediction: Record<string, unknown>; outcome: Record<string, unknown> | null }>;
+  let scores: { overall: Record<string, unknown>; models: Array<{ model: string; scorecard: Record<string, unknown> }> };
+  try {
+    [status, runs, predictions, scores] = await Promise.all([api.agentStatus(), api.agentRuns(10), api.agentPredictions(), api.agentScorecard()]);
+  } catch (err) {
+    return h("section", {}, title, intro, h("p", { class: "empty" }, errorText(err)));
+  }
+  const message = h("p", { class: "error", role: "alert" });
+  const busy = h("p", { class: "muted", role: "status" });
+  const book = str(status["book"]) ?? "paper";
+  const gate = (status["live_gate"] ?? {}) as Record<string, unknown>;
+  const missingLive = (gate["missing"] as string[] | undefined) ?? [];
+  const setup = agentSetupMissing(status);
+  const start = async (kind: "research" | "monitor" | "manual", request?: string) => {
+    message.textContent = "";
+    busy.textContent = "The agent is working; a run can take several minutes…";
+    try {
+      const r = await api.agentRun(kind, request);
+      busy.textContent = `Run ${str(r["status"]) ?? ""}.`;
+      rerender();
+    } catch (err) {
+      busy.textContent = "";
+      message.textContent = errorText(err);
+    }
+  };
+  const ask = h("textarea", { rows: "3", maxlength: "4000", "aria-label": "Request to the agent", placeholder: "e.g. Look at private banks after today's RBI policy." });
+  const controls = isOwner(ctx) ? h("div", { class: "card stack" },
+    h("div", { class: "row wrap" },
+      h("button", { class: "primary", onclick: () => start("research") }, "Research now"),
+      h("button", { class: "ghost", onclick: () => start("monitor") }, "Review positions"),
+      h("button", { class: "ghost", onclick: async () => { try { const r = await api.agentEvaluate(); window.alert(`Scored ${str(r["evaluated"]) ?? "0"}; still open ${str(r["still_open"]) ?? "0"}.`); rerender(); } catch (err) { message.textContent = errorText(err); } } }, "Score predictions")),
+    ask,
+    h("button", { class: "ghost", onclick: () => { const text = ask.value.trim(); if (text) void start("manual", text); } }, "Ask the agent"),
+    busy) : null;
+  const statusCard = h("div", { class: "card stack" },
+    h("div", { class: "row" },
+      h("span", { class: book === "live" ? "chip short strong" : "chip neutral" }, book === "live" ? "LIVE BOOK" : "PAPER BOOK"),
+      h("span", {}, ` ${status["enabled"] === true ? "On" : "Off"} · ${str(status["model"]) ?? ""} · stage ${str(status["stage"]) ?? ""}`)),
+    setup.length ? h("ul", {}, ...setup.map((m) => h("li", {}, m))) : null,
+    h("p", { class: "muted" }, `Schedule: research ${str(get(status, "schedule.research_utc")) ?? "manual"} UTC; position reviews ${str(get(status, "schedule.monitor_every_minutes")) ? `every ${str(get(status, "schedule.monitor_every_minutes"))} min while NSE is open` : "off"}.`),
+    h("details", {}, h("summary", {}, "Live trading for the agent"),
+      h("p", { class: "muted" }, "Set only in the server file ([agent_live]), never here. The agent trades the live book only when the owner enabled it there, [live] is configured, every live-trading condition holds, and its scored paper record meets all thresholds."),
+      missingLive.length ? h("ul", {}, ...missingLive.map((m) => h("li", {}, m))) : h("p", {}, "All thresholds met.")),
+    scoreMetrics((status["scorecard"] ?? {}) as Record<string, unknown>));
+  const bands = ((scores.overall["bands"] as Array<Record<string, unknown>> | undefined) ?? []).filter((b) => Number(b["count"]) > 0);
+  const calibration = bands.length === 0 ? h("p", { class: "empty" }, "No scored predictions yet.") : h("table", { class: "table" },
+    h("thead", {}, h("tr", {}, ...["Stated probability", "Scored", "Mean stated", "Came true"].map((t) => h("th", {}, t)))),
+    h("tbody", {}, ...bands.map((b) => h("tr", {}, h("td", {}, `${formatPercent(str(b["from"]), 0)}–${formatPercent(str(b["to"]), 0)}`), h("td", { class: "mono right" }, str(b["count"]) ?? "0"), h("td", { class: "mono right" }, formatPercent(str(b["mean_probability"]))), h("td", { class: "mono right" }, formatPercent(str(b["hit_rate"])))))));
+  const predictionTable = predictions.length === 0 ? h("p", { class: "empty" }, "No predictions yet.") : h("div", { class: "scroll" }, h("table", { class: "table" },
+    h("thead", {}, h("tr", {}, ...["Made", "Symbol", "Call", "Horizon", "Probability", "Thesis", "Outcome", "Trade"].map((t) => h("th", {}, t)))),
+    h("tbody", {}, ...predictions.slice(0, 100).map(({ prediction: p, outcome }) => h("tr", {},
+      h("td", { class: "mono" }, str(p["reference_date"]) ?? ""),
+      h("td", {}, str(p["symbol"]) ?? ""),
+      h("td", {}, p["direction"] === "up" ? "Up" : "Down"),
+      h("td", { class: "mono right" }, `${str(p["horizon_days"]) ?? "?"}d`),
+      h("td", { class: "mono right" }, formatPercent(str(p["probability"]))),
+      h("td", {}, (str(p["thesis"]) ?? "").slice(0, 160)),
+      h("td", {}, outcomeText(outcome)),
+      h("td", {}, p["decision"] ? h("a", { href: `#/decisions/${encodeURIComponent(String(p["decision"]))}` }, "decision") : "—"))))));
+  return h("section", {}, title, intro, statusCard, controls, message,
+    h("h2", {}, "Recent runs"), runs.length === 0 ? h("p", { class: "empty" }, "No runs yet.") : h("div", { class: "stack" }, ...runs.map(runCard)),
+    h("h2", {}, "Predictions"), predictionTable,
+    h("h2", {}, "Calibration"), calibration,
+    scores.models.length > 1 ? h("div", { class: "stack" }, h("h2", {}, "By model"), ...scores.models.map((m) => h("div", { class: "card stack" }, h("strong", {}, m.model), scoreMetrics(m.scorecard)))) : null);
+}

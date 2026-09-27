@@ -721,3 +721,24 @@ impl AgentExecution {
         }
     }
 }
+
+/// The AI agent, for the API and the scheduler (ADR 0016).
+#[async_trait]
+pub trait AgentControl: Send + Sync {
+    /// Configuration, book, stage and what the live gate still needs.
+    async fn status(&self) -> Result<serde_json::Value, StoreError>;
+    /// Runs the agent once (`research`, `monitor` or `manual` with a request).
+    async fn run(
+        &self,
+        kind: &str,
+        request: Option<String>,
+    ) -> Result<serde_json::Value, StoreError>;
+    /// Recent runs with their tool traces, newest first.
+    async fn runs(&self, limit: i64) -> Result<serde_json::Value, StoreError>;
+    /// Predictions with their outcomes, newest first.
+    async fn predictions(&self) -> Result<serde_json::Value, StoreError>;
+    /// The scorecard, overall and per model.
+    async fn scorecard(&self) -> Result<serde_json::Value, StoreError>;
+    /// Scores predictions whose horizon has passed.
+    async fn evaluate(&self) -> Result<serde_json::Value, StoreError>;
+}

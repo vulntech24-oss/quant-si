@@ -62,6 +62,12 @@ pub fn router(state: ApiState) -> Router {
         .route("/validations", post(run_validation))
         .route("/evidence", get(evidence_list))
         .route("/evidence/{id}", get(evidence_one))
+        .route("/agent/status", get(agent_status))
+        .route("/agent/run", post(agent_run))
+        .route("/agent/runs", get(agent_runs))
+        .route("/agent/predictions", get(agent_predictions))
+        .route("/agent/scorecard", get(agent_scorecard))
+        .route("/agent/evaluate", post(agent_evaluate))
         .route("/ai/run", post(ai_run))
         .route("/ai/advice", get(ai_advice))
         .route("/ai/scorecard", get(ai_scorecard))
@@ -985,6 +991,110 @@ async fn evidence_one(
 }
 
 // ---------- advisory AI (INV-04) ----------
+
+fn agent(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::AgentControl>, ApiError> {
+    state
+        .agent
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("the AI agent is not available".to_owned()))
+}
+
+async fn agent_status(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    agent(&state)?
+        .status()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+#[derive(Deserialize)]
+struct AgentRunBody {
+    kind: String,
+    #[serde(default)]
+    request: Option<String>,
+}
+
+/// Runs the AI agent (owner). Its trade requests go through the Risk Gate
+/// and the Order Gateway like every entry; the live book is reachable only
+/// when the server file allows it (ADR 0016).
+async fn agent_run(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<AgentRunBody>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    if !matches!(body.kind.as_str(), "research" | "monitor" | "manual") {
+        return Err(ApiError::BadRequest(
+            "kind must be research, monitor or manual".to_owned(),
+        ));
+    }
+    if body.request.as_ref().is_some_and(|r| r.len() > 4000) {
+        return Err(ApiError::BadRequest(
+            "the request is too long (4000 characters)".to_owned(),
+        ));
+    }
+    let service = agent(&state)?;
+    state
+        .audit
+        .record(&caller.actor(), "agent.run", json!({ "kind": body.kind }))
+        .await
+        .map_err(internal)?;
+    service
+        .run(&body.kind, body.request)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
+
+#[derive(Deserialize)]
+struct AgentRunsQuery {
+    limit: Option<i64>,
+}
+
+async fn agent_runs(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Query(q): Query<AgentRunsQuery>,
+) -> Result<Json<Value>, ApiError> {
+    agent(&state)?
+        .runs(q.limit.unwrap_or(20))
+        .await
+        .map(Json)
+        .map_err(internal)
+}
+
+async fn agent_predictions(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    agent(&state)?
+        .predictions()
+        .await
+        .map(Json)
+        .map_err(internal)
+}
+
+async fn agent_scorecard(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    agent(&state)?.scorecard().await.map(Json).map_err(internal)
+}
+
+async fn agent_evaluate(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    agent(&state)?
+        .evaluate()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
+}
 
 fn ai(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::AiAdvisory>, ApiError> {
     state

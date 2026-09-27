@@ -7,7 +7,7 @@ import "./styles.css";
 import { ApiError, api, type Me, type Status } from "./api";
 import { clear, h } from "./dom";
 import { formatIst } from "./format";
-import { aiView, backtestView, brokerView, dataView, portfolioView, securityView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
+import { agentView, aiView, backtestView, brokerView, dataView, portfolioView, securityView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
 
 const root = document.getElementById("app");
 
@@ -33,6 +33,7 @@ function alertBanner(status: Status | null): HTMLElement | null {
 
 const NAV: Array<[string, string]> = [
   ["#/decisions", "Decisions"],
+  ["#/agent", "AI agent"],
   ["#/portfolio", "Portfolio"],
   ["#/paper", "Paper"],
   ["#/broker", "Broker"],
@@ -83,6 +84,7 @@ async function render(ctx: Ctx): Promise<void> {
     else if (route.startsWith("#/portfolio")) view = await portfolioView();
     else if (route.startsWith("#/validation")) view = await validationView(ctx, rerender);
     else if (route.startsWith("#/review")) view = await reviewView(ctx, rerender);
+    else if (route.startsWith("#/agent")) view = await agentView(ctx, rerender);
     else if (route.startsWith("#/ai")) view = await aiView(ctx, rerender);
     else if (route.startsWith("#/settings")) view = await settingsView(ctx, rerender);
     else if (route.startsWith("#/security")) view = await securityView(ctx, rerender);

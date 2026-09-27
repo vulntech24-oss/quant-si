@@ -2,8 +2,8 @@
 //! settings saved from the web UI override them, and every run reads the
 //! effective values. No restart is needed after a change.
 //!
-//! Editable sections: `paper`, `risk`, `ai`, `kite`, `notifications`,
-//! `validation`, `review`. Each
+//! Editable sections: `paper`, `risk`, `agent`, `ai`, `kite`, `data`,
+//! `notifications`, `validation`, `review`. Each
 //! save is validated through the same typed constructors the files use,
 //! needs the owner's step-up (checked by the API), is stored as a new
 //! append-only version, and is audited with old and new values.
@@ -34,13 +34,13 @@ use qd_store::Stores;
 use serde_json::{Map, Value, json};
 
 use crate::config::{
-    AiConfig, DataConfig, KiteConfig, NotificationsConfig, PaperConfig, ServerConfig,
+    AgentConfig, AiConfig, DataConfig, KiteConfig, NotificationsConfig, PaperConfig, ServerConfig,
 };
 use qd_app::ports::SecretReader;
 use qd_store::settings::PgSecrets;
 
 /// The editable sections, in display order.
-pub const SECTIONS: [(&str, &str, &str); 8] = [
+pub const SECTIONS: [(&str, &str, &str); 9] = [
     (
         "paper",
         "Paper trading",
@@ -50,6 +50,11 @@ pub const SECTIONS: [(&str, &str, &str); 8] = [
         "risk",
         "Risk limits",
         "Every entry passes these limits (INV-03). Loosening them is your decision; it is audited.",
+    ),
+    (
+        "agent",
+        "AI agent",
+        "The desk's AI: researches the market, predicts and requests trades. The Risk Gate has the final word on every entry; paper book unless the server file allows live.",
     ),
     (
         "ai",
@@ -102,6 +107,8 @@ pub struct Effective {
     pub notifications: NotificationsConfig,
     /// Data-quality limits.
     pub data: DataConfig,
+    /// The AI agent.
+    pub agent: AgentConfig,
 }
 
 /// The server's runtime: file configuration, stores, secrets and clock.
@@ -114,6 +121,9 @@ pub struct Runtime {
     pub secrets: Arc<PgSecrets>,
     /// The Kite API base ([`qd_broker_kite::client::API_BASE`]; tests use a fake).
     pub kite_base: String,
+    /// The AI agent's provider base; `None` is the provider's production
+    /// API (tests use a fake).
+    pub agent_base: Option<String>,
     /// Clock.
     pub clock: Arc<dyn Clock>,
 }
@@ -133,6 +143,7 @@ impl Runtime {
             stores,
             secrets,
             kite_base: qd_broker_kite::client::API_BASE.to_owned(),
+            agent_base: None,
             clock,
         }
     }
@@ -189,6 +200,11 @@ fn validate_section(section: &str, value: &Value) -> Result<Value, String> {
             let config = RiskConfig::new(data).map_err(|e| bad(&e))?;
             serde_json::to_value(RiskConfigData::clone(&config)).map_err(|e| bad(&e))
         }
+        "agent" => {
+            let c: AgentConfig = serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
+            c.validate()?;
+            serde_json::to_value(&c).map_err(|e| bad(&e))
+        }
         "ai" => {
             let ai: AiConfig = serde_json::from_value(value.clone()).map_err(|e| bad(&e))?;
             ai.validate()?;
@@ -242,6 +258,7 @@ impl Runtime {
             }),
             "risk" => serde_json::to_value(RiskConfigData::clone(&c.risk)).map_err(error),
             "ai" => serde_json::to_value(&c.file.ai).map_err(error),
+            "agent" => serde_json::to_value(&c.file.agent).map_err(error),
             "validation" => serde_json::to_value(&c.validation).map_err(error),
             "review" => serde_json::to_value(&c.review).map_err(error),
             "kite" => serde_json::to_value(&c.file.kite).map_err(error),
@@ -300,6 +317,7 @@ impl Runtime {
             kite: serde_json::from_value(get("kite")?).map_err(error)?,
             notifications: serde_json::from_value(get("notifications")?).map_err(error)?,
             data: serde_json::from_value(get("data")?).map_err(error)?,
+            agent: serde_json::from_value(get("agent")?).map_err(error)?,
         })
     }
 
@@ -768,6 +786,31 @@ fn describe(section: &str, key: &str) -> (String, Option<&'static str>) {
         ("risk", "min_ev_r") => Some("Minimum expected value after costs, in R."),
         ("risk", "stage_multipliers.paper") => {
             Some("Must stay 0: paper versions never trade live (INV-14).")
+        }
+        ("agent", "enabled") => Some(
+            "Scheduled and manual runs. Needs the provider's API key; Zerodha login for quotes and new instruments.",
+        ),
+        ("agent", "provider") => Some("openai, xai or gemini."),
+        ("agent", "model") => {
+            Some("Model name as the provider lists it. Each model keeps its own track record.")
+        }
+        ("agent", "research_utc") => Some(
+            "Daily research run (UTC); after the bar import is best, e.g. 11:15 UTC (16:45 IST). Empty: manual only.",
+        ),
+        ("agent", "monitor_every_minutes") => {
+            Some("Position reviews while NSE is open (15–390 minutes). Empty: off.")
+        }
+        ("agent", "limits.max_position_fraction") => Some(
+            "Largest entry notional as a share of equity (0.25 = 25%). The Risk Gate may cut it further.",
+        ),
+        ("agent", "limits.min_rr") => {
+            Some("Minimum net reward-to-risk of the agent's plans, enforced by the Risk Gate.")
+        }
+        ("agent", "limits.max_trades_per_run") => {
+            Some("Trade requests per run (0 disables trading).")
+        }
+        ("agent", "limits.instructions") => {
+            Some("Your standing guidance: focus sectors, style, what to avoid.")
         }
         ("ai", "enabled") => {
             Some("Advice is journaled and scored only; it never changes a decision.")

@@ -10,8 +10,10 @@
 //! - [`keys`]: crash-safe master-key rotation.
 //! - [`kite`]: the Zerodha connection, live trading and their schedules.
 //! - [`notify`]: Telegram notifications.
+//! - [`agent`]: the AI agent: market access, desks, runs and schedule.
 //! - [`SystemClock`]: the real clock, used only by binaries.
 
+pub mod agent;
 pub mod config;
 pub mod data;
 pub mod http;

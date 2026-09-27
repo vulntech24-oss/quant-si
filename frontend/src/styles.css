@@ -132,3 +132,7 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
   .quickbar a.danger { background: var(--short, #cf222e); border-color: var(--short, #cf222e); color: #fff; }
   footer { padding-bottom: 72px; }
 }
+
+/* AI agent page: summaries keep their line breaks; traces wrap. */
+.prewrap { white-space: pre-wrap; }
+pre.small { white-space: pre-wrap; word-break: break-word; max-height: 16rem; overflow: auto; }

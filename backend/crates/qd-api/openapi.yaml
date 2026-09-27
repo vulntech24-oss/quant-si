@@ -66,6 +66,18 @@ paths:
     get: {summary: "Recorded evidence, newest first, optionally ?version=<id> (summaries without per-trade detail)"}
   /api/evidence/{id}:
     get: {summary: One evidence record with its full report}
+  /api/agent/status:
+    get: {summary: "The AI agent (ADR 0016): configuration, book (paper unless the server file allows live), stage, live-gate requirements still missing, schedule, limits and scorecard"}
+  /api/agent/run:
+    post: {summary: "Run the AI agent once (owner). Body {kind: research | monitor | manual, request?: text}. Trade requests go through the Decision Engine, Risk Gate and Order Gateway; returns the journaled run with its tool trace (409 when off or busy)"}
+  /api/agent/runs:
+    get: {summary: "Recent agent runs with tool traces, newest first (?limit=, at most 50)"}
+  /api/agent/predictions:
+    get: {summary: "AI predictions with their scored outcomes, newest first"}
+  /api/agent/scorecard:
+    get: {summary: "Prediction accuracy, Brier score, calibration and trade results, overall and per model"}
+  /api/agent/evaluate:
+    post: {summary: "Score predictions whose horizon has passed, from completed daily bars (owner)"}
   /api/ai/run:
     post: {summary: "Run advisory AI over entry decisions not yet advised (owner; 409 when disabled). Advice is shadow-only (INV-04)"}
   /api/ai/advice:

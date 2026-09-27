@@ -43,7 +43,10 @@ fn error(e: impl std::fmt::Display) -> StoreError {
 }
 
 /// The latest spec of every instrument effective on `date`.
-async fn latest_specs(rt: &Runtime, date: NaiveDate) -> Result<Vec<InstrumentSpec>, StoreError> {
+pub(crate) async fn latest_specs(
+    rt: &Runtime,
+    date: NaiveDate,
+) -> Result<Vec<InstrumentSpec>, StoreError> {
     let mut latest: HashMap<_, InstrumentSpec> = HashMap::new();
     for spec in
         qd_app::ports::HistoricalMarketData::instruments(rt.stores.market.as_ref(), date).await?
@@ -97,65 +100,85 @@ pub async fn sync_bars(rt: &Runtime) -> Result<Value, StoreError> {
                 }
             }
         };
-        let to = completed_through(now, &spec.venue);
-        let window_start = to - Duration::days(e.kite.history_days);
-        let stored = qd_app::ports::HistoricalMarketData::daily_bars(
-            rt.stores.market.as_ref(),
-            spec.id,
-            window_start,
-            to,
-            now,
-        )
-        .await?;
-        let from = stored
-            .last()
-            .map(Bar::date)
-            .and_then(|d| d.succ_opt())
-            .unwrap_or(window_start);
-        if from > to {
-            report.push(json!({ "symbol": spec.symbol, "inserted": 0, "through": to }));
-            continue;
-        }
-        let continuous = spec.kind == InstrumentKind::Future;
-        match daily_candles(&client, &token, from, to, continuous, to).await {
-            Ok(bars) => {
-                let mut new: Vec<Bar> = bars.into_iter().filter(|b| b.date() >= from).collect();
-                let issues = check_bars(
-                    stored.last(),
-                    &new,
-                    rt.config.calendars.get(&spec.calendar_id),
-                    e.data.limits(),
-                );
-                // A suspect jump holds back that bar and every later one.
-                let first_jump = issues.iter().find_map(|i| match i {
-                    DataIssue::PriceJump { date, .. } => Some(*date),
-                    _ => None,
-                });
-                let mut held_back = 0;
-                if let (true, Some(jump)) = (e.data.hold_suspect_bars, first_jump) {
-                    let before = new.len();
-                    new.retain(|b| b.date() < jump);
-                    held_back = before - new.len();
-                }
-                let inserted = rt.stores.market.insert_bars(spec.id, &new, now).await?;
-                let notable: Vec<&DataIssue> = issues
-                    .iter()
-                    .filter(|i| !matches!(i, DataIssue::CalendarUnknown { .. }))
-                    .collect();
-                report.push(json!({
-                    "symbol": spec.symbol,
-                    "inserted": inserted,
-                    "through": to,
-                    "held_back": held_back,
-                    "issues": notable,
-                }));
-            }
+        match import_spec_bars(rt, &e, &client, &spec, &token, e.kite.history_days).await {
+            Ok(v) => report.push(v),
             Err(KiteError::Token(m)) => return Err(StoreError(format!("Kite session: {m}"))),
             Err(err) => report.push(json!({ "symbol": spec.symbol, "error": err.to_string() })),
         }
         tokio::time::sleep(CANDLE_PAUSE).await;
     }
     Ok(json!({ "instruments": report }))
+}
+
+/// Imports completed daily bars from Kite for one instrument: dates after
+/// the last stored bar, within `history_days`, through the data-quality
+/// checks (a suspect jump holds back that bar and every later one when
+/// `data.hold_suspect_bars` is on).
+pub(crate) async fn import_spec_bars(
+    rt: &Runtime,
+    e: &crate::runtime::Effective,
+    client: &qd_broker_kite::client::KiteClient,
+    spec: &InstrumentSpec,
+    token: &str,
+    history_days: i64,
+) -> Result<Value, KiteError> {
+    let unexpected = |err: StoreError| KiteError::Unexpected(err.0);
+    let now = rt.clock.now();
+    let to = completed_through(now, &spec.venue);
+    let window_start = to - Duration::days(history_days);
+    let stored = qd_app::ports::HistoricalMarketData::daily_bars(
+        rt.stores.market.as_ref(),
+        spec.id,
+        window_start,
+        to,
+        now,
+    )
+    .await
+    .map_err(unexpected)?;
+    let from = stored
+        .last()
+        .map(Bar::date)
+        .and_then(|d| d.succ_opt())
+        .unwrap_or(window_start);
+    if from > to {
+        return Ok(json!({ "symbol": spec.symbol, "inserted": 0, "through": to }));
+    }
+    let continuous = spec.kind == InstrumentKind::Future;
+    let bars = daily_candles(client, token, from, to, continuous, to).await?;
+    let mut new: Vec<Bar> = bars.into_iter().filter(|b| b.date() >= from).collect();
+    let issues = check_bars(
+        stored.last(),
+        &new,
+        rt.config.calendars.get(&spec.calendar_id),
+        e.data.limits(),
+    );
+    let first_jump = issues.iter().find_map(|i| match i {
+        DataIssue::PriceJump { date, .. } => Some(*date),
+        _ => None,
+    });
+    let mut held_back = 0;
+    if let (true, Some(jump)) = (e.data.hold_suspect_bars, first_jump) {
+        let before = new.len();
+        new.retain(|b| b.date() < jump);
+        held_back = before - new.len();
+    }
+    let inserted = rt
+        .stores
+        .market
+        .insert_bars(spec.id, &new, now)
+        .await
+        .map_err(unexpected)?;
+    let notable: Vec<&DataIssue> = issues
+        .iter()
+        .filter(|i| !matches!(i, DataIssue::CalendarUnknown { .. }))
+        .collect();
+    Ok(json!({
+        "symbol": spec.symbol,
+        "inserted": inserted,
+        "through": to,
+        "held_back": held_back,
+        "issues": notable,
+    }))
 }
 
 /// The Zerodha connection behind the `BrokerLink` port.

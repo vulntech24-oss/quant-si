@@ -93,3 +93,37 @@ enabled = false
 # initial_equity = "100000"
 # start_date = "2026-11-02"
 # daily_run_utc = "11:30:00"     # after the bar import; absent = manual only
+
+# The AI agent (ADR 0016): researches the market on the web, reads quotes and
+# candles, predicts, and requests trades. Every trade request goes through the
+# Decision Engine and Risk Gate (which may cut the size or refuse) and the
+# Order Gateway. Also editable in Settings → AI agent. Its provider's key goes
+# in Settings → API keys (openai_api_key, xai_api_key or gemini_api_key).
+# [agent]
+# enabled = false
+# provider = "openai"            # openai | xai | gemini
+# model = "gpt-6-astra"
+# research_utc = "11:15:00"      # daily research run, after the bar import (16:45 IST)
+# monitor_every_minutes = 60     # position reviews while NSE is open
+# call_timeout_seconds = 120
+# [agent.limits]
+# max_steps = 24
+# max_tool_calls = 40
+# max_trades_per_run = 3
+# run_timeout_secs = 600
+# min_rr = "1.5"                 # net reward-to-risk floor, enforced by the Risk Gate
+# max_position_fraction = "0.25" # largest entry notional as a share of equity
+# slippage_ticks = "1"
+# max_holding_days = 60
+# instructions = ""              # your standing guidance for the agent
+
+# When the AI agent may trade the live book (ADR 0016). Server file only.
+# Absent or enabled = false: the agent trades the paper book. With it on, the
+# agent also needs [live], every INV-14 condition, and a scored paper record
+# meeting all thresholds; otherwise its live entries are NO TRADE.
+# [agent_live]
+# enabled = false
+# min_evaluated_predictions = 30
+# min_accuracy = "0.55"
+# max_brier = "0.25"
+# min_trades = 20

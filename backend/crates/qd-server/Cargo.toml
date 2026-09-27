@@ -13,6 +13,7 @@ live-orders = ["qd-app/live-orders", "qd-broker-kite/live-orders"]
 [dependencies]
 async-trait.workspace = true
 axum.workspace = true
+qd-agent.workspace = true
 qd-ai.workspace = true
 qd-ai-providers.workspace = true
 qd-broker-kite.workspace = true

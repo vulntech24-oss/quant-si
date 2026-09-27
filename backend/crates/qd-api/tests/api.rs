@@ -160,6 +160,37 @@ impl qd_app::ports::Notifier for FakeNotifier {
     }
 }
 
+/// Records agent runs.
+#[derive(Default)]
+struct FakeAgent(std::sync::Mutex<Vec<(String, Option<String>)>>);
+
+#[async_trait::async_trait]
+impl qd_app::ports::AgentControl for FakeAgent {
+    async fn status(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({"book": "paper"}))
+    }
+    async fn run(
+        &self,
+        kind: &str,
+        request: Option<String>,
+    ) -> Result<serde_json::Value, StoreError> {
+        self.0.lock().unwrap().push((kind.to_owned(), request));
+        Ok(serde_json::json!({"status": "completed"}))
+    }
+    async fn runs(&self, _: i64) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!([]))
+    }
+    async fn predictions(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!([]))
+    }
+    async fn scorecard(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({}))
+    }
+    async fn evaluate(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({"evaluated": 0}))
+    }
+}
+
 const OWNER_PASSWORD: &str = "correct horse battery staple";
 const VIEWER_PASSWORD: &str = "viewer password 123";
 
@@ -168,6 +199,7 @@ struct App {
     stores: Stores,
     account: AccountId,
     notifier: Arc<FakeNotifier>,
+    agent: Arc<FakeAgent>,
 }
 
 async fn app(pool: PgPool) -> App {
@@ -204,11 +236,13 @@ async fn app(pool: PgPool) -> App {
         .await
         .unwrap();
     let notifier = Arc::new(FakeNotifier::default());
+    let agent = Arc::new(FakeAgent::default());
     let state = ApiState {
         monitor: qd_app::monitor::MonitorSettings::default(),
         data: None,
         portfolio: None,
         search: None,
+        agent: Some(agent.clone()),
         totp: Some(Arc::new(qd_store::settings::PgSecrets::new(
             pool.clone(),
             Some(qd_store::settings::MasterKey::new([7_u8; 32])),
@@ -264,6 +298,7 @@ async fn app(pool: PgPool) -> App {
         stores,
         account,
         notifier,
+        agent,
     }
 }
 
@@ -1183,4 +1218,70 @@ async fn sessions_are_listed_without_tokens_and_can_be_logged_out_everywhere(poo
         let (status, _, _) = call(&app, "GET", "/api/status", Some(cookie), None, false).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
     }
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn agent_runs_are_owner_only_validated_and_audited(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let body = serde_json::json!({"kind": "manual", "request": "Look at banks"});
+
+    let (status, _, json) =
+        call(&app, "GET", "/api/agent/status", Some(&viewer), None, false).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["book"], "paper");
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/agent/run",
+        Some(&viewer),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/agent/run",
+        Some(&owner),
+        Some(body.clone()),
+        false,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/agent/run",
+        Some(&owner),
+        Some(serde_json::json!({"kind": "trade_everything"})),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(app.agent.0.lock().unwrap().is_empty());
+
+    let (status, _, json) = call(
+        &app,
+        "POST",
+        "/api/agent/run",
+        Some(&owner),
+        Some(body),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(json["status"], "completed");
+    assert_eq!(
+        app.agent.0.lock().unwrap().clone(),
+        vec![("manual".to_owned(), Some("Look at banks".to_owned()))]
+    );
+    let audited: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM audit_log WHERE action = 'agent.run'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(audited, 1);
 }

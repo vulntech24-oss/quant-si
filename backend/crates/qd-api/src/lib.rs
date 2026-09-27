@@ -85,6 +85,8 @@ pub struct ApiState {
     pub broker: Option<Arc<dyn qd_app::ports::BrokerLink>>,
     /// Walk-forward parameter searches (research only).
     pub search: Option<Arc<dyn qd_app::ports::ParameterSearch>>,
+    /// The AI agent (ADR 0016).
+    pub agent: Option<Arc<dyn qd_app::ports::AgentControl>>,
     /// TOTP second factors (encrypted with the master key).
     pub totp: Option<Arc<dyn qd_app::ports::TotpStore>>,
     /// Portfolio views of the paper and live books.

@@ -108,6 +108,118 @@ pub struct ConfigFile {
     /// file only, never editable from the web UI (ADR 0013).
     #[serde(default)]
     pub live: Option<LiveConfig>,
+    /// The AI agent (ADR 0016). Disabled by default; editable in the web UI.
+    #[serde(default)]
+    pub agent: AgentConfig,
+    /// When the AI agent may trade the live book (ADR 0016). Server file
+    /// only, never editable from the web UI. Off by default: the agent
+    /// trades the paper book.
+    #[serde(default)]
+    pub agent_live: qd_agent::config::LiveGate,
+}
+
+fn default_agent_provider() -> String {
+    "openai".to_owned()
+}
+
+fn default_agent_model() -> String {
+    "gpt-6-astra".to_owned()
+}
+
+const fn default_agent_call_timeout() -> u64 {
+    120
+}
+
+/// The AI agent (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct AgentConfig {
+    /// Master switch. Default: false.
+    #[serde(default)]
+    pub enabled: bool,
+    /// `openai`, `xai` or `gemini` (its API key is under API keys).
+    #[serde(default = "default_agent_provider")]
+    pub provider: String,
+    /// Model name at that provider.
+    #[serde(default = "default_agent_model")]
+    pub model: String,
+    /// Daily research run (UTC), e.g. after the bar import. Off when absent.
+    #[serde(default)]
+    pub research_utc: Option<chrono::NaiveTime>,
+    /// Monitoring run every this many minutes while NSE is open. Off when absent.
+    #[serde(default)]
+    pub monitor_every_minutes: Option<u32>,
+    /// Timeout per model call, seconds.
+    #[serde(default = "default_agent_call_timeout")]
+    pub call_timeout_seconds: u64,
+    /// Budgets and limits of each run.
+    #[serde(default)]
+    pub limits: qd_agent::config::AgentSettings,
+}
+
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: default_agent_provider(),
+            model: default_agent_model(),
+            research_utc: None,
+            monitor_every_minutes: None,
+            call_timeout_seconds: default_agent_call_timeout(),
+            limits: qd_agent::config::AgentSettings::default(),
+        }
+    }
+}
+
+impl AgentConfig {
+    /// Range checks.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.provider_kind().is_none() {
+            return Err("agent.provider must be openai, xai or gemini".to_owned());
+        }
+        let model = self.model.trim();
+        if model.is_empty()
+            || model.len() > 100
+            || !model
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || "-._:/".contains(c))
+        {
+            return Err("agent.model must be a model name".to_owned());
+        }
+        if !(5..=600).contains(&self.call_timeout_seconds) {
+            return Err("agent.call_timeout_seconds must be between 5 and 600".to_owned());
+        }
+        if self
+            .monitor_every_minutes
+            .is_some_and(|m| !(15..=390).contains(&m))
+        {
+            return Err("agent.monitor_every_minutes must be between 15 and 390".to_owned());
+        }
+        self.limits
+            .validate()
+            .map_err(|e| format!("agent.limits: {e}"))
+    }
+
+    /// The provider.
+    #[must_use]
+    pub fn provider_kind(&self) -> Option<qd_ai_providers::Provider> {
+        match self.provider.as_str() {
+            "openai" => Some(qd_ai_providers::Provider::OpenAi),
+            "xai" => Some(qd_ai_providers::Provider::Xai),
+            "gemini" => Some(qd_ai_providers::Provider::Gemini),
+            _ => None,
+        }
+    }
+
+    /// The secret holding the provider's API key.
+    #[must_use]
+    pub fn key_name(&self) -> &'static str {
+        match self.provider.as_str() {
+            "xai" => "xai_api_key",
+            "gemini" => "gemini_api_key",
+            _ => "openai_api_key",
+        }
+    }
 }
 
 /// One hosted-model advisor.
