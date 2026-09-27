@@ -1,0 +1,83 @@
+/* QuantDesk styles, from design/stitch-reference DESIGN.md ("Calm Quantitative
+   Precision"), using the prose palette where the YAML tokens disagree. */
+:root {
+  --canvas: #f8f9fa;
+  --card: #ffffff;
+  --ink: #0f172a;
+  --slate: #64748b;
+  --muted: #94a3b8;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --long: #059669;
+  --long-bg: #ecfdf5;
+  --short: #dc2626;
+  --short-bg: #fef2f2;
+  --neutral-bg: #f1f5f9;
+  --radius: 6px;
+  --radius-card: 8px;
+  font-family: "Geist Sans", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--canvas);
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background-color: var(--canvas);
+  background-image: radial-gradient(rgba(226, 232, 240, 0.6) 1px, transparent 1px);
+  background-size: 24px 24px;
+  font-size: 14px;
+  line-height: 22px;
+}
+.mono, .metric .mono, td.mono, pre { font-family: "JetBrains Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+h1 { font-size: 24px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; margin: 0 0 4px; }
+h2 { font-size: 16px; font-weight: 500; margin: 0 0 12px; }
+a { color: inherit; }
+.topbar { position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 24px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 600; }
+nav { display: flex; gap: 4px; flex-wrap: wrap; }
+nav a { padding: 6px 12px; border-radius: var(--radius); text-decoration: none; color: var(--slate); }
+nav a.active { background: var(--ink); color: #fff; }
+.user { display: flex; align-items: center; gap: 8px; }
+main { max-width: 1200px; margin: 0 auto; padding: 24px; }
+footer { text-align: center; padding: 16px; }
+.card { display: block; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); padding: 16px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03); text-decoration: none; }
+a.card:hover { border-color: var(--border-strong); }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; gap: 8px; align-items: center; }
+.row.wrap { flex-wrap: wrap; }
+.between { justify-content: space-between; }
+.title { font-size: 16px; font-weight: 500; }
+.muted { color: var(--slate); }
+.small { font-size: 12px; }
+.empty { color: var(--slate); padding: 24px; text-align: center; }
+.error { color: var(--short); min-height: 1em; }
+.reason { margin: 8px 0; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 4px; font-family: "JetBrains Mono", monospace; font-size: 12px; text-decoration: none; white-space: nowrap; }
+.chip.long { background: var(--long-bg); color: var(--long); }
+.chip.short { background: var(--short-bg); color: var(--short); }
+.chip.neutral { background: var(--neutral-bg); color: var(--slate); }
+.chip.strong { font-weight: 600; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin-top: 8px; }
+.metric .label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate); }
+.table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-card); margin-top: 12px; }
+.table th, .table td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+.table th { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--slate); font-weight: 500; }
+.right { text-align: right !important; }
+.reasons { margin: 0; padding-left: 18px; }
+.reasons .supports::marker { color: var(--long); }
+.reasons .opposes::marker { color: var(--short); }
+pre { max-height: 400px; overflow: auto; font-size: 12px; background: var(--neutral-bg); padding: 12px; border-radius: var(--radius); }
+button, input, select { font: inherit; height: 34px; padding: 0 10px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); color: var(--ink); }
+input:focus, select:focus { outline: none; border-color: var(--ink); box-shadow: 0 0 0 1px var(--ink); }
+button { cursor: pointer; }
+button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
+button.danger { background: var(--short); color: #fff; border-color: var(--short); }
+button.ghost { border-color: transparent; color: var(--slate); background: transparent; }
+button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
+.danger-text { color: var(--short) !important; }
+.login { display: grid; place-items: center; min-height: 100vh; }
+.login form { width: 320px; }
+.modal { border: 1px solid var(--border-strong); border-radius: 10px; padding: 16px; }
+.modal::backdrop { backdrop-filter: blur(8px); background: rgba(248, 249, 250, 0.8); }
+.spark { width: 100%; height: 100px; }
+.spark polyline { fill: none; stroke: var(--ink); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
