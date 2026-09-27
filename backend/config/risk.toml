@@ -1,0 +1,29 @@
+# Risk configuration: the spec §4 defaults. Placeholders the owner confirms or
+# changes (§4 item 9). Values are strings so they never pass through floats.
+# Fractions: "0.005" = 0.5%.
+
+risk_per_trade = "0.005"          # 0.5% of equity per trade
+max_total_open_risk = "0.05"      # 5% total open risk
+max_bucket_open_risk = "0.02"     # 2% per correlated bucket
+max_strategy_open_risk = "0.02"   # 2% per strategy version
+daily_loss_limit = "0.02"         # 2% of start-of-day equity, open P&L included
+weekly_loss_limit = "0.04"        # 4% of start-of-week equity
+hard_halt_drawdown = "0.10"       # hard halt at 10% below the high-water mark
+cool_off_after_losses = 3         # cool-off after 3 losing trades in a row
+cool_off_hours = 24               # assumption (ADR 0005): the spec gives no duration
+paper_accounts_size_as_full = true
+min_ev_r = "0.10"                 # EV after costs must be at least +0.10R
+min_evidence = 30                 # comparable out-of-sample setups
+
+[stage_multipliers]               # live accounts only
+paper = "0"
+small_capital = "0.25"
+full = "1.0"
+
+# Assumptions (ADR 0005): the spec requires gap shocks per asset class but
+# gives no values. Owner to confirm.
+[gap_shocks]
+equity = "0.20"
+precious_metal = "0.10"
+energy = "0.20"
+crypto = "0.30"
