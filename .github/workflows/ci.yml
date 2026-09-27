@@ -11,6 +11,23 @@ jobs:
   backend:
     name: Backend checks (spec §1.4)
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: quantdesk
+          POSTGRES_PASSWORD: ci-only-password
+          POSTGRES_DB: quantdesk
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U quantdesk"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Throwaway CI database; not a secret. sqlx::test creates one database per test.
+      DATABASE_URL: postgres://quantdesk:ci-only-password@localhost:5432/quantdesk
     defaults:
       run:
         working-directory: backend
@@ -28,6 +45,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Tests
         run: cargo test --workspace
+      - name: Tests (live-orders feature compiled in, still disabled by configuration)
+        run: cargo test -p qd-app -p qd-server --features qd-app/live-orders
       - name: cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
         with:
