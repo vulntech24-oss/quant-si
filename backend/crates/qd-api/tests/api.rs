@@ -208,6 +208,7 @@ async fn app(pool: PgPool) -> App {
         monitor: qd_app::monitor::MonitorSettings::default(),
         data: None,
         portfolio: None,
+        search: None,
         totp: Some(Arc::new(qd_store::settings::PgSecrets::new(
             pool.clone(),
             Some(qd_store::settings::MasterKey::new([7_u8; 32])),

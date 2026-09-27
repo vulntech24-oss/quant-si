@@ -58,6 +58,8 @@ paths:
     post: {summary: "Import bars from CSV, body {csv, accept_jumps} (owner; a suspect jump refuses the import unless accepted)"}
   /api/backtests:
     post: {summary: Run a research backtest (owner)}
+  /api/research/search:
+    post: {summary: "Walk-forward parameter search over a strategy's small grid, body {logic_version, instruments, from, to, equity} (owner; research only, never evidence)"}
   /api/validations:
     post: {summary: "Validate a strategy version (walk-forward, out-of-sample, holdout, Monte Carlo) and record the evidence (owner). Body {version, instruments[], from, to, equity}"}
   /api/evidence:

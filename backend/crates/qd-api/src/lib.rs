@@ -83,6 +83,8 @@ pub struct ApiState {
     pub live: Option<Arc<dyn PaperTrading>>,
     /// The broker connection (Zerodha Kite login, data, fills).
     pub broker: Option<Arc<dyn qd_app::ports::BrokerLink>>,
+    /// Walk-forward parameter searches (research only).
+    pub search: Option<Arc<dyn qd_app::ports::ParameterSearch>>,
     /// TOTP second factors (encrypted with the master key).
     pub totp: Option<Arc<dyn qd_app::ports::TotpStore>>,
     /// Portfolio views of the paper and live books.

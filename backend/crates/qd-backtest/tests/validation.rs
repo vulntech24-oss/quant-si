@@ -314,3 +314,58 @@ fn monte_carlo_is_deterministic_and_worse_edges_draw_down_more() {
     assert!(monte_carlo(&[], dec!(0.01), dec!(0.2), config).is_none());
     assert!(monte_carlo(&good, dec!(1.5), dec!(0.2), config).is_none());
 }
+
+#[test]
+fn every_catalog_strategy_has_a_small_grid_containing_its_catalog_parameters() {
+    for entry in qd_strategy::catalog::catalog().unwrap() {
+        let grid = qd_backtest::search::grid(entry.strategy.logic_version()).unwrap();
+        assert!(!grid.is_empty() && grid.len() <= qd_backtest::search::MAX_CANDIDATES);
+        let catalog: Vec<_> = grid.iter().filter(|c| c.is_catalog).collect();
+        assert_eq!(catalog.len(), 1, "{}", entry.strategy.logic_version());
+        assert_eq!(catalog[0].parameters, entry.parameters);
+    }
+    assert!(qd_backtest::search::grid("unknown-1.0.0").is_none());
+}
+
+#[tokio::test]
+async fn the_parameter_search_selects_on_training_data_only_and_is_deterministic() {
+    use qd_backtest::search::{SearchInput, SearchSettings, grid, walk_forward_search};
+    let data = data(trending_bars(900));
+    let info = info();
+    let input = SearchInput {
+        info: &info,
+        instruments: &data,
+        from: day(630),
+        to: day(899),
+        equity: Money::new(dec!(1000000), Currency::INR),
+        slippage_ticks: dec!(1),
+    };
+    let settings = SearchSettings {
+        min_train_trades: 3,
+        ..SearchSettings::default()
+    };
+    let candidates = grid(TrendPullback::LOGIC_VERSION).unwrap();
+    let report = walk_forward_search(&input, &candidates, settings, &risk(), &costs())
+        .await
+        .unwrap();
+    assert_eq!(report.trials_per_window, candidates.len());
+    assert_eq!(report.windows.len(), 3);
+    let mut expected_from = day(630);
+    for w in &report.windows {
+        assert_eq!(w.test_from, expected_from, "test windows are contiguous");
+        assert_eq!(w.train_from, w.test_from - chrono::Duration::days(365));
+        assert!(w.chosen < candidates.len());
+        expected_from = w.test_to + chrono::Duration::days(1);
+    }
+    assert_eq!(report.windows.last().unwrap().test_to, day(899));
+    let total_test: u32 = report.windows.iter().map(|w| w.test_trades).sum();
+    assert_eq!(total_test, report.out_of_sample.trades);
+    assert!(!report.verdict.is_empty());
+    let again = walk_forward_search(&input, &candidates, settings, &risk(), &costs())
+        .await
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&report).unwrap(),
+        serde_json::to_value(&again).unwrap()
+    );
+}

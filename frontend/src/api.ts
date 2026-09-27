@@ -165,6 +165,7 @@ export const api = {
   strategies: () => request<StrategyRow[]>("GET", "/strategies"),
   strategyEvent: (id: string, event: Record<string, unknown>) => request<{ stage: unknown }>("POST", `/strategies/${encodeURIComponent(id)}/events`, event),
   instruments: () => request<Array<{ id: string; symbol: string; version: number; currency: string }>>("GET", "/instruments"),
+  parameterSearch: (body: { logic_version: string; instruments: string[]; from: string; to: string; equity: string }) => request<Record<string, unknown>>("POST", "/research/search", body),
   strategyCatalog: () => request<Array<{ logic_version: string; name: string; parameters: Record<string, unknown> }>>("GET", "/strategy-catalog"),
   backtest: (body: { instrument: string; from: string; to: string; equity: string; logic_version?: string }) => request<Record<string, unknown>>("POST", "/backtests", body),
   validate: (body: { version: string; instruments: string[]; from: string; to: string; equity: string }) => request<Record<string, unknown>>("POST", "/validations", body),

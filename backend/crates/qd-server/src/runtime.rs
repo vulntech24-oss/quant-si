@@ -634,6 +634,24 @@ impl Reviewer for DynReviewer {
     }
 }
 
+/// Walk-forward parameter searches with the current risk configuration.
+pub struct DynSearch(pub Arc<Runtime>);
+
+#[async_trait]
+impl qd_app::ports::ParameterSearch for DynSearch {
+    async fn search(&self, request: &qd_app::ports::SearchRequest) -> Result<Value, StoreError> {
+        let rt = &self.0;
+        qd_backtest::research::ResearchSearch::new(
+            rt.stores.market.clone(),
+            Arc::new(rt.config.costs.clone()),
+            rt.effective().await?.risk,
+            rt.clock.clone(),
+        )
+        .search(request)
+        .await
+    }
+}
+
 /// Research backtests with the current risk configuration.
 pub struct DynBacktests(pub Arc<Runtime>);
 

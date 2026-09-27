@@ -58,6 +58,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/instruments/{id}/bars", get(bars).post(import_bars))
         .route("/instruments/{id}/quality", get(bar_quality))
         .route("/backtests", post(backtest))
+        .route("/research/search", post(parameter_search))
         .route("/validations", post(run_validation))
         .route("/evidence", get(evidence_list))
         .route("/evidence/{id}", get(evidence_one))
@@ -1268,6 +1269,34 @@ async fn paper_run(
         .await
         .map(Json)
         .map_err(|e| ApiError::Conflict(e.0))
+}
+
+/// A walk-forward parameter search (owner). Research only: the report is
+/// neither evidence nor registrable (INV-10).
+async fn parameter_search(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(request): Json<qd_app::ports::SearchRequest>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let search = state
+        .search
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("parameter search is not available".to_owned()))?;
+    state
+        .audit
+        .record(
+            &caller.actor(),
+            "research.search",
+            serde_json::to_value(&request).map_err(internal)?,
+        )
+        .await
+        .map_err(internal)?;
+    search
+        .search(&request)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::BadRequest(e.0))
 }
 
 async fn backtest(

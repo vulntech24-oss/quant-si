@@ -225,7 +225,43 @@ export async function backtestView(ctx: Ctx): Promise<HTMLElement> {
       result.append(h("p", { class: "error" }, errorText(err)));
     }
   };
-  return h("section", {}, h("h1", {}, "Research backtest"), h("p", { class: "muted" }, "Any strategy in this build, simulated at the Paper stage with a neutral evidence prior. Research only: results are not evidence until validated out of sample."), isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, strategy, select, from, to, equity, h("button", { class: "primary" }, "Run")) : h("p", { class: "muted" }, "Only the owner can run backtests."), result);
+  const search = searchForm(ctx, strategies, instruments);
+  return h("section", {}, search, h("h1", {}, "Research backtest"), h("p", { class: "muted" }, "Any strategy in this build, simulated at the Paper stage with a neutral evidence prior. Research only: results are not evidence until validated out of sample."), isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, strategy, select, from, to, equity, h("button", { class: "primary" }, "Run")) : h("p", { class: "muted" }, "Only the owner can run backtests."), result);
+}
+
+function searchForm(ctx: Ctx, strategies: Array<{ logic_version: string; name: string }>, instruments: Array<{ id: string; symbol: string; version: number }>): HTMLElement | null {
+  if (!isOwner(ctx)) return null;
+  const strategy = h("select", { "aria-label": "Strategy" }, ...strategies.map((s) => h("option", { value: s.logic_version }, s.name)));
+  const pick = h("select", { multiple: true, size: "4", "aria-label": "Instruments" }, ...instruments.map((i) => h("option", { value: i.id }, i.symbol))) as HTMLSelectElement;
+  const from = h("input", { type: "date", "aria-label": "First test date" });
+  const to = h("input", { type: "date", "aria-label": "Last date" });
+  const equity = h("input", { value: "1000000", inputmode: "decimal", "aria-label": "Starting equity" });
+  const result = h("div", { class: "stack" });
+  const run = async (e: Event) => {
+    e.preventDefault();
+    clear(result);
+    result.append(h("p", { class: "muted" }, "Searching… (every candidate on every training window; this can take a minute)"));
+    try {
+      const chosen = [...pick.selectedOptions].map((o) => o.value);
+      const r = await api.parameterSearch({ logic_version: strategy.value, instruments: chosen, from: from.value, to: to.value, equity: equity.value });
+      const oos = (get(r, "out_of_sample") ?? {}) as Json;
+      const base = (get(r, "baseline") ?? {}) as Json;
+      const candidates = (get(r, "candidates") as Json[] | undefined) ?? [];
+      const windows = (get(r, "windows") as Json[] | undefined) ?? [];
+      clear(result);
+      result.append(
+        h("p", { class: "reason" }, String(get(r, "verdict") ?? "")),
+        h("div", { class: "metrics" }, metric("Out-of-sample trades", str(oos["trades"]) ?? "0"), metric("Out-of-sample mean R", formatNumber(str(oos["expectancy_r"]))), metric("Seen in training", `${formatNumber(str(get(r, "mean_in_sample_r")))}R`), metric("Catalog parameters, same windows", `${formatNumber(str(base["expectancy_r"]))}R (${str(base["trades"]) ?? "0"} trades)`), metric("Candidates per window", String(get(r, "trials_per_window") ?? ""))),
+        h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Test window", "Chosen", "Train R (trades)", "Test R (trades)"].map((t) => h("th", {}, t)))), h("tbody", {}, ...windows.map((w) => h("tr", {}, h("td", {}, `${str(w["test_from"])} → ${str(w["test_to"])}`), h("td", { class: "mono small" }, JSON.stringify(candidates[Number(w["chosen"])] ?? {})), h("td", { class: "mono right" }, `${formatNumber(str(w["train_expectancy_r"]))} (${str(w["train_trades"])})`), h("td", { class: "mono right" }, `${formatNumber(str(w["test_expectancy_r"]))} (${str(w["test_trades"])})`))))),
+      );
+    } catch (err) {
+      clear(result);
+      result.append(h("p", { class: "error" }, errorText(err)));
+    }
+  };
+  return h("section", { class: "stack" }, h("h1", {}, "Parameter search"),
+    h("p", { class: "muted" }, "Walk-forward over a small grid around the strategy's parameters: each quarter, the best setting on the previous year is chosen and then run on the unseen quarter. Research only: a better setting becomes a new strategy version in code and must pass validation and paper trading before it can trade."),
+    h("form", { class: "card row wrap", onsubmit: run }, strategy, pick, from, to, equity, h("button", { class: "primary" }, "Search")), result);
 }
 
 function backtestReport(report: Json): HTMLElement {

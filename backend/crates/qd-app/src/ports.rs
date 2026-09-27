@@ -633,3 +633,25 @@ pub trait PortfolioReader: Send + Sync {
     /// Equity curve, drawdown, exposure and P&L per strategy for `paper` or `live`.
     async fn view(&self, book: &str) -> Result<serde_json::Value, StoreError>;
 }
+
+/// A walk-forward parameter search request (research only, ADR 0015).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct SearchRequest {
+    /// Logic version whose grid is searched.
+    pub logic_version: String,
+    /// Instruments.
+    pub instruments: Vec<InstrumentId>,
+    /// First test date (training reaches back before it).
+    pub from: chrono::NaiveDate,
+    /// Last date.
+    pub to: chrono::NaiveDate,
+    /// Starting equity of each run.
+    pub equity: Decimal,
+}
+
+/// Runs walk-forward parameter searches (research only; never evidence).
+#[async_trait]
+pub trait ParameterSearch: Send + Sync {
+    /// Runs one search and returns its report.
+    async fn search(&self, request: &SearchRequest) -> Result<serde_json::Value, StoreError>;
+}

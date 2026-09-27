@@ -11,11 +11,13 @@
 //! - [`validator`]: validation of registered versions over stored data (the `Validator` port).
 //! - [`montecarlo`]: bootstrap resampling of trade outcomes.
 //! - [`research`]: research backtests of stored data (the `BacktestRunner` port).
+//! - [`search`]: walk-forward parameter search over a small grid (research only).
 
 pub mod engine;
 pub mod metrics;
 pub mod montecarlo;
 pub mod research;
+pub mod search;
 pub mod sim;
 pub mod validation;
 pub mod validator;
