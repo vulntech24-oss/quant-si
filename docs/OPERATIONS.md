@@ -191,6 +191,45 @@ job failures (once a day each).
   walk-forward selection. It is research only: a better setting has to
   become a new strategy version in code.
 
+## 6e. The AI agent (ADR 0016)
+
+**Setup**
+1. Settings → API keys: enter the key for your provider (`openai_api_key`,
+   `xai_api_key` or `gemini_api_key`).
+2. Settings → Paper trading: turn it on. The agent trades the paper book by
+   default.
+3. Log in with Zerodha each day. The agent uses it for quotes, instrument
+   search and new history.
+4. Settings → AI agent: switch it on, and choose the provider and model.
+   Optionally set:
+   - `research_utc`, e.g. 11:15 UTC, after the bar import;
+   - `monitor_every_minutes`;
+   - your standing `limits.instructions`.
+
+**Using it**
+- **AI agent → Research now:** runs it once.
+- **Ask the agent:** sends your own request.
+- **Each run shows** its summary, the trade decisions it produced (open
+  them for the post-risk verdict), and the full tool trace.
+
+**What the agent can and cannot do**
+- It proposes the allocation, the entry, stop and target, and the
+  probabilities.
+- The Risk Gate can shrink the size or say NO TRADE with a reason. The kill
+  switch stops its entries at once; its exits still work.
+- Its predictions are scored after their horizon (the Score predictions
+  button, or automatically before each run). Check the accuracy, Brier
+  score and calibration before trusting it with more.
+
+**The live book** is never switched on from the web UI. It needs all of:
+- `[agent_live] enabled = true` in the server file;
+- a `[live]` book and every live-trading condition;
+- a scored paper record meeting the thresholds.
+The agent page shows what is still missing.
+
+**Cost:** each run makes up to `max_steps` model calls plus the web research
+calls. Keep the schedules modest.
+
 ## 6d. Security
 
 - **Security → Two-factor login:** set up an authenticator app (TOTP).

@@ -18,6 +18,7 @@ TypeScript frontend.
 | Backtesting, walk-forward / out-of-sample / holdout validation, Monte Carlo | Built |
 | Paper trading (daily cycle shared with backtests, restore from the journal) | Built |
 | Evidence-gated promotions; review and calibration | Built |
+| **AI agent** (ADR 0016): web research, instruments, quotes, candles, analysis, predictions, AI-sized trades capped by the Risk Gate, monitoring, scored track record | Built (paper book by default) |
 | Advisory AI (shadow mode) with a deterministic checklist advisor | Built |
 | HTTP API, owner authentication, frontend | Built |
 | Settings page: all settings and API keys from the web UI (keys encrypted, write-only) | Built |

@@ -157,3 +157,14 @@ Known limits:
 - Enable TOTP on the Zerodha account (required for Kite Connect).
 - Enter the API key and secret in Settings. Log in daily with "Login with
   Zerodha": tokens expire at 06:00 IST.
+
+## Market quotes (the AI agent, ADR 0016)
+
+- Source: https://kite.trade/docs/connect/v3/market-quotes/ (read 2026-09-27).
+- `GET /quote` (full, up to 500 instruments), `GET /quote/ohlc` (OHLC and
+  last price, up to 1000), and `GET /quote/ltp` (last price, up to 1000).
+  Instruments are repeated `i=EXCHANGE:TRADINGSYMBOL` parameters.
+- Instruments missing from `data` have no quote (or expired); check each key.
+- The agent uses `/quote/ohlc` for at most 20 symbols per call. In Kite's
+  OHLC, `close` is the previous session's close. Quotes inform the agent;
+  plans are judged on completed daily bars.

@@ -10,8 +10,8 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phases 0–9, Zerodha/live/AI/Telegram (ADR 0014) and the upgrades
-  (ADR 0015) done. Remaining: crypto venue, 2027 holiday lists, owner decisions**
+- Current phase: **Phases 0–9, Zerodha/live/AI/Telegram (ADR 0014), the upgrades
+  (ADR 0015) and the AI agent as the central intelligence (ADR 0016) done. Remaining: crypto venue, 2027 holiday lists, owner decisions**
   (`docs/PROGRESS.md`, "What remains").
   See `docs/PROGRESS.md`.
 
@@ -107,6 +107,9 @@ backend/                     Cargo workspace (ADR 0002)
     src/broker.rs            executor (orders only with live-orders; OCO = two-leg GTT),
                              account reader, fills from the order book
     src/runner.rs            LiveRunner (latest date only, intraday fill sync), demote_on_breach
+  crates/qd-agent/           the AI agent (ADR 0016): tool-calling loop (OpenAI/xAI/Gemini),
+                             web research, QuantDesk tools, runs with budgets and traces,
+                             prediction scoring, live gate; trades only via AgentDesk
   crates/qd-ai-providers/    OpenAI/xAI (Responses) and Gemini advisors; advisory only (INV-04)
   crates/qd-ai/              advisory AI (INV-04): Advisor, checklist-v1, orchestrator, scorecard;
                              depends on nothing that can act on trading state (tested)
@@ -171,6 +174,12 @@ Create a crate only when it has real code.
   database are never editable from the UI (ADR 0013).
 - AI advice is shadow-only: `qd-ai` may depend only on `qd-app` and `qd-domain`, and
   its only write is an `ai_advice` journal entry (ADR 0011).
+- The AI agent (ADR 0016) reaches trading only through the `AgentDesk` port (Decision
+  Engine → Risk Gate → Position Manager → Order Gateway). Its allocation only ever caps
+  the gate's size (`EntryRequest.max_quantity`); never add an agent tool that changes
+  limits, halts, settings, keys, strategies or accounts. Web content is untrusted data.
+  The live book for the agent is server-file only (`[agent_live]`) and needs its scored
+  record; keep `qd-agent` free of broker, store, server, API and risk dependencies.
 - Promotions cite recorded evidence that the registry checks: a passed validation up to
   Paper, a passed paper review for live stages (ADR 0010). Never weaken these checks.
 - The journal is the source of truth for trading state; never add mutable position or
@@ -198,12 +207,15 @@ Create a crate only when it has real code.
 - INV-02 Halts block risk-increasing orders, never exits; exits never exceed open qty.
 - INV-03 The Risk Gate can reject any entry; nothing bypasses it, manual entries included.
 - INV-04 AI is advisory; it never touches orders, sizes, limits, params, credentials, halts.
+  Owner-directed exception (ADR 0016): the AI agent requests entries/exits and allocations,
+  always through the Risk Gate and Order Gateway, never limits, params, credentials or halts.
 - INV-05 No journal, no trade: decisions and intents are durably written before broker calls.
 - INV-06 Fail closed on missing/stale/inconsistent inputs; unknown halt state = halted.
 - INV-07 Startup keeps entries halted until reconciliation; hard halts need a human re-arm.
 - INV-08 Same strategy/risk/gateway/cost code in backtest, paper and live.
 - INV-09 Point-in-time data only; every decision replays from an immutable snapshot.
 - INV-10 Strategy versions are immutable; only validated versions at trading stages trade.
+  The AI agent's evidence is its scored prediction record instead (ADR 0016).
 - INV-11 Promotion needs owner approval with evidence; demotion on breach is automatic.
 - INV-12 Actions are OpenLong/CloseLong/OpenShort/CloseShort; no bare BUY/SELL.
 - INV-13 Exact decimal arithmetic; levels and quantities rounded before RR/EV/size.

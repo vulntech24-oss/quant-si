@@ -18,6 +18,7 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 9 | Deployment, monitoring, alerts, operator docs (live broker blocked) | **Done** (2026-09-27) |
 | — | Zerodha Kite, live runner, hosted AI advisors, Telegram, verified costs | **Done** (2026-09-27, ADR 0014) |
 | — | Upgrades: calendars and data quality, Data page, 3 strategies, portfolio and charts, TOTP and sessions, settings history, key rotation, backups, parameter search, mobile | **Done** (2026-09-27, ADR 0015) |
+| — | AI agent as the central intelligence: tool loop, web research, market tools, AI allocation capped by the Risk Gate, predictions and scoring | **Done** (2026-09-27, ADR 0016) |
 
 ## Phase 0: audit (2026-09-27)
 
@@ -564,6 +565,55 @@ read first and recorded in `docs/integrations/`.
   - chart geometry and the settings diff.
 - Phone layout checked in Chromium at 390×844 (Playwright screenshots).
 
+## AI agent (2026-09-27, ADR 0016)
+
+- **What the owner decided:** AI is the desk's brain.
+- **What the agent does:** it researches on the web through the provider's
+  search tool. It finds and adds NSE/BSE equities from Zerodha's list, reads
+  quotes, candles and a technical snapshot, and decides whether to trade and
+  how much capital to allocate. It monitors its positions and closes them
+  when their thesis breaks.
+- **Providers:** OpenAI and xAI (Responses API function calling) and Gemini
+  (`generateContent` function calling).
+- **Deterministic boundary:**
+  - the allocation is capped at a share of equity;
+  - the Risk Gate then sizes by risk and caps at the allocation
+    (`EntryRequest.max_quantity`); it never raises the size;
+  - everything else in the gate is unchanged: halts, limits, RR, EV, open
+    risk and costs;
+  - entries go through the Decision Engine, journal, Position Manager and
+    Order Gateway, via the paper runner by default.
+- **Live book:** only with `[agent_live]` in the server file, a passing
+  scored record and every INV-14 condition.
+- **Predictions:** journaled, and scored from completed bars (the first
+  level touched, or the direction at the horizon). The scorecard reports
+  accuracy, Brier score and calibration per model, and feeds back to the
+  agent.
+- **Runs:** research (daily time), monitor (during market hours) and manual.
+  Each is budgeted and journaled with its full tool trace, and shown on the
+  AI agent page.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features, stable 1.98), `cargo deny check`, workspace
+  tests, the live-orders tests; frontend typecheck, 19 tests, build.
+- **New tests:**
+  - the Risk Gate: a requested maximum caps the size, never raises it, is
+    too small at zero, and never bypasses halts;
+  - paper: an agent entry capped by its allocation goes through the
+    gateway; a second entry on the same instrument is already in position;
+    only the agent can close its own position; halts block agent entries;
+  - the agent: the tool loop with a fake model; the allocation cap; budgets;
+    invalid requests never reaching the desk; journaling; prediction
+    scoring rules; the scorecard; the live gate; the stable identity;
+    provider request and response shapes; providers over HTTP against local
+    fake servers; the dependency boundary;
+  - the server end to end, against a fake Responses API and a fake Zerodha:
+    add instrument, quotes, snapshot, research, then a trade the Risk Gate
+    caps. No order endpoint is called;
+  - the API: agent runs are owner-only, need CSRF, are validated and are
+    audited.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -627,3 +677,7 @@ read first and recorded in `docs/integrations/`.
    - a version with a passed paper review at SmallCapital.
 4. **Missing spec sections §7–§20**: every assumption is recorded in the
    ADRs; the owner should confirm them.
+5. **AI agent**: choose the provider and model, enter its API key, turn on
+   paper trading and the agent, and set the research and monitoring
+   schedule. Review its scored record before considering `[agent_live]`
+   (ADR 0016).
