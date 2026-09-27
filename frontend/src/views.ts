@@ -2,7 +2,7 @@
 // why, trade details, risk, deep analysis and raw data. Headlines are always
 // the post-risk verdict (INV-17).
 
-import { ApiError, api, type DecisionSummary, type HaltView, type KiteStatus, type Me, type SecretRow, type SettingsField, type SettingsSection, type Status, type StrategyRow } from "./api";
+import { ApiError, api, type DecisionSummary, type DataIssue, type HaltView, type KiteStatus, type Me, type SecretRow, type SettingsField, type SettingsSection, type Status, type StrategyRow } from "./api";
 import { clear, h } from "./dom";
 import { formatIst, formatNumber, formatPercent } from "./format";
 import { actionLabel, reasonText } from "./labels";
@@ -631,4 +631,98 @@ export async function brokerView(ctx: Ctx, rerender: () => void): Promise<HTMLEl
 export async function journalView(): Promise<HTMLElement> {
   const entries = await api.journal(100);
   return h("section", {}, h("h1", {}, "Decision journal"), h("p", { class: "muted" }, "Append-only record of decisions, orders, fills, positions and halts."), h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["#", "Kind", "Recorded", ""].map((t) => h("th", {}, t)))), h("tbody", {}, ...entries.map((e) => h("tr", {}, h("td", { class: "mono" }, String(e.seq)), h("td", {}, e.kind.replace(/_/g, " ")), h("td", {}, formatIst(e.recorded_at)), h("td", {}, h("details", {}, h("summary", {}, "entry"), h("pre", {}, JSON.stringify(e.entry, null, 2)))))))));
+}
+
+// ---------- data: instruments and bars ----------
+
+/** One line of plain text per data issue. */
+export function issueText(i: DataIssue): string {
+  switch (i.issue) {
+    case "missing_day": return `${i.date}: no bar on a trading day`;
+    case "bar_on_holiday": return `${i.date}: bar on an exchange holiday`;
+    case "price_jump": return `${i.date}: close ${i.close ?? "?"} after ${i.previous ?? "?"}; check for a split, bonus or bad print`;
+    case "calendar_unknown": return `${i.date}: the holiday calendar does not cover this date, so gaps were not checked`;
+  }
+}
+
+const SPEC_TEMPLATE = `# A new instrument (every field is validated). Use a new id (UUID) or a
+# higher version of an existing one; stored versions never change.
+id = "0199a000-0000-7000-8000-000000000102"
+version = 1
+effective_from = "2026-01-01"
+symbol = "INFY-EQ"
+venue = "nse"
+asset_class = "equity"
+kind = "cash_equity"
+currency = "INR"
+tick_size = "0.05"
+lot_size = "1"
+multiplier = "1"
+quantity_step = "1"
+min_quantity = "1"
+calendar_id = "nse"
+correlation_bucket = "india_equity"
+broker_refs = [{ broker = "kite", symbol = "INFY" }]
+
+[capabilities]
+can_short_overnight = false
+supports_market_orders = true
+requires_market_protection = true
+protection_modes = ["broker_oco"]
+products = ["delivery"]
+order_types = ["limit", "stop_limit", "stop_market", "market"]
+validities = ["day", "good_till_cancelled"]
+`;
+
+export async function dataView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const specs = await api.instrumentSpecs();
+  const owner = isOwner(ctx);
+  const message = h("p", { class: "error", role: "alert" });
+  const result = h("div", { class: "stack" });
+  const show = (lines: string[]) => { clear(result); result.append(...lines.map((l) => h("p", {}, l))); };
+  const kiteSymbol = (s: Json) => ((s["broker_refs"] as Json[] | undefined) ?? []).find((r) => r["broker"] === "kite")?.["symbol"];
+  const rows = specs.map((s) => {
+    const id = String(s["id"]);
+    const file = h("input", { type: "file", accept: ".csv,text/csv", "aria-label": `Bars CSV for ${String(s["symbol"])}` }) as HTMLInputElement;
+    const accept = h("input", { type: "checkbox", "aria-label": "Accept price jumps" }) as HTMLInputElement;
+    const upload = async () => {
+      message.textContent = "";
+      const chosen = file.files?.[0];
+      if (!chosen) { message.textContent = "Choose a CSV file first."; return; }
+      try {
+        const out = await api.importBars(id, await chosen.text(), accept.checked);
+        show([`Imported ${out.rows_written} bar(s) for ${String(s["symbol"])}.`, ...out.issues.map(issueText)]);
+      } catch (err) { message.textContent = errorText(err); }
+    };
+    const check = async () => {
+      message.textContent = "";
+      try {
+        const q = await api.barQuality(id);
+        show([`${q.symbol}: ${q.bars} bar(s) in the last 400 days${q.first ? `, ${q.first} to ${q.last ?? ""}` : ""}.`, ...(q.issues.length ? q.issues.map(issueText) : ["No issues found."])]);
+      } catch (err) { message.textContent = errorText(err); }
+    };
+    return h("tr", {},
+      h("td", {}, String(s["symbol"])),
+      h("td", { class: "mono" }, String(s["version"])),
+      h("td", {}, String(s["venue"] && typeof s["venue"] === "object" ? JSON.stringify(s["venue"]) : s["venue"] ?? "")),
+      h("td", {}, String(s["calendar_id"] ?? "")),
+      h("td", {}, kiteSymbol(s) ? String(kiteSymbol(s)) : h("span", { class: "muted" }, "none")),
+      h("td", {}, h("button", { class: "ghost", onclick: check }, "Check data")),
+      h("td", {}, owner ? h("div", { class: "row wrap" }, file, h("label", { class: "small" }, accept, " accept jumps"), h("button", { class: "ghost", onclick: upload }, "Upload bars")) : null),
+    );
+  });
+  const table = specs.length === 0
+    ? h("p", { class: "empty" }, "No instruments yet. Add one below.")
+    : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Symbol", "Version", "Venue", "Calendar", "Kite symbol", "", "Bars CSV (date,open,high,low,close,volume)"].map((t) => h("th", {}, t)))), h("tbody", {}, ...rows));
+  const spec = h("textarea", { rows: "18", class: "mono", "aria-label": "Instrument spec (TOML)" }) as HTMLTextAreaElement;
+  spec.value = SPEC_TEMPLATE;
+  const add = h("form", { class: "card stack", onsubmit: async (e: Event) => {
+    e.preventDefault();
+    message.textContent = "";
+    try { const out = await api.addInstrument(spec.value); show([`Added ${String(out["symbol"])} version ${String(out["version"])}.`]); rerender(); } catch (err) { message.textContent = errorText(err); }
+  } }, h("h2", {}, "Add an instrument"), h("p", { class: "muted" }, "Paste or edit the spec. A \"kite\" broker reference lets the daily import fetch its bars from Zerodha."), spec, h("button", { class: "primary" }, "Add instrument"));
+  return h("section", {},
+    h("h1", {}, "Data"),
+    h("p", { class: "muted" }, "Instruments and their daily bars. Every import is checked against the exchange holiday calendar for gaps and for suspect price jumps; a corrected bar is stored as a new version (INV-09)."),
+    message, result, table, owner ? add : null);
 }

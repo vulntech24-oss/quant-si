@@ -1767,6 +1767,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "csv",
  "getrandom 0.3.4",
  "hex",
  "qd-ai",

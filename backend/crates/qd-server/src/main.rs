@@ -172,6 +172,7 @@ async fn run() -> Result<(), String> {
     };
     let api_state = qd_api::ApiState {
         monitor: monitor.clone(),
+        data: Some(Arc::new(qd_server::data::DataService(runtime.clone()))),
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),

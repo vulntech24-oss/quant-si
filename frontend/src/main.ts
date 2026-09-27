@@ -7,7 +7,7 @@ import "./styles.css";
 import { ApiError, api, type Me, type Status } from "./api";
 import { clear, h } from "./dom";
 import { formatIst } from "./format";
-import { aiView, backtestView, brokerView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
+import { aiView, backtestView, brokerView, dataView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
 
 const root = document.getElementById("app");
 
@@ -35,6 +35,7 @@ const NAV: Array<[string, string]> = [
   ["#/decisions", "Decisions"],
   ["#/paper", "Paper"],
   ["#/broker", "Broker"],
+  ["#/data", "Data"],
   ["#/halts", "Kill switch"],
   ["#/strategies", "Strategies"],
   ["#/validation", "Validation"],
@@ -66,6 +67,7 @@ async function render(ctx: Ctx): Promise<void> {
     else if (route.startsWith("#/halts")) view = await haltsView(ctx, rerender);
     else if (route.startsWith("#/paper")) view = await paperView(ctx, rerender);
     else if (route.startsWith("#/broker")) view = await brokerView(ctx, rerender);
+    else if (route.startsWith("#/data")) view = await dataView(ctx, rerender);
     else if (route.startsWith("#/validation")) view = await validationView(ctx, rerender);
     else if (route.startsWith("#/review")) view = await reviewView(ctx, rerender);
     else if (route.startsWith("#/ai")) view = await aiView(ctx, rerender);

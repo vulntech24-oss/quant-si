@@ -178,6 +178,7 @@ async fn app(pool: PgPool) -> App {
     let notifier = Arc::new(FakeNotifier::default());
     let state = ApiState {
         monitor: qd_app::monitor::MonitorSettings::default(),
+        data: None,
         live: None,
         broker: Some(Arc::new(FakeBrokerLink)),
         notifier: Some(notifier.clone()),

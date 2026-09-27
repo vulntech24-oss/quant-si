@@ -36,8 +36,10 @@ paths:
     post: {summary: Apply a stage event (owner; promote and resume need step-up)}
   /api/instruments:
     get: {summary: Instrument specs effective today}
+    post: {summary: "Add an instrument spec version from TOML, body {toml} (owner; specs are immutable)"}
   /api/instruments/{id}/bars:
     get: {summary: Point-in-time daily bars; query from, to}
+    post: {summary: "Import bars from CSV, body {csv, accept_jumps} (owner; a suspect jump refuses the import unless accepted)"}
   /api/backtests:
     post: {summary: Run a research backtest (owner)}
   /api/validations:
@@ -73,6 +75,8 @@ paths:
     post: {summary: "Process paper trading days through a date, body {through: YYYY-MM-DD} (owner; 409 when busy, not configured, or the book cannot be restored)"}
   /api/account/live-armed:
     post: {summary: Arm (owner, step-up) or disarm (owner) live trading for the live account (the configured account when no live book exists)}
+  /api/instruments/{id}/quality:
+    get: {summary: "Data-quality issues in the last 400 days of stored bars (gaps against the exchange calendar, suspect jumps)"}
   /api/kite:
     get: {summary: "Zerodha connection status: switches, which keys are set (never their values), last login"}
   /api/kite/login:

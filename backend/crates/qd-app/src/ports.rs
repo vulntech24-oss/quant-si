@@ -533,3 +533,26 @@ pub trait Notifier: Send + Sync {
     /// Sends one plain-text message.
     async fn notify(&self, text: &str) -> Result<(), StoreError>;
 }
+
+/// Instruments and bars managed from the web UI (ADR 0015). Every write is
+/// validated like the CLI's and audited.
+#[async_trait]
+pub trait DataAdmin: Send + Sync {
+    /// Adds an instrument spec version from its TOML text.
+    async fn add_instrument(
+        &self,
+        spec_toml: &str,
+        actor: &str,
+    ) -> Result<serde_json::Value, SettingsError>;
+    /// Imports daily bars from CSV text (`date,open,high,low,close,volume`).
+    /// A suspect price jump refuses the import unless `accept_jumps`.
+    async fn import_bars(
+        &self,
+        instrument: InstrumentId,
+        csv: &str,
+        accept_jumps: bool,
+        actor: &str,
+    ) -> Result<serde_json::Value, SettingsError>;
+    /// Data-quality issues in an instrument's recent stored bars.
+    async fn quality(&self, instrument: InstrumentId) -> Result<serde_json::Value, StoreError>;
+}

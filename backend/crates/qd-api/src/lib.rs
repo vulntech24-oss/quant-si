@@ -82,6 +82,8 @@ pub struct ApiState {
     pub live: Option<Arc<dyn PaperTrading>>,
     /// The broker connection (Zerodha Kite login, data, fills).
     pub broker: Option<Arc<dyn qd_app::ports::BrokerLink>>,
+    /// Instruments and bar uploads from the web UI.
+    pub data: Option<Arc<dyn qd_app::ports::DataAdmin>>,
     /// Alert thresholds and the paper book's calendar.
     pub monitor: qd_app::monitor::MonitorSettings,
     /// Owner notifications (Telegram).

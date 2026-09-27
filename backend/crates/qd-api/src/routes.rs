@@ -46,8 +46,9 @@ pub fn router(state: ApiState) -> Router {
         .route("/halts/{id}/rearm", post(rearm_halt))
         .route("/strategies", get(strategies))
         .route("/strategies/{id}/events", post(strategy_event))
-        .route("/instruments", get(instruments))
-        .route("/instruments/{id}/bars", get(bars))
+        .route("/instruments", get(instruments).post(add_instrument))
+        .route("/instruments/{id}/bars", get(bars).post(import_bars))
+        .route("/instruments/{id}/quality", get(bar_quality))
         .route("/backtests", post(backtest))
         .route("/validations", post(run_validation))
         .route("/evidence", get(evidence_list))
@@ -581,6 +582,64 @@ async fn bars(
         .await
         .map_err(internal)?;
     Ok(Json(serde_json::to_value(bars).map_err(internal)?))
+}
+
+fn data(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::DataAdmin>, ApiError> {
+    state
+        .data
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("data management is not available".to_owned()))
+}
+
+#[derive(Deserialize)]
+struct NewInstrument {
+    toml: String,
+}
+
+async fn add_instrument(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<NewInstrument>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    data(&state)?
+        .add_instrument(&body.toml, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+#[derive(Deserialize)]
+struct BarUpload {
+    csv: String,
+    #[serde(default)]
+    accept_jumps: bool,
+}
+
+async fn import_bars(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(id): Path<InstrumentId>,
+    Json(body): Json<BarUpload>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    data(&state)?
+        .import_bars(id, &body.csv, body.accept_jumps, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+async fn bar_quality(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Path(id): Path<InstrumentId>,
+) -> Result<Json<Value>, ApiError> {
+    data(&state)?
+        .quality(id)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::BadRequest(e.0))
 }
 
 // ---------- validation and evidence ----------

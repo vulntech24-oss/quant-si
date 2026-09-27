@@ -297,3 +297,46 @@ async fn the_kite_import_reports_gaps_and_holds_back_suspect_bars(pool: PgPool) 
     assert_eq!(issues, vec!["missing_day", "price_jump"]);
     assert_eq!(row["issues"][0]["date"], "2026-09-22");
 }
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn instruments_and_bars_from_the_web_ui_are_validated_and_checked(pool: PgPool) {
+    use qd_app::ports::DataAdmin;
+    let rt = runtime(&pool, "http://unused").await;
+    let data = qd_server::data::DataService(rt.clone());
+    let spec_toml = include_str!("../../../config/instruments/examples/example-equity.toml");
+    let spec = data.add_instrument(spec_toml, "owner").await.unwrap();
+    let id: qd_domain::ids::InstrumentId = serde_json::from_value(spec["id"].clone()).unwrap();
+    assert!(
+        data.add_instrument(spec_toml, "owner").await.is_err(),
+        "specs are immutable"
+    );
+    assert!(
+        data.add_instrument("symbol = 1", "owner").await.is_err(),
+        "invalid TOML is refused"
+    );
+
+    let jumpy = "date,open,high,low,close,volume\n\
+                 2026-09-21,100,101,99,100,10\n\
+                 2026-09-23,100,101,99,100,10\n\
+                 2026-09-24,140,141,139,140,10\n";
+    let err = data
+        .import_bars(id, jumpy, false, "owner")
+        .await
+        .unwrap_err();
+    assert!(err.to_string().contains("price jump"), "{err}");
+    assert!(
+        data.import_bars(id, "date,open\n2026-09-21,1\n", false, "owner")
+            .await
+            .is_err()
+    );
+    let out = data.import_bars(id, jumpy, true, "owner").await.unwrap();
+    assert_eq!(out["rows_written"], 3);
+    let quality = data.quality(id).await.unwrap();
+    let kinds: Vec<&str> = quality["issues"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|i| i["issue"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, vec!["missing_day", "price_jump"]);
+}

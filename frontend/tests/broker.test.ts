@@ -45,3 +45,12 @@ describe("Zerodha page", () => {
     expect(liveConditions(ready, null)[3]?.[1]).toBe(false);
   });
 });
+
+import { issueText } from "../src/views";
+
+describe("data issues", () => {
+  it("reads as one plain line each, with the exact prices", () => {
+    expect(issueText({ issue: "missing_day", date: "2026-09-22" })).toBe("2026-09-22: no bar on a trading day");
+    expect(issueText({ issue: "price_jump", date: "2026-09-24", previous: "101.50", close: "140.00" })).toContain("close 140.00 after 101.50");
+  });
+});

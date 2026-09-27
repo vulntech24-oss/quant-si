@@ -18,6 +18,7 @@ qd-ai-providers.workspace = true
 qd-broker-kite.workspace = true
 reqwest.workspace = true
 chrono = { workspace = true, features = ["clock"] }
+csv.workspace = true
 qd-api.workspace = true
 qd-backtest.workspace = true
 qd-broker-paper.workspace = true

@@ -59,6 +59,13 @@ export interface Status {
   live_account?: { id: string; name: string; mode: "backtest" | "paper" | "live"; currency: string; live_armed: boolean } | null;
 }
 
+export interface DataIssue {
+  issue: "missing_day" | "bar_on_holiday" | "price_jump" | "calendar_unknown";
+  date: string;
+  previous?: string;
+  close?: string;
+}
+
 export interface KiteStatus {
   enabled: boolean;
   user_id: string;
@@ -167,6 +174,10 @@ export const api = {
   clearSecret: (name: string) => request<{ name: string; set: boolean }>("DELETE", `/secrets/${encodeURIComponent(name)}`),
   paper: () => request<Record<string, unknown>>("GET", "/paper"),
   paperRun: (through: string) => request<Record<string, unknown>>("POST", "/paper/run", { through }),
+  instrumentSpecs: () => request<Array<Record<string, unknown>>>("GET", "/instruments"),
+  addInstrument: (toml: string) => request<Record<string, unknown>>("POST", "/instruments", { toml }),
+  importBars: (id: string, csv: string, acceptJumps: boolean) => request<{ rows_written: number; issues: DataIssue[] }>("POST", `/instruments/${encodeURIComponent(id)}/bars`, { csv, accept_jumps: acceptJumps }),
+  barQuality: (id: string) => request<{ symbol: string; bars: number; first: string | null; last: string | null; issues: DataIssue[] }>("GET", `/instruments/${encodeURIComponent(id)}/quality`),
   kite: () => request<KiteStatus>("GET", "/kite"),
   kiteLogin: () => request<{ url: string }>("POST", "/kite/login"),
   kiteSyncBars: () => request<Record<string, unknown>>("POST", "/kite/sync-bars"),
