@@ -31,3 +31,18 @@ start_date = "2026-10-01"       # first trading date processed
 # slippage_ticks = "1"          # adverse ticks on market and stop fills (default)
 # warm_up_days = 400            # history loaded for indicators (default)
 # daily_run_utc = "13:00:00"    # automatic daily run; absent = manual runs only
+
+# Advisory AI (ADR 0011). Shadow mode only: advice is journaled and scored,
+# and never changes orders, sizes, limits, parameters or halts (INV-04).
+# Disabled by default. The only advisor today is the deterministic checklist;
+# provider adapters (OpenAI, Gemini, xAI) come after their docs are read.
+[ai]
+enabled = false
+# max_calls_per_day = 200        # per advisor
+# timeout_seconds = 20           # per call
+# [ai.checklist]
+# min_comfortable_rr = "2.0"
+# min_comfortable_ev_r = "0.2"
+# min_comfortable_evidence = 60
+# max_stop_distance = "0.10"
+# max_cost_share_of_reward = "0.20"

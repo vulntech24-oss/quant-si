@@ -70,6 +70,8 @@ pub struct ApiState {
     pub validator: Arc<dyn qd_app::ports::Validator>,
     /// Recorded evidence.
     pub evidence: Arc<dyn qd_app::evidence::EvidenceStore>,
+    /// Advisory AI, when enabled (INV-04).
+    pub ai: Option<Arc<dyn qd_app::ports::AiAdvisory>>,
     /// Paper review and calibration.
     pub reviewer: Arc<dyn qd_app::review::Reviewer>,
     /// Clock.

@@ -67,12 +67,15 @@ async fn run() -> Result<(), String> {
         "startup complete"
     );
 
+    let ai = qd_server::ai::ai_service(&config, &stores, clock.clone())
+        .map(|s| s as Arc<dyn qd_app::ports::AiAdvisory>);
+    tracing::info!(enabled = ai.is_some(), "advisory AI (shadow mode)");
     if let (Some(runner), Some(run_at)) = (
         &paper,
         config.file.paper.as_ref().and_then(|p| p.daily_run_utc),
     ) {
         tracing::info!(%run_at, "automatic daily paper run enabled");
-        qd_server::paper::spawn_daily(runner.clone(), clock.clone(), run_at);
+        qd_server::paper::spawn_daily(runner.clone(), clock.clone(), run_at, ai.clone());
     }
     let backtests = qd_backtest::research::ResearchBacktester::new(
         stores.market.clone(),
@@ -108,6 +111,7 @@ async fn run() -> Result<(), String> {
         backtests: Arc::new(backtests),
         paper: paper.map(|r| r as Arc<dyn qd_app::ports::PaperTrading>),
         validator: Arc::new(validator),
+        ai,
         reviewer: Arc::new(qd_app::review::JournalReviewer {
             reader: stores.journal.clone(),
             evidence: stores.evidence.clone(),

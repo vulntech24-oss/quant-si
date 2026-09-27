@@ -44,6 +44,42 @@ pub struct DecisionRecord {
     pub approval: Option<ApprovedEntry>,
 }
 
+/// What an AI advisor thinks of a decision. Advisory only (INV-04): nothing
+/// that places orders, sizes positions, sets limits or halts ever reads it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AiStance {
+    /// Sees no problem.
+    Agree,
+    /// Sees risks worth a look.
+    Caution,
+    /// Would not take the trade.
+    Disagree,
+    /// Has no view (for example, not enough information).
+    Abstain,
+}
+
+/// One advisor's advice on one decision, journaled in shadow mode.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct AiAdvice {
+    /// Id.
+    pub id: qd_domain::ids::AiReviewId,
+    /// The decision advised on.
+    pub decision: DecisionId,
+    /// Advisor name and version, e.g. `checklist-v1`.
+    pub advisor: String,
+    /// Stance.
+    pub stance: AiStance,
+    /// Confidence, 0–1.
+    pub confidence: rust_decimal::Decimal,
+    /// Plain-text summary (bounded length, no markup).
+    pub summary: String,
+    /// Specific concerns.
+    pub flags: Vec<String>,
+    /// When.
+    pub at: DateTime<Utc>,
+}
+
 /// One journal entry.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -97,6 +133,8 @@ pub enum JournalEntry {
     },
     /// A trading day finished for an account: its book and closed trades.
     DayClosed(Box<crate::session::DayRecord>),
+    /// Advisory AI output about a decision (INV-04, shadow mode).
+    AiAdvice(Box<AiAdvice>),
     /// A halt was recorded or cleared.
     Halt {
         /// The halt.

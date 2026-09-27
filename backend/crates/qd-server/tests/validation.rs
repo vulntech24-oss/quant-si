@@ -305,6 +305,41 @@ async fn invariant_11_validation_evidence_promotes_and_feeds_paper_decisions(poo
     assert!(entered > 0, "{report:?}");
     assert_eq!(no_evidence, 0, "{report:?}");
 
+    // Advisory AI in shadow mode: it only appends advice. Nothing that trades
+    // changes, and the next paper run is unaffected.
+    let counts = |pool: PgPool| async move {
+        sqlx::query_as::<_, (i64, i64, i64, i64)>(
+            "SELECT (SELECT count(*) FROM journal WHERE kind <> 'ai_advice'), \
+             (SELECT count(*) FROM halt_events), (SELECT count(*) FROM strategy_stage_events), \
+             (SELECT count(*) FROM accounts)",
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let before = counts(pool.clone()).await;
+    let ai = qd_ai::service::AiService {
+        orchestrator: qd_ai::orchestrator::AiOrchestrator::new(
+            vec![Arc::new(qd_ai::checklist::ChecklistAdvisor::default())],
+            stores.journal.clone(),
+            stores.journal.clone(),
+            Arc::new(FixedClock),
+            qd_ai::orchestrator::AiSettings {
+                max_calls_per_day: 1000,
+                timeout_seconds: 5,
+            },
+        ),
+        reader: stores.journal.clone(),
+    };
+    let ai_report = qd_app::ports::AiAdvisory::run(&ai).await.unwrap();
+    assert_eq!(
+        ai_report["advice_written"].as_u64().unwrap(),
+        u64::from(entered)
+    );
+    assert_eq!(counts(pool.clone()).await, before);
+    let scores = qd_app::ports::AiAdvisory::scorecard(&ai).await.unwrap();
+    assert!(scores[0]["scored"].as_u64().unwrap() > 0, "{scores:#}");
+
     // Review: paper predictions meet paper outcomes. The shipped criteria
     // need far more paper history than this, so the recorded review fails,
     // and a failed review cannot promote to a live stage.

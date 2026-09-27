@@ -52,6 +52,9 @@ pub fn router(state: ApiState) -> Router {
         .route("/validations", post(run_validation))
         .route("/evidence", get(evidence_list))
         .route("/evidence/{id}", get(evidence_one))
+        .route("/ai/run", post(ai_run))
+        .route("/ai/advice", get(ai_advice))
+        .route("/ai/scorecard", get(ai_scorecard))
         .route("/review", get(review))
         .route("/review/{version}/record", post(record_review))
         .route("/paper", get(paper_state))
@@ -610,6 +613,50 @@ async fn evidence_one(
         .map_err(internal)?
         .map(Json)
         .ok_or(ApiError::NotFound)
+}
+
+// ---------- advisory AI (INV-04) ----------
+
+fn ai(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::AiAdvisory>, ApiError> {
+    state
+        .ai
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("advisory AI is disabled".to_owned()))
+}
+
+async fn ai_run(State(state): State<ApiState>, caller: Caller) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    let service = ai(&state)?;
+    state
+        .audit
+        .record(&caller.actor(), "ai.run", json!({}))
+        .await
+        .map_err(internal)?;
+    service.run().await.map(Json).map_err(internal)
+}
+
+#[derive(Deserialize)]
+struct AdviceQuery {
+    decision: Option<DecisionId>,
+}
+
+async fn ai_advice(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Query(q): Query<AdviceQuery>,
+) -> Result<Json<Value>, ApiError> {
+    ai(&state)?
+        .advice(q.decision)
+        .await
+        .map(Json)
+        .map_err(internal)
+}
+
+async fn ai_scorecard(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    ai(&state)?.scorecard().await.map(Json).map_err(internal)
 }
 
 async fn review(State(state): State<ApiState>, _caller: Caller) -> Result<Json<Value>, ApiError> {

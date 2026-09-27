@@ -60,9 +60,15 @@ pub fn due_date(now: chrono::DateTime<chrono::Utc>, run_at: NaiveTime) -> Option
     (now.time() >= run_at).then(|| now.date_naive())
 }
 
-/// Runs paper trading once a day after `run_at` (UTC). Checks every minute;
-/// the run lock and the journal's last processed day make repeats harmless.
-pub fn spawn_daily(runner: Arc<PaperRunner>, clock: Arc<dyn Clock>, run_at: NaiveTime) {
+/// Runs paper trading once a day after `run_at` (UTC), then advisory AI if
+/// enabled. Checks every minute; the run lock and the journal's last
+/// processed day make repeats harmless.
+pub fn spawn_daily(
+    runner: Arc<PaperRunner>,
+    clock: Arc<dyn Clock>,
+    run_at: NaiveTime,
+    ai: Option<Arc<dyn qd_app::ports::AiAdvisory>>,
+) {
     tokio::spawn(async move {
         let mut last: Option<NaiveDate> = None;
         loop {
@@ -77,6 +83,12 @@ pub fn spawn_daily(runner: Arc<PaperRunner>, clock: Arc<dyn Clock>, run_at: Naiv
                 Ok(report) => {
                     last = Some(date);
                     tracing::info!(%date, report = %report, "paper run complete");
+                    if let Some(ai) = &ai {
+                        match ai.run().await {
+                            Ok(r) => tracing::info!(report = %r, "advisory AI run complete"),
+                            Err(e) => tracing::warn!(error = %e, "advisory AI run failed"),
+                        }
+                    }
                 }
                 Err(e) => tracing::error!(%date, error = %e, "paper run failed"),
             }

@@ -84,6 +84,46 @@ pub struct ConfigFile {
     /// because no venue can be reconciled.
     #[serde(default)]
     pub paper: Option<PaperConfig>,
+    /// Advisory AI (INV-04). Disabled by default.
+    #[serde(default)]
+    pub ai: AiConfig,
+}
+
+const fn default_ai_calls() -> u32 {
+    200
+}
+
+const fn default_ai_timeout() -> u64 {
+    20
+}
+
+/// Advisory AI settings (ADR 0011). Advice is shadow-only (INV-04).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AiConfig {
+    /// Master switch. Default: false.
+    #[serde(default)]
+    pub enabled: bool,
+    /// Calls per advisor per UTC day. Default 200.
+    #[serde(default = "default_ai_calls")]
+    pub max_calls_per_day: u32,
+    /// Timeout per call in seconds. Default 20.
+    #[serde(default = "default_ai_timeout")]
+    pub timeout_seconds: u64,
+    /// Thresholds of the deterministic checklist advisor.
+    #[serde(default)]
+    pub checklist: qd_ai::checklist::ChecklistConfig,
+}
+
+impl Default for AiConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_calls_per_day: default_ai_calls(),
+            timeout_seconds: default_ai_timeout(),
+            checklist: qd_ai::checklist::ChecklistConfig::default(),
+        }
+    }
 }
 
 fn default_close_time_utc() -> chrono::NaiveTime {
@@ -246,6 +286,11 @@ impl ServerConfig {
                         .to_owned(),
                 ));
             }
+        }
+        if file.ai.timeout_seconds == 0 || file.ai.timeout_seconds > 300 {
+            return Err(ConfigError::Unsafe(
+                "ai.timeout_seconds must be between 1 and 300".to_owned(),
+            ));
         }
         if !(1..=168).contains(&file.session_hours) {
             return Err(ConfigError::Unsafe(

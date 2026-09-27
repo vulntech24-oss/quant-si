@@ -362,3 +362,17 @@ pub trait Validator: Send + Sync {
         actor: &str,
     ) -> Result<serde_json::Value, StoreError>;
 }
+
+/// Advisory AI (INV-04), for the API and the CLI.
+#[async_trait]
+pub trait AiAdvisory: Send + Sync {
+    /// Advises on entry decisions not yet advised; returns the run report.
+    async fn run(&self) -> Result<serde_json::Value, StoreError>;
+    /// Advice, newest first, optionally for one decision.
+    async fn advice(
+        &self,
+        decision: Option<qd_domain::ids::DecisionId>,
+    ) -> Result<serde_json::Value, StoreError>;
+    /// How each advisor's stances matched realized outcomes.
+    async fn scorecard(&self) -> Result<serde_json::Value, StoreError>;
+}

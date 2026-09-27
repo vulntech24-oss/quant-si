@@ -67,6 +67,27 @@ enum Command {
     /// Paper trading with the server's `[paper]` configuration.
     #[command(subcommand)]
     Paper(PaperCommand),
+    /// Advisory AI (shadow mode, INV-04) with the server's `[ai]` configuration.
+    Ai {
+        /// Server configuration file.
+        #[arg(long, env = "QD_CONFIG")]
+        config: PathBuf,
+        #[command(subcommand)]
+        command: AiCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum AiCommand {
+    /// Advise on entry decisions not yet advised.
+    Run,
+    /// Show advice, optionally for one decision.
+    Advice {
+        #[arg(long)]
+        decision: Option<qd_domain::ids::DecisionId>,
+    },
+    /// How each advisor's stances matched realized outcomes.
+    Scorecard,
 }
 
 #[derive(Subcommand)]
@@ -384,6 +405,31 @@ async fn run(cli: Cli) -> Result<(), String> {
         ),
         Command::Backtest(args) => backtest(args, &stores).await,
         Command::Paper(cmd) => paper(cmd, &stores, actor, now).await,
+        Command::Ai { config, command } => {
+            use qd_app::ports::AiAdvisory;
+            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
+                .map_err(|e| e.to_string())?;
+            let service = qd_server::ai::ai_service(
+                &config,
+                &stores,
+                std::sync::Arc::new(qd_server::SystemClock),
+            )
+            .ok_or("advisory AI is disabled ([ai] enabled = false)")?;
+            let out = match command {
+                AiCommand::Run => {
+                    stores
+                        .audit
+                        .record(actor, "ai.run", serde_json::json!({}))
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    service.run().await
+                }
+                AiCommand::Advice { decision } => service.advice(decision).await,
+                AiCommand::Scorecard => service.scorecard().await,
+            }
+            .map_err(|e| e.to_string())?;
+            print(&out)
+        }
     }
 }
 

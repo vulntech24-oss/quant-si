@@ -114,6 +114,7 @@ async fn app(pool: PgPool) -> App {
         backtests: Arc::new(FakeBacktests),
         paper: None,
         validator: Arc::new(FakeValidator),
+        ai: None,
         reviewer: Arc::new(qd_app::review::JournalReviewer {
             reader: stores.journal.clone(),
             evidence: stores.evidence.clone(),

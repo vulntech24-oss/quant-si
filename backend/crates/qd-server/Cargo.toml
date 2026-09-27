@@ -12,6 +12,7 @@ live-orders = ["qd-app/live-orders"]
 
 [dependencies]
 axum.workspace = true
+qd-ai.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 qd-api.workspace = true
 qd-backtest.workspace = true

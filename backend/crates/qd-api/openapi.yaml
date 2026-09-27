@@ -46,6 +46,12 @@ paths:
     get: {summary: "Recorded evidence, newest first, optionally ?version=<id> (summaries without per-trade detail)"}
   /api/evidence/{id}:
     get: {summary: One evidence record with its full report}
+  /api/ai/run:
+    post: {summary: "Run advisory AI over entry decisions not yet advised (owner; 409 when disabled). Advice is shadow-only (INV-04)"}
+  /api/ai/advice:
+    get: {summary: "Advisory AI output, newest first, optionally ?decision=<id>"}
+  /api/ai/scorecard:
+    get: {summary: How each advisor's stances matched realized outcomes}
   /api/review:
     get: {summary: "Predicted vs realized review of the account's paper results: calibration bins, Brier score, EV vs realized R, and the paper-review checks per version"}
   /api/review/{version}/record:
