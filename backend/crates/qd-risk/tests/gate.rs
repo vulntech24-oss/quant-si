@@ -70,6 +70,66 @@ fn paper_entry_is_sized_within_the_risk_budget_at_final_costs() {
     assert!(entry.expected_value.in_r() >= dec!(0.10));
 }
 
+// ---------- the AI agent's allocation (ADR 0016) ----------
+
+#[test]
+fn a_requested_maximum_below_the_gate_size_caps_the_entry() {
+    let (config, costs, spec) = (config(), costs(), equity_spec());
+    let proposal = paper_proposal(&spec);
+    let gate = RiskGate::new(&config, &costs);
+    let mut req = request(&proposal, &spec, StrategyStage::Paper);
+    req.max_quantity = Some(Quantity::new(dec!(250)).unwrap());
+    let entry = approved(gate.evaluate(&req, &account(AccountMode::Paper)));
+    assert_eq!(entry.quantity, Quantity::new(dec!(250)).unwrap());
+    assert_eq!(
+        entry.capped_by_request,
+        Some(Quantity::new(dec!(250)).unwrap())
+    );
+    assert_eq!(entry.costs.reference_quantity(), entry.quantity);
+    assert!(entry.planned_risk.amount < dec!(5000));
+}
+
+#[test]
+fn a_requested_maximum_above_the_gate_size_never_raises_it() {
+    let (config, costs, spec) = (config(), costs(), equity_spec());
+    let proposal = paper_proposal(&spec);
+    let gate = RiskGate::new(&config, &costs);
+    let mut req = request(&proposal, &spec, StrategyStage::Paper);
+    req.max_quantity = Some(Quantity::new(dec!(100000)).unwrap());
+    let entry = approved(gate.evaluate(&req, &account(AccountMode::Paper)));
+    // The same 963 shares as without a request: the risk budget decides.
+    assert_eq!(entry.quantity, Quantity::new(dec!(963)).unwrap());
+    assert_eq!(entry.capped_by_request, None);
+}
+
+#[test]
+fn a_zero_requested_maximum_is_too_small() {
+    let (config, costs, spec) = (config(), costs(), equity_spec());
+    let proposal = paper_proposal(&spec);
+    let gate = RiskGate::new(&config, &costs);
+    let mut req = request(&proposal, &spec, StrategyStage::Paper);
+    req.max_quantity = Some(Quantity::ZERO);
+    assert!(matches!(
+        rejected(gate.evaluate(&req, &account(AccountMode::Paper))),
+        NoTradeReason::PositionTooSmall { .. }
+    ));
+}
+
+#[test]
+fn a_requested_maximum_does_not_bypass_halts() {
+    let (config, costs, spec) = (config(), costs(), equity_spec());
+    let proposal = paper_proposal(&spec);
+    let gate = RiskGate::new(&config, &costs);
+    let mut req = request(&proposal, &spec, StrategyStage::Paper);
+    req.max_quantity = Some(Quantity::new(dec!(10)).unwrap());
+    let mut state = account(AccountMode::Paper);
+    state.halts = HaltState::Unknown;
+    assert!(matches!(
+        rejected(gate.evaluate(&req, &state)),
+        NoTradeReason::KillSwitch(_)
+    ));
+}
+
 #[test]
 fn live_small_capital_entry_uses_the_stage_multiplier_and_verified_costs() {
     let (config, costs, spec) = (config(), verified_costs(), equity_spec());

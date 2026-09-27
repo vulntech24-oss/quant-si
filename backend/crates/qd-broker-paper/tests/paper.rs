@@ -557,3 +557,172 @@ async fn the_portfolio_view_reads_equity_drawdown_and_pnl_per_strategy_from_the_
     assert!(strategies[0]["trades"].as_u64().unwrap() > 0);
     assert!(portfolio.view("live").await.is_err());
 }
+
+// ---------- the AI agent (ADR 0016) ----------
+
+fn agent_info(
+    stage: qd_domain::lifecycle::strategy::StrategyStage,
+) -> qd_app::decision::StrategyVersionInfo {
+    let now = FixedClock.now();
+    qd_app::decision::StrategyVersionInfo {
+        reference: StrategyRef {
+            strategy_id: StrategyId::new_at(now),
+            name: "AI agent".to_owned(),
+            version_id: StrategyVersionId::new_at(now),
+            version_number: 1,
+            logic_version: "ai-agent-test".to_owned(),
+            git_sha: "test".to_owned(),
+        },
+        stage,
+        rr_floor: dec!(1.5),
+        slippage: qd_domain::economics::SlippageAssumption::new("slip-ticks-v1", dec!(0.05))
+            .unwrap(),
+    }
+}
+
+fn agent_entry(
+    instrument: InstrumentId,
+    allocation: Decimal,
+    info: qd_app::decision::StrategyVersionInfo,
+) -> qd_app::session::AgentEntry {
+    use qd_domain::action::EntryAction;
+    use qd_domain::plan::{EntryOrderType, TradePlanInput};
+    use qd_domain::proposal::{FactorValue, Grade, Reason, ReasonDirection};
+    qd_app::session::AgentEntry {
+        instrument,
+        candidate: qd_strategy::strategy::SetupCandidate {
+            plan: TradePlanInput {
+                action: EntryAction::OpenLong,
+                entry_type: EntryOrderType::Limit,
+                entry: dec!(279.40),
+                stop: dec!(270),
+                target: dec!(300),
+                max_holding_days: 10,
+                invalidation: vec![],
+            },
+            setup_type: "ai-thesis".to_owned(),
+            grade: Grade::B,
+            reasons: vec![Reason {
+                factor: "ai_thesis".to_owned(),
+                value: FactorValue::Text("steady uptrend".to_owned()),
+                direction: ReasonDirection::Supports,
+            }],
+            strongest_argument_against: "the trend may be late".to_owned(),
+        },
+        probabilities: OutcomeProbabilities::new(
+            dec!(0.55),
+            dec!(0.35),
+            dec!(0.10),
+            "ai:test:model",
+            0,
+        )
+        .unwrap(),
+        time_exit_r: Decimal::ZERO,
+        allocation,
+        info,
+    }
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn an_agent_entry_is_capped_by_its_allocation_and_goes_through_the_gateway(pool: PgPool) {
+    use qd_app::ports::{AgentDesk, HistoricalMarketData};
+    use qd_domain::lifecycle::strategy::StrategyStage;
+    let w = world(pool).await;
+    let acct = account(&w.stores, AccountMode::Paper).await;
+    let runner = runner(&w, acct, Arc::new(NoEvidenceTables));
+    let instrument = w.stores.market.instruments(day(599)).await.unwrap()[0].id;
+    let info = agent_info(StrategyStage::Paper);
+    let agent = info.reference.version_id;
+
+    // ₹50,000 at 279.40 is 178 shares; the risk budget alone would allow more.
+    let done = runner
+        .enter(agent_entry(instrument, dec!(50000), info.clone()))
+        .await
+        .unwrap();
+    assert_eq!(done.book, "paper");
+    assert_eq!(done.requested_quantity.value(), dec!(178));
+    assert_eq!(done.approved_quantity.unwrap().value(), dec!(178));
+    assert!(done.position.is_some(), "{done:?}");
+    assert_eq!(count(&w.pool, "order_intent", acct).await, 1);
+    let source: String = sqlx::query_scalar(
+        "SELECT entry->'proposal'->'probabilities'->>'source' FROM journal \
+         WHERE kind = 'decision' AND entry->>'id' = $1",
+    )
+    .bind(done.decision.to_string())
+    .fetch_one(&w.pool)
+    .await
+    .unwrap();
+    assert_eq!(source, "ai:test:model");
+
+    // A second entry on the same instrument: already in position.
+    let again = runner
+        .enter(agent_entry(instrument, dec!(50000), info.clone()))
+        .await
+        .unwrap();
+    assert_eq!(again.outcome, "already_in_position");
+
+    // Another strategy's id cannot close it; the agent's own id cancels the unfilled entry.
+    let position = done.position.unwrap();
+    assert!(
+        runner
+            .exit(position, StrategyVersionId::new_at(t0()))
+            .await
+            .is_err()
+    );
+    runner.exit(position, agent).await.unwrap();
+    let account_view = runner.account().await.unwrap();
+    assert_eq!(account_view["working_orders"].as_array().unwrap().len(), 0);
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn invariant_02_a_halt_blocks_agent_entries_whatever_the_allocation(pool: PgPool) {
+    use qd_app::ports::{AgentDesk, HistoricalMarketData};
+    use qd_domain::lifecycle::strategy::StrategyStage;
+    let w = world(pool).await;
+    let acct = account(&w.stores, AccountMode::Paper).await;
+    let runner = runner(&w, acct, Arc::new(NoEvidenceTables));
+    let instrument = w.stores.market.instruments(day(599)).await.unwrap()[0].id;
+    let now = FixedClock.now();
+    let halt = Halt::new(
+        HaltId::new_at(now),
+        HaltKind::Manual,
+        HaltScope::Global,
+        "owner".to_owned(),
+        now,
+        None,
+        true,
+    )
+    .unwrap();
+    w.stores.halts.record(&halt).await.unwrap();
+    let done = runner
+        .enter(agent_entry(
+            instrument,
+            dec!(10000),
+            agent_info(StrategyStage::Paper),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(done.outcome, "kill_switch");
+    assert_eq!(count(&w.pool, "order_intent", acct).await, 0);
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn an_agent_entry_on_a_live_account_needs_a_live_stage(pool: PgPool) {
+    // The paper runner refuses live accounts outright; the Risk Gate's stage
+    // check is covered in qd-risk. Here: a paper-stage agent on paper trades.
+    use qd_app::ports::{AgentDesk, HistoricalMarketData};
+    use qd_domain::lifecycle::strategy::StrategyStage;
+    let w = world(pool).await;
+    let live = account(&w.stores, AccountMode::Live).await;
+    let runner = runner(&w, live, Arc::new(NoEvidenceTables));
+    let instrument = w.stores.market.instruments(day(599)).await.unwrap()[0].id;
+    let err = runner
+        .enter(agent_entry(
+            instrument,
+            dec!(10000),
+            agent_info(StrategyStage::Paper),
+        ))
+        .await
+        .unwrap_err();
+    assert!(err.0.contains("not a paper account"), "{err}");
+}

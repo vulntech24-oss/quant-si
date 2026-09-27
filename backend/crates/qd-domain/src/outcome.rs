@@ -76,6 +76,8 @@ pub enum ExitReason {
     Roll,
     /// The strategy version was demoted.
     Demotion,
+    /// The AI agent closed it (ADR 0016).
+    Agent,
 }
 
 /// An input the decision depends on (INV-06).

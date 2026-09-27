@@ -42,13 +42,16 @@ use qd_domain::proposal::AccountMode;
 use qd_risk::config::RiskConfig;
 use qd_risk::gate::{AccountRiskState, RiskItem};
 use qd_risk::triggers::halt_triggers;
+use qd_strategy::features::FeatureSet;
 use qd_strategy::regime::RegimeClassifier;
-use qd_strategy::strategy::{Strategy, run_strategy};
+use qd_strategy::strategy::{Evaluation, SetupCandidate, Strategy, StrategyOutput, run_strategy};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::decision::{DecisionContext, DecisionEngine, StrategyVersionInfo};
+use crate::decision::{
+    AgentForecast, DecisionContext, DecisionEngine, JournaledDecision, StrategyVersionInfo,
+};
 use crate::gateway::{GatewayRejection, OrderGateway};
 use crate::journal::JournalEntry;
 use crate::ports::{BrokerAccountReader, BrokerFill, Clock, HaltStore, Journal};
@@ -247,6 +250,56 @@ pub enum SessionError {
     /// The date is not after the last processed date.
     #[error("{0} was already processed")]
     AlreadyProcessed(NaiveDate),
+}
+
+/// An entry the AI agent asks for, outside the daily cycle (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentEntry {
+    /// Instrument.
+    pub instrument: InstrumentId,
+    /// The agent's plan and explanation.
+    pub candidate: SetupCandidate,
+    /// The agent's probabilities and expected time-exit R.
+    pub probabilities: qd_domain::economics::OutcomeProbabilities,
+    /// Expected R at the time exit.
+    pub time_exit_r: Decimal,
+    /// Capital the agent allocates, account currency: entry notional ceiling.
+    pub allocation: Decimal,
+    /// The agent's identity, stage and RR floor.
+    pub info: StrategyVersionInfo,
+}
+
+/// What an agent entry came to.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentEntryOutcome {
+    /// The journaled decision (post-risk, INV-17).
+    pub decision: JournaledDecision,
+    /// The allocation as a quantity ceiling.
+    pub requested_quantity: Quantity,
+    /// The position opened, when the entry was approved and submitted.
+    pub position: Option<PositionId>,
+    /// Why the gateway refused an approved entry.
+    pub rejection: Option<String>,
+}
+
+/// Why an agent request could not be decided.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum AgentError {
+    /// The instrument is not in the run.
+    #[error("instrument {0} is not loaded")]
+    UnknownInstrument(InstrumentId),
+    /// Too little history for the feature set recorded with every decision.
+    #[error("not enough history: {0}")]
+    History(String),
+    /// No such active position, or the agent did not open it.
+    #[error("no active agent position {0}")]
+    UnknownPosition(PositionId),
+    /// The allocation is not positive.
+    #[error("the allocation must be positive")]
+    Allocation,
+    /// The session failed.
+    #[error(transparent)]
+    Session(#[from] SessionError),
 }
 
 /// Settings of a session.
@@ -644,6 +697,171 @@ impl TradingSession {
         };
         self.apply_events(events, date, &mut day).await;
         day
+    }
+
+    /// Marks every instrument at its last close on or before `date`.
+    fn mark_to(&mut self, date: NaiveDate, instruments: &[InstrumentData]) {
+        for data in instruments {
+            if let Some(bar) = data.series.bars().iter().rev().find(|b| b.date() <= date) {
+                self.closes.insert(data.spec.id, bar.close());
+            }
+        }
+    }
+
+    /// Equity marked at the last closes on or before `date`, and the
+    /// account state the Risk Gate would see now.
+    pub async fn risk_state_at(
+        &mut self,
+        date: NaiveDate,
+        instruments: &[InstrumentData],
+        risk: &RiskConfig,
+    ) -> (Decimal, AccountRiskState) {
+        self.mark_to(date, instruments);
+        let unrealized: Decimal = self
+            .positions
+            .active()
+            .iter()
+            .map(|p| unrealized(p, self.closes.get(&p.instrument).copied()))
+            .sum();
+        let equity = self.book.initial + self.book.realized_net + unrealized;
+        let by_id: HashMap<InstrumentId, &InstrumentData> =
+            instruments.iter().map(|d| (d.spec.id, d)).collect();
+        let state = self.risk_state(equity, &by_id, risk).await;
+        (equity, state)
+    }
+
+    /// An AI agent's entry, decided after the close of `date` (the last
+    /// completed bar) through the same Decision Engine, Risk Gate, Position
+    /// Manager and Order Gateway as every strategy (INV-01, INV-03, INV-08).
+    /// The allocation only caps the size; the Risk Gate decides it.
+    pub async fn agent_entry(
+        &mut self,
+        date: NaiveDate,
+        instruments: &[InstrumentData],
+        request: &AgentEntry,
+        engine: &DecisionEngine<'_>,
+        risk: &RiskConfig,
+    ) -> Result<AgentEntryOutcome, AgentError> {
+        if request.allocation <= Decimal::ZERO {
+            return Err(AgentError::Allocation);
+        }
+        let data = instruments
+            .iter()
+            .find(|d| d.spec.id == request.instrument)
+            .ok_or(AgentError::UnknownInstrument(request.instrument))?;
+        let series = data.series.as_of(date);
+        let features =
+            FeatureSet::compute(&series).map_err(|e| AgentError::History(e.to_string()))?;
+        let regime = RegimeClassifier::V1.classify(&features);
+        let evaluation = Evaluation {
+            features,
+            regime,
+            output: StrategyOutput::Setup(Box::new(request.candidate.clone())),
+        };
+        self.market_clock.set(self.close_of(date));
+        let (_, state) = self.risk_state_at(date, instruments, risk).await;
+        let now = self.wall_clock.now();
+        // Allocation → quantity ceiling at the planned entry, rounded down.
+        let per_unit = request.candidate.plan.entry * data.spec.multiplier;
+        let requested_quantity = request
+            .allocation
+            .checked_div(per_unit)
+            .and_then(|raw| data.spec.round_quantity_down(raw).ok())
+            .unwrap_or(Quantity::ZERO);
+        let forecast = AgentForecast {
+            probabilities: request.probabilities.clone(),
+            time_exit_r: request.time_exit_r,
+            max_quantity: requested_quantity,
+        };
+        let ctx = DecisionContext {
+            decision_id: DecisionId::new_at(now),
+            at: now,
+            expected_last_completed: date,
+            spec: &data.spec,
+            product: data.product,
+            fx: FxRate::identity(self.book.currency, now),
+            strategy: &request.info,
+            evaluation: &evaluation,
+            series: &series,
+            account: &state,
+            already_in_position: self.positions.has_active(data.spec.id),
+            snapshot_id: self.settings.snapshot,
+            calendar_version: &self.settings.calendar_version,
+        };
+        let decision = engine
+            .decide_agent_and_journal(&ctx, &forecast, self.journal.as_ref())
+            .await
+            .map_err(|e| SessionError::Journal(e.to_string()))?
+            .ok_or_else(|| SessionError::Journal("the agent setup was not decided".to_owned()))?;
+        let mut position = None;
+        let mut rejection = None;
+        if let (Some(authorization), Some(proposal)) =
+            (&decision.authorization, decision.record.proposal.as_ref())
+        {
+            match self
+                .positions
+                .open(
+                    authorization,
+                    proposal,
+                    &data.spec,
+                    request.info.stage,
+                    data.product,
+                )
+                .await
+            {
+                Ok(id) => position = Some(id),
+                Err(e) => rejection = Some(e.to_string()),
+            }
+        }
+        Ok(AgentEntryOutcome {
+            decision,
+            requested_quantity,
+            position,
+            rejection,
+        })
+    }
+
+    /// Closes an active position the agent opened (never blocked by halts,
+    /// INV-02). Positions of other strategies are refused.
+    pub async fn agent_exit(
+        &self,
+        position: PositionId,
+        agent: qd_domain::ids::StrategyVersionId,
+    ) -> Result<PositionUpdate, AgentError> {
+        let Some(p) = self
+            .positions
+            .active()
+            .into_iter()
+            .find(|p| p.id == position && p.strategy_version == Some(agent))
+        else {
+            return Err(AgentError::UnknownPosition(position));
+        };
+        let mut update = PositionUpdate::default();
+        // An entry that has not filled yet is cancelled instead.
+        for working in self.gateway.working_intents(position) {
+            if working.risk_effect() == qd_domain::action::RiskEffect::Increasing {
+                if let Err(e) = self.gateway.cancel(working.id()).await {
+                    update.rejections.push(e.to_string());
+                    continue;
+                }
+                let still_working = self
+                    .gateway
+                    .working_intents(position)
+                    .iter()
+                    .any(|w| w.id() == working.id());
+                if still_working {
+                    update
+                        .rejections
+                        .push("the entry cancel is not confirmed yet".to_owned());
+                } else if p.quantity.is_zero() {
+                    self.positions.on_entry_ended(working.id()).await;
+                }
+            }
+        }
+        self.positions
+            .exit(position, ExitReason::Agent, &mut update)
+            .await;
+        Ok(update)
     }
 
     async fn risk_state(

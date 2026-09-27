@@ -13,6 +13,11 @@
 //!
 //! The outcome is always post-risk. An authorization to enter is released
 //! only after the decision is durably journaled.
+//!
+//! The AI agent (ADR 0016) goes through the same gates with its own plan,
+//! its own outcome probabilities (in place of step 5) and its capital
+//! allocation, which the Risk Gate treats as a maximum: the final quantity
+//! is the smaller of what the agent asks for and what the gate allows.
 
 use chrono::{DateTime, NaiveDate, Utc};
 use qd_domain::costs::{CostModel, CostRequest};
@@ -47,6 +52,17 @@ pub enum EvidencePolicy {
     /// Offline research backtests that produce the evidence: a neutral prior
     /// (all mass on the time exit, EV 0). Never valid for paper or live accounts.
     ResearchPrior,
+}
+
+/// What the AI agent brings to an entry decision (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AgentForecast {
+    /// The agent's outcome probabilities (source `ai:<provider>:<model>`).
+    pub probabilities: OutcomeProbabilities,
+    /// Expected R when neither stop nor target is hit before the time exit.
+    pub time_exit_r: Decimal,
+    /// The allocation as a quantity: the most the agent asks to trade.
+    pub max_quantity: Quantity,
 }
 
 /// One strategy version as the Decision Engine sees it.
@@ -148,6 +164,25 @@ impl<'a> DecisionEngine<'a> {
     /// Decides, without journaling. Pure given its inputs.
     #[must_use]
     pub fn decide(&self, ctx: &DecisionContext<'_>) -> DecisionResult {
+        self.decide_with(ctx, None)
+    }
+
+    /// Decides an AI agent's entry, without journaling: the same gates, with
+    /// the agent's probabilities and its allocation as the size ceiling.
+    #[must_use]
+    pub fn decide_agent(
+        &self,
+        ctx: &DecisionContext<'_>,
+        forecast: &AgentForecast,
+    ) -> DecisionResult {
+        self.decide_with(ctx, Some(forecast))
+    }
+
+    fn decide_with(
+        &self,
+        ctx: &DecisionContext<'_>,
+        forecast: Option<&AgentForecast>,
+    ) -> DecisionResult {
         let record = |outcome: DecisionOutcome,
                       proposal: Option<TradeProposal>,
                       approval: Option<qd_risk::gate::ApprovedEntry>| {
@@ -169,7 +204,9 @@ impl<'a> DecisionEngine<'a> {
             |reason: NoTradeReason| record(DecisionOutcome::NoTrade { reason }, None, None);
 
         // Research priors are never valid outside backtests.
-        if self.policy == EvidencePolicy::ResearchPrior && ctx.account.mode != AccountMode::Backtest
+        if forecast.is_none()
+            && self.policy == EvidencePolicy::ResearchPrior
+            && ctx.account.mode != AccountMode::Backtest
         {
             return no_trade(NoTradeReason::MissingOrInconsistentData {
                 input: InputKind::Configuration,
@@ -193,7 +230,11 @@ impl<'a> DecisionEngine<'a> {
         if ctx.already_in_position {
             return no_trade(NoTradeReason::AlreadyInPosition);
         }
-        let (probabilities, time_exit_r) = match self.probabilities(ctx, candidate) {
+        let probabilities = match forecast {
+            Some(f) => Ok((f.probabilities.clone(), f.time_exit_r)),
+            None => self.probabilities(ctx, candidate),
+        };
+        let (probabilities, time_exit_r) = match probabilities {
             Ok(p) => p,
             Err(reason) => return no_trade(reason),
         };
@@ -211,6 +252,7 @@ impl<'a> DecisionEngine<'a> {
                 rr_floor: ctx.strategy.rr_floor,
                 fx: ctx.fx,
                 at: ctx.at,
+                max_quantity: forecast.map(|f| f.max_quantity),
             },
             ctx.account,
         );
@@ -235,7 +277,25 @@ impl<'a> DecisionEngine<'a> {
         ctx: &DecisionContext<'_>,
         journal: &dyn Journal,
     ) -> Result<Option<JournaledDecision>, JournalError> {
-        let DecisionResult::Decided(record) = self.decide(ctx) else {
+        Self::journal_decision(self.decide(ctx), journal).await
+    }
+
+    /// Decides an AI agent's entry and journals it; the authorization exists
+    /// only after the journal write succeeded (INV-05).
+    pub async fn decide_agent_and_journal(
+        &self,
+        ctx: &DecisionContext<'_>,
+        forecast: &AgentForecast,
+        journal: &dyn Journal,
+    ) -> Result<Option<JournaledDecision>, JournalError> {
+        Self::journal_decision(self.decide_agent(ctx, forecast), journal).await
+    }
+
+    async fn journal_decision(
+        result: DecisionResult,
+        journal: &dyn Journal,
+    ) -> Result<Option<JournaledDecision>, JournalError> {
+        let DecisionResult::Decided(record) = result else {
             return Ok(None);
         };
         journal

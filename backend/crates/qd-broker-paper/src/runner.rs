@@ -28,20 +28,20 @@ use qd_app::decision::{DecisionEngine, EvidencePolicy};
 use qd_app::gateway::{GatewayAccount, OrderGateway};
 use qd_app::live::LivePolicy;
 use qd_app::ports::{
-    AccountStore, Clock, Evidence, EvidenceSource, HaltStore, HistoricalMarketData, Journal,
-    JournalReader, PaperTrading, Reconciler, RunLock, StoreError,
+    AccountStore, AgentDesk, AgentExecution, Clock, Evidence, EvidenceSource, HaltStore,
+    HistoricalMarketData, Journal, JournalReader, PaperTrading, Reconciler, RunLock, StoreError,
 };
-use qd_app::positions::reconcile_book;
+use qd_app::positions::{PositionUpdate, reconcile_book};
 use qd_app::registry::StrategyRegistry;
 use qd_app::restore::{RestoreError, RestoredState};
 use qd_app::runs;
 use qd_app::session::{
-    AccountBook, DayRecord, InstrumentData, SessionClock, SessionError, SessionParts,
+    AccountBook, AgentEntry, DayRecord, InstrumentData, SessionClock, SessionError, SessionParts,
     SessionSettings, StrategySlot, TradingSession,
 };
 use qd_domain::costs::CostModel;
 use qd_domain::halt::{Halt, HaltKind, HaltScope};
-use qd_domain::ids::{AccountId, HaltId, InstrumentId, SnapshotId, StrategyVersionId};
+use qd_domain::ids::{AccountId, HaltId, InstrumentId, PositionId, SnapshotId, StrategyVersionId};
 use qd_domain::instrument::InstrumentSpec;
 use qd_domain::lifecycle::strategy::StrategyStage;
 use qd_domain::market::Bar;
@@ -202,6 +202,12 @@ pub fn catalog() -> Result<Vec<CatalogEntry>, PaperError> {
     qd_strategy::catalog::catalog().map_err(|e| PaperError::Invalid(e.to_string()))
 }
 
+struct CaughtUp {
+    session: TradingSession,
+    data: Vec<InstrumentData>,
+    report: PaperRunReport,
+}
+
 /// The paper-trading runner.
 pub struct PaperRunner {
     deps: PaperDeps,
@@ -291,14 +297,9 @@ impl PaperRunner {
         Ok(runs::load_instruments(self.deps.market.as_ref(), from, through, known_at).await?)
     }
 
-    /// Processes every trading day after the last processed one, through `through`.
-    pub async fn run(&self, through: NaiveDate) -> Result<PaperRunReport, PaperError> {
-        let _guard = self
-            .deps
-            .lock
-            .try_acquire(&format!("paper-run:{}", self.settings.account))
-            .await?
-            .ok_or(PaperError::Busy)?;
+    /// Restores the book and processes every trading day after the last
+    /// processed one, through `through`. The caller holds the run lock.
+    async fn catch_up(&self, through: NaiveDate) -> Result<CaughtUp, PaperError> {
         let account = self
             .deps
             .accounts
@@ -401,13 +402,77 @@ impl PaperRunner {
                 .await?;
             days.push(DaySummary::from(&day));
         }
-        Ok(PaperRunReport {
-            resumed_after,
-            days,
-            skipped_versions,
-            reconciliation_notes,
-            active_positions: session.positions().active().len(),
+        Ok(CaughtUp {
+            session,
+            data,
+            report: PaperRunReport {
+                resumed_after,
+                days,
+                skipped_versions,
+                reconciliation_notes,
+                active_positions: 0,
+            },
         })
+    }
+
+    async fn lock(&self) -> Result<Box<dyn qd_app::ports::RunGuard>, PaperError> {
+        self.deps
+            .lock
+            .try_acquire(&format!("paper-run:{}", self.settings.account))
+            .await?
+            .ok_or(PaperError::Busy)
+    }
+
+    /// Processes every trading day after the last processed one, through `through`.
+    pub async fn run(&self, through: NaiveDate) -> Result<PaperRunReport, PaperError> {
+        let _guard = self.lock().await?;
+        let caught_up = self.catch_up(through).await?;
+        let mut report = caught_up.report;
+        report.active_positions = caught_up.session.positions().active().len();
+        Ok(report)
+    }
+
+    /// An AI agent entry on the paper book (ADR 0016): the book is brought
+    /// up to date first, then the entry is decided after the close of the
+    /// last processed day. An approved entry fills on the next bar.
+    pub async fn agent_enter(&self, entry: &AgentEntry) -> Result<AgentExecution, PaperError> {
+        let _guard = self.lock().await?;
+        let today = self.deps.clock.now().date_naive();
+        let mut caught_up = self.catch_up(today).await?;
+        let date = caught_up.session.last_date().ok_or_else(|| {
+            PaperError::Invalid("the paper book has no processed day yet".to_owned())
+        })?;
+        let evidence = NoEvidenceTables;
+        let engine = DecisionEngine::new(
+            &self.deps.risk,
+            self.deps.costs.as_ref(),
+            &evidence,
+            EvidencePolicy::Required {
+                min_evidence: self.deps.risk.min_evidence,
+            },
+        );
+        let outcome = caught_up
+            .session
+            .agent_entry(date, &caught_up.data, entry, &engine, &self.deps.risk)
+            .await
+            .map_err(|e| PaperError::Invalid(e.to_string()))?;
+        Ok(AgentExecution::from_outcome("paper", &outcome))
+    }
+
+    /// Closes an agent position on the paper book; it fills on the next bar.
+    pub async fn agent_exit(
+        &self,
+        position: PositionId,
+        agent: StrategyVersionId,
+    ) -> Result<PositionUpdate, PaperError> {
+        let _guard = self.lock().await?;
+        let today = self.deps.clock.now().date_naive();
+        let caught_up = self.catch_up(today).await?;
+        caught_up
+            .session
+            .agent_exit(position, agent)
+            .await
+            .map_err(|e| PaperError::Invalid(e.to_string()))
     }
 
     /// The current book as JSON: account state, positions, working orders.
@@ -430,6 +495,45 @@ impl PaperTrading for PaperRunner {
 
     async fn state(&self) -> Result<Value, StoreError> {
         self.state_json().await.map_err(|e| store_error(&e))
+    }
+}
+
+#[async_trait]
+impl AgentDesk for PaperRunner {
+    fn book(&self) -> &'static str {
+        "paper"
+    }
+
+    async fn account(&self) -> Result<Value, StoreError> {
+        let state = self.load_state().await.map_err(|e| store_error(&e))?;
+        let mut book = runs::book_json(self.settings.account, &state);
+        if let Some(obj) = book.as_object_mut() {
+            obj.insert(
+                "initial_equity".to_owned(),
+                Value::String(self.settings.initial_equity.to_string()),
+            );
+            obj.insert(
+                "risk_limits".to_owned(),
+                serde_json::to_value(&*self.deps.risk).map_err(|e| StoreError(e.to_string()))?,
+            );
+        }
+        Ok(book)
+    }
+
+    async fn enter(&self, entry: AgentEntry) -> Result<AgentExecution, StoreError> {
+        self.agent_enter(&entry).await.map_err(|e| store_error(&e))
+    }
+
+    async fn exit(
+        &self,
+        position: PositionId,
+        agent: StrategyVersionId,
+    ) -> Result<Value, StoreError> {
+        let update = self
+            .agent_exit(position, agent)
+            .await
+            .map_err(|e| store_error(&e))?;
+        serde_json::to_value(update).map_err(|e| StoreError(e.to_string()))
     }
 }
 

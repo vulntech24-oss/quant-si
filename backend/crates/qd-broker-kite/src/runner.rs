@@ -24,20 +24,22 @@ use qd_app::decision::{DecisionEngine, EvidencePolicy};
 use qd_app::evidence::EvidenceLoader;
 use qd_app::gateway::{GatewayAccount, OrderGateway};
 use qd_app::live::LivePolicy;
+use qd_app::ports::AgentExecution;
 use qd_app::ports::{
     AccountRecord, AccountStore, Clock, HaltStore, HistoricalMarketData, Journal, JournalReader,
     RunLock, StoreError,
 };
+use qd_app::positions::PositionUpdate;
 use qd_app::registry::StrategyRegistry;
 use qd_app::restore::{RestoreError, RestoredState};
 use qd_app::runs::{self, LoadError};
 use qd_app::session::{
-    AccountBook, InstrumentData, SessionClock, SessionError, SessionParts, SessionSettings,
-    TradingSession,
+    AccountBook, AgentEntry, InstrumentData, SessionClock, SessionError, SessionParts,
+    SessionSettings, TradingSession,
 };
 use qd_domain::costs::CostModel;
 use qd_domain::halt::{Halt, HaltKind, HaltScope};
-use qd_domain::ids::{AccountId, HaltId, SnapshotId};
+use qd_domain::ids::{AccountId, HaltId, PositionId, SnapshotId, StrategyVersionId};
 use qd_domain::instrument::InstrumentSpec;
 use qd_domain::lifecycle::strategy::{StageEvent, StrategyStage};
 use qd_domain::market::Bar;
@@ -52,6 +54,19 @@ use thiserror::Error;
 use crate::broker::{KiteBroker, OrderSettings, RefreshReport};
 use crate::client::{KiteClient, KiteError};
 use crate::market::ist;
+
+/// A source with no evidence tables (agent entries bring their own forecast).
+struct NoEvidence;
+
+impl qd_app::ports::EvidenceSource for NoEvidence {
+    fn evidence(
+        &self,
+        _: qd_domain::ids::StrategyVersionId,
+        _: &str,
+    ) -> Option<qd_app::ports::Evidence> {
+        None
+    }
+}
 
 /// The stages that trade live.
 pub const LIVE_STAGES: [StrategyStage; 2] = [StrategyStage::SmallCapital, StrategyStage::Full];
@@ -544,5 +559,83 @@ impl LiveRunner {
         report.unprotected += day.unprotected;
         report.mismatches = day.mismatches;
         Ok(report)
+    }
+
+    /// An AI agent entry on the live book (ADR 0016), decided after the
+    /// close of the last processed day. The Risk Gate needs a live stage for
+    /// a live account and the Order Gateway checks every INV-14 condition;
+    /// without them the entry is NO TRADE or refused, never sent.
+    pub async fn agent_enter(
+        &self,
+        client: KiteClient,
+        orders: OrderSettings,
+        entry: &AgentEntry,
+    ) -> Result<AgentExecution, LiveError> {
+        let _guard = self
+            .deps
+            .lock
+            .try_acquire(&format!("live-run:{}", self.settings.account))
+            .await?
+            .ok_or(LiveError::Busy)?;
+        let today = self.deps.clock.now().with_timezone(&ist()).date_naive();
+        let mut prepared = self.prepare(client, orders, today).await?;
+        prepared.broker.refresh().await?;
+        for (_, events) in prepared.broker.drain_all() {
+            prepared.session.apply_events_now(events, today).await;
+        }
+        let date = prepared
+            .restored
+            .last_day
+            .as_ref()
+            .map(|d| d.date)
+            .ok_or_else(|| {
+                LiveError::Invalid("the live book has no processed day yet".to_owned())
+            })?;
+        if (today - date).num_days() > MAX_STALE_DAYS {
+            return Err(LiveError::Stale(date));
+        }
+        let evidence = NoEvidence;
+        let engine = DecisionEngine::new(
+            &self.deps.risk,
+            self.deps.costs.as_ref(),
+            &evidence,
+            EvidencePolicy::Required {
+                min_evidence: self.deps.risk.min_evidence,
+            },
+        );
+        let outcome = prepared
+            .session
+            .agent_entry(date, &prepared.data, entry, &engine, &self.deps.risk)
+            .await
+            .map_err(|e| LiveError::Invalid(e.to_string()))?;
+        Ok(AgentExecution::from_outcome("live", &outcome))
+    }
+
+    /// Closes an agent position on the live book (exits are never blocked
+    /// by halts or disarming, INV-02).
+    pub async fn agent_exit(
+        &self,
+        client: KiteClient,
+        orders: OrderSettings,
+        position: PositionId,
+        agent: StrategyVersionId,
+    ) -> Result<PositionUpdate, LiveError> {
+        let _guard = self
+            .deps
+            .lock
+            .try_acquire(&format!("live-run:{}", self.settings.account))
+            .await?
+            .ok_or(LiveError::Busy)?;
+        let today = self.deps.clock.now().with_timezone(&ist()).date_naive();
+        let prepared = self.prepare(client, orders, today).await?;
+        prepared.broker.refresh().await?;
+        for (_, events) in prepared.broker.drain_all() {
+            prepared.session.apply_events_now(events, today).await;
+        }
+        prepared
+            .session
+            .agent_exit(position, agent)
+            .await
+            .map_err(|e| LiveError::Invalid(e.to_string()))
     }
 }

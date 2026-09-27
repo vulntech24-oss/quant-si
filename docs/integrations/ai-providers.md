@@ -58,3 +58,71 @@
   an advisor; the key never reaches `qd-ai` or the browser.
 - Each provider is switched on separately in Settings → Advisory AI. The daily
   call budget and the timeout apply per advisor.
+
+## Tool calling and web search (the AI agent, ADR 0016)
+
+Read on 2026-09-27.
+
+### OpenAI (Responses API)
+
+- Sources: https://developers.openai.com/api/docs/guides/function-calling and
+  https://developers.openai.com/api/docs/guides/tools-web-search (the
+  platform.openai.com pages now redirect there).
+- A function tool is `{"type": "function", "name": ..., "description": ...,
+  "parameters": <JSON Schema object>, "strict": true}` in `tools[]`.
+- The response `output[]` holds `{"type": "function_call", "call_id", "name",
+  "arguments": "<JSON string>"}` items. Each result goes back as an input item
+  `{"type": "function_call_output", "call_id": ..., "output": "<string>"}`.
+  To continue, re-send the accumulated output items in `input` (or use
+  `previous_response_id`; QuantDesk re-sends, so nothing is stored at the
+  provider between turns).
+- `parallel_tool_calls` and `tool_choice` ("auto", "required", ...) control
+  calls.
+- Web search is the built-in tool `{"type": "web_search"}` (the old
+  `web_search_preview` is legacy). Options: `search_context_size`,
+  `user_location`, `filters.allowed_domains`/`blocked_domains`. The output
+  has `web_search_call` items and a `message` whose text carries
+  `url_citation` annotations (`url`, `title`). It can be combined with
+  function tools.
+
+### xAI (Responses API)
+
+- Sources: https://docs.x.ai/docs/guides/function-calling and
+  https://docs.x.ai/docs/guides/tools/search-tools.
+- Function tools, `function_call` items and `function_call_output` inputs
+  have the same shapes as OpenAI's. Parameters must be an object schema.
+- Web search is `{"type": "web_search"}` (options `allowed_domains` or
+  `excluded_domains`, at most 5, not both). Built-in tools run on xAI's
+  servers; custom functions pause and come back to the caller.
+
+### Gemini (generateContent)
+
+- Sources: https://ai.google.dev/gemini-api/docs/function-calling,
+  https://ai.google.dev/gemini-api/docs/tool-combination,
+  https://ai.google.dev/gemini-api/docs/google-search and
+  https://ai.google.dev/api/generate-content.
+- Functions: `tools: [{"functionDeclarations": [{"name", "description",
+  "parametersJsonSchema"}]}]`. The model answers with `functionCall` parts
+  (`name`, `args`, `id`). Results go back as a `user` turn of
+  `functionResponse` parts (`name`, `response` object, `id`). The model's own
+  turn is sent back unchanged, so `thoughtSignature` parts survive.
+- Search grounding: `tools: [{"googleSearch": {}}]`. The response carries
+  `groundingMetadata.groundingChunks[].web.{uri,title}` and
+  `webSearchQueries`.
+- Mixing built-in tools with functions is "Preview … Gemini 3 models only",
+  and is documented only on the newer Interactions API.
+
+### How the agent uses them
+
+- **Web research is a function tool, `web_research(query)`, for all three
+  providers.** QuantDesk implements it with a separate call that has only
+  the provider's search tool:
+  - `web_search` on OpenAI and xAI;
+  - `googleSearch` on Gemini.
+  It returns the answer text plus the cited sources.
+- **Why a function tool and not native mixing:**
+  - every query and every source is journaled in the run trace;
+  - one loop works for every provider;
+  - Gemini does not need the preview combination.
+- The agent loop sends QuantDesk's function tools with `tool_choice: "auto"`
+  and re-sends the whole transcript on each turn.

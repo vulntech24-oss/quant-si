@@ -92,6 +92,10 @@ pub struct EntryRequest<'a> {
     pub fx: FxRate,
     /// Decision time.
     pub at: DateTime<Utc>,
+    /// The most the proposer asks to trade (the AI agent's capital
+    /// allocation, ADR 0016). The gate's size is capped at it and never
+    /// raised by it; `None` leaves sizing to the gate alone.
+    pub max_quantity: Option<Quantity>,
 }
 
 /// An approved entry: the only place a quantity is decided.
@@ -113,6 +117,9 @@ pub struct ApprovedEntry {
     pub economics: UnitEconomics,
     /// Expected value at the final costs.
     pub expected_value: ExpectedValue,
+    /// The proposer's requested maximum, when it capped the size.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub capped_by_request: Option<Quantity>,
 }
 
 /// The Risk Gate's decision.
@@ -402,6 +409,22 @@ impl<'a> RiskGate<'a> {
                 };
             }
 
+            // The proposer's own maximum can only make the entry smaller.
+            let mut capped_by_request = None;
+            if let Some(requested) = request.max_quantity {
+                if requested < size.quantity() {
+                    size = match cap_quantity(&size, requested, spec)
+                        .map_err(|_| inconsistent(InputKind::Equity))?
+                    {
+                        SizingOutcome::Sized(capped) => capped,
+                        SizingOutcome::TooSmall { quantity, min } => {
+                            return Err(NoTradeReason::PositionTooSmall { quantity, min });
+                        }
+                    };
+                    capped_by_request = Some(requested);
+                }
+            }
+
             // Step 4: costs at the final quantity. The exit leg is priced at the
             // higher plan level, which has the larger turnover.
             let quote = self
@@ -456,6 +479,7 @@ impl<'a> RiskGate<'a> {
                 costs_verified: quote.verified,
                 economics,
                 expected_value,
+                capped_by_request,
             });
         }
         Err(NoTradeReason::UneconomicAfterCosts)

@@ -655,3 +655,69 @@ pub trait ParameterSearch: Send + Sync {
     /// Runs one search and returns its report.
     async fn search(&self, request: &SearchRequest) -> Result<serde_json::Value, StoreError>;
 }
+
+/// What an AI agent entry came to (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AgentExecution {
+    /// Book: `paper` or `live`.
+    pub book: String,
+    /// The journaled decision.
+    pub decision: qd_domain::ids::DecisionId,
+    /// `enter` or the NO TRADE reason code (post-risk, INV-17).
+    pub outcome: String,
+    /// The full post-risk outcome.
+    pub detail: serde_json::Value,
+    /// The agent's allocation as a quantity ceiling.
+    pub requested_quantity: qd_domain::num::Quantity,
+    /// The quantity the Risk Gate approved (never above the request).
+    pub approved_quantity: Option<qd_domain::num::Quantity>,
+    /// Planned loss to the stop at that quantity, account currency.
+    pub planned_risk: Option<rust_decimal::Decimal>,
+    /// The position opened.
+    pub position: Option<qd_domain::ids::PositionId>,
+    /// Why the Order Gateway refused an approved entry.
+    pub rejection: Option<String>,
+}
+
+/// The book the AI agent trades (ADR 0016). Paper by default; the live
+/// book only when every INV-14 condition and the agent's live gate hold.
+/// Entries go through the Decision Engine, the Risk Gate, the Position
+/// Manager and the Order Gateway; nothing here bypasses them.
+#[async_trait]
+pub trait AgentDesk: Send + Sync {
+    /// `paper` or `live`.
+    fn book(&self) -> &'static str;
+    /// Equity, positions, working orders and limits, as JSON.
+    async fn account(&self) -> Result<serde_json::Value, StoreError>;
+    /// Decides and, when approved, submits an agent entry.
+    async fn enter(&self, entry: crate::session::AgentEntry) -> Result<AgentExecution, StoreError>;
+    /// Closes (or cancels the entry of) a position the agent opened.
+    async fn exit(
+        &self,
+        position: qd_domain::ids::PositionId,
+        agent: qd_domain::ids::StrategyVersionId,
+    ) -> Result<serde_json::Value, StoreError>;
+}
+
+impl AgentExecution {
+    /// Builds the report from a session outcome.
+    #[must_use]
+    pub fn from_outcome(book: &str, o: &crate::session::AgentEntryOutcome) -> Self {
+        let record = &o.decision.record;
+        let outcome = match &record.outcome {
+            qd_domain::outcome::DecisionOutcome::NoTrade { reason } => reason.code().to_owned(),
+            other => other.headline().to_owned(),
+        };
+        Self {
+            book: book.to_owned(),
+            decision: record.id,
+            outcome,
+            detail: serde_json::to_value(&record.outcome).unwrap_or(serde_json::Value::Null),
+            requested_quantity: o.requested_quantity,
+            approved_quantity: record.approval.as_ref().map(|a| a.quantity),
+            planned_risk: record.approval.as_ref().map(|a| a.planned_risk.amount),
+            position: o.position,
+            rejection: o.rejection.clone(),
+        }
+    }
+}
