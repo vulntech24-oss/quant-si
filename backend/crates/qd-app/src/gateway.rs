@@ -378,27 +378,84 @@ impl OrderGateway {
         intent: OrderIntent,
         stage: Option<StrategyStage>,
     ) -> Result<GatewayAck, GatewayRejection> {
+        let mut results = self.submit_group(vec![intent], stage).await?;
+        results
+            .pop()
+            .unwrap_or(Err(GatewayRejection::UnknownIntent))
+    }
+
+    /// Submits the legs of one OCO group (a protective stop and its target)
+    /// as one broker order, so a broker with native OCO orders (a two-leg
+    /// GTT) never holds one leg without the other.
+    ///
+    /// Every leg must be risk-reducing and carry the same OCO group. All
+    /// legs are validated and journaled before anything is sent; if any leg
+    /// fails validation, none is sent. Returns one result per leg, in order.
+    pub async fn submit_oco(
+        &self,
+        legs: Vec<OrderIntent>,
+        stage: Option<StrategyStage>,
+    ) -> Result<Vec<Result<GatewayAck, GatewayRejection>>, GatewayRejection> {
+        let group = legs.first().and_then(OrderIntent::oco_group);
+        let well_formed = legs.len() >= 2
+            && group.is_some()
+            && legs
+                .iter()
+                .all(|l| l.oco_group() == group && l.risk_effect() == RiskEffect::Reducing);
+        if !well_formed {
+            return Err(terms_error(
+                "an OCO submission needs two or more risk-reducing legs of one group",
+            ));
+        }
+        self.submit_group(legs, stage).await
+    }
+
+    async fn submit_group(
+        &self,
+        intents: Vec<OrderIntent>,
+        stage: Option<StrategyStage>,
+    ) -> Result<Vec<Result<GatewayAck, GatewayRejection>>, GatewayRejection> {
         // 1. Idempotency and reservation.
         {
             let mut state = self.lock();
-            if let Some(existing) = state.intents.get(&intent.id()) {
-                return Ok(GatewayAck {
-                    intent: intent.id(),
-                    state: existing.state,
-                });
+            let known: Vec<GatewayAck> = intents
+                .iter()
+                .filter_map(|i| {
+                    state.intents.get(&i.id()).map(|r| GatewayAck {
+                        intent: i.id(),
+                        state: r.state,
+                    })
+                })
+                .collect();
+            if known.len() == intents.len() {
+                return Ok(known.into_iter().map(Ok).collect());
             }
-            state.intents.insert(
-                intent.id(),
-                IntentRecord {
-                    intent: intent.clone(),
-                    state: OrderIntentState::Created,
-                    filled: Quantity::ZERO,
-                },
-            );
+            if !known.is_empty() {
+                // Part of the group was submitted before: sending the rest
+                // would split the group.
+                return Err(terms_error("part of the OCO group was already submitted"));
+            }
+            for intent in &intents {
+                state.intents.insert(
+                    intent.id(),
+                    IntentRecord {
+                        intent: intent.clone(),
+                        state: OrderIntentState::Created,
+                        filled: Quantity::ZERO,
+                    },
+                );
+            }
         }
-        match self.validate(&intent, stage).await {
-            Ok(()) => {}
-            Err(rejection) => {
+        // 2-4. Validation: all legs or none.
+        let mut failure = None;
+        for intent in &intents {
+            if let Err(rejection) = self.validate(intent, stage).await {
+                failure = Some(rejection);
+                break;
+            }
+        }
+        if let Some(rejection) = failure {
+            for intent in &intents {
                 self.set_state(intent.id(), OrderIntentState::GatewayRejected);
                 // Best effort: the order was never sent, so a failed write loses nothing.
                 let _ = self
@@ -412,38 +469,75 @@ impl OrderGateway {
                         at: self.clock.now(),
                     })
                     .await;
-                return Err(rejection);
             }
+            return Err(rejection);
         }
 
         // 5. Journal before send.
         let now = self.clock.now();
-        let journaled = self
-            .journal(&JournalEntry::OrderIntent {
-                intent: Box::new(intent.clone()),
-            })
-            .await
-            && self
-                .journal(&JournalEntry::OrderEvent {
-                    intent: intent.id(),
-                    event: OrderEvent::GatewayAccepted,
-                    state: OrderIntentState::PendingSubmit,
-                    at: now,
-                })
-                .await;
+        let mut journaled = true;
+        for intent in &intents {
+            journaled = journaled
+                && self
+                    .journal(&JournalEntry::OrderIntent {
+                        intent: Box::new(intent.clone()),
+                    })
+                    .await
+                && self
+                    .journal(&JournalEntry::OrderEvent {
+                        intent: intent.id(),
+                        event: OrderEvent::GatewayAccepted,
+                        state: OrderIntentState::PendingSubmit,
+                        at: now,
+                    })
+                    .await;
+        }
         if !journaled {
-            self.set_state(intent.id(), OrderIntentState::GatewayRejected);
+            for intent in &intents {
+                self.set_state(intent.id(), OrderIntentState::GatewayRejected);
+            }
             return Err(GatewayRejection::JournalUnavailable);
         }
-        self.set_state(intent.id(), OrderIntentState::PendingSubmit);
+        for intent in &intents {
+            self.set_state(intent.id(), OrderIntentState::PendingSubmit);
+        }
 
         // 6. The broker call.
-        let symbol = self
-            .instruments
-            .get(&intent.instrument())
-            .map_or("", |s| s.symbol.as_str());
-        let request = BrokerOrderRequest::from_intent(&intent, symbol);
-        let (event, next) = match self.executor.submit(&request).await {
+        let requests: Vec<BrokerOrderRequest> = intents
+            .iter()
+            .map(|intent| {
+                let symbol = self
+                    .instruments
+                    .get(&intent.instrument())
+                    .map_or("", |s| s.symbol.as_str());
+                BrokerOrderRequest::from_intent(intent, symbol)
+            })
+            .collect();
+        let mut outcomes = if let [single] = requests.as_slice() {
+            vec![self.executor.submit(single).await]
+        } else {
+            self.executor.submit_oco(&requests).await
+        };
+        // A broker answer that does not cover every leg leaves the rest unknown.
+        outcomes.resize(
+            requests.len(),
+            Err(BrokerError::Transport(
+                "the broker did not answer for this leg".to_owned(),
+            )),
+        );
+        let mut results = Vec::with_capacity(intents.len());
+        for (intent, outcome) in intents.iter().zip(outcomes) {
+            results.push(self.record_submission(intent.id(), outcome).await);
+        }
+        Ok(results)
+    }
+
+    async fn record_submission(
+        &self,
+        id: OrderIntentId,
+        outcome: Result<crate::ports::BrokerOrderAck, BrokerError>,
+    ) -> Result<GatewayAck, GatewayRejection> {
+        let (event, next) = match outcome {
             Ok(ack) => (
                 OrderEvent::BrokerAcknowledged {
                     broker_order_id: ack.broker_order_id.0,
@@ -459,14 +553,14 @@ impl OrderGateway {
                 OrderIntentState::Unknown,
             ),
         };
-        self.set_state(intent.id(), next);
+        self.set_state(id, next);
         let rejected_reason = match &event {
             OrderEvent::BrokerRejected { reason } => Some(reason.clone()),
             _ => None,
         };
         // The order may now be live; a failed write here latches the entry halt.
         self.journal(&JournalEntry::OrderEvent {
-            intent: intent.id(),
+            intent: id,
             event,
             state: next,
             at: self.clock.now(),
@@ -475,7 +569,7 @@ impl OrderGateway {
         match rejected_reason {
             Some(reason) => Err(GatewayRejection::BrokerRejected(reason)),
             None => Ok(GatewayAck {
-                intent: intent.id(),
+                intent: id,
                 state: next,
             }),
         }

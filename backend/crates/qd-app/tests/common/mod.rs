@@ -79,6 +79,8 @@ impl Clock for FakeClock {
 #[derive(Default)]
 pub struct FakeExecutor {
     pub submitted: Mutex<Vec<BrokerOrderRequest>>,
+    /// Legs per `submit_oco` call.
+    pub oco_calls: Mutex<Vec<usize>>,
     pub cancelled: Mutex<Vec<OrderIntentId>>,
     pub reject: AtomicBool,
     pub transport_error: AtomicBool,
@@ -103,6 +105,18 @@ impl BrokerOrderExecutor for FakeExecutor {
         Ok(BrokerOrderAck {
             broker_order_id: BrokerOrderId(request.client_order_id().to_string()),
         })
+    }
+
+    async fn submit_oco(
+        &self,
+        legs: &[BrokerOrderRequest],
+    ) -> Vec<Result<BrokerOrderAck, BrokerError>> {
+        self.oco_calls.lock().unwrap().push(legs.len());
+        let mut out = Vec::new();
+        for leg in legs {
+            out.push(self.submit(leg).await);
+        }
+        out
     }
 
     async fn cancel(&self, id: OrderIntentId) -> Result<(), BrokerError> {

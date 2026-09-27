@@ -69,6 +69,8 @@ pub struct RestoredIntent {
     pub state: OrderIntentState,
     /// Quantity filled per journaled fills.
     pub filled: Quantity,
+    /// The broker's id for the order, once acknowledged.
+    pub broker_order_id: Option<String>,
 }
 
 /// Trading state rebuilt from the journal for one account.
@@ -136,6 +138,7 @@ impl RestoredState {
                         intent,
                         state: OrderIntentState::Created,
                         filled: Quantity::ZERO,
+                        broker_order_id: None,
                     });
                 }
                 "order_event" => {
@@ -143,6 +146,12 @@ impl RestoredState {
                         .map_err(|e| malformed(e.to_string()))?;
                     if let Some(&i) = index_of.get(&e.intent) {
                         intents[i].state = e.state;
+                        if let Some(id) = value
+                            .pointer("/event/broker_order_id")
+                            .and_then(Value::as_str)
+                        {
+                            intents[i].broker_order_id = Some(id.to_owned());
+                        }
                         journaled_events.insert(e.intent);
                     }
                 }

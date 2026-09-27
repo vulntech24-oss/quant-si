@@ -413,11 +413,7 @@ impl PositionManager {
             validity: Validity::GoodTillCancelled,
             product: p.product,
         };
-        let mut protected = true;
-        for (terms, purpose) in [
-            (stop_terms, OrderPurpose::ProtectiveStop),
-            (target_terms, OrderPurpose::Target),
-        ] {
+        let leg = |terms: OrderTerms, purpose: OrderPurpose| {
             let intent = OrderIntent::reducing(
                 OrderIntentId::new_at(now),
                 p.account,
@@ -432,9 +428,35 @@ impl PositionManager {
                 now,
             );
             lock(&self.by_intent).insert(intent.id(), id);
-            if let Err(rejection) = self.gateway.submit(intent, p.stage).await {
+            intent
+        };
+        let legs = vec![
+            leg(stop_terms, OrderPurpose::ProtectiveStop),
+            leg(target_terms, OrderPurpose::Target),
+        ];
+        let purposes: Vec<OrderPurpose> = legs.iter().map(OrderIntent::purpose).collect();
+        let mut protected = true;
+        match self.gateway.submit_oco(legs, p.stage).await {
+            Ok(results) => {
+                for (purpose, result) in purposes.into_iter().zip(results) {
+                    if let Err(rejection) = result {
+                        update.rejections.push(rejection.to_string());
+                        if purpose == OrderPurpose::ProtectiveStop {
+                            protected = false;
+                        }
+                    }
+                }
+            }
+            Err(rejection) => {
+                // The pair was refused before anything was sent. The stop
+                // matters more than the target: try it on its own.
                 update.rejections.push(rejection.to_string());
-                if purpose == OrderPurpose::ProtectiveStop {
+                if let Err(rejection) = self
+                    .gateway
+                    .submit(leg(stop_terms, OrderPurpose::ProtectiveStop), p.stage)
+                    .await
+                {
+                    update.rejections.push(rejection.to_string());
                     protected = false;
                 }
             }

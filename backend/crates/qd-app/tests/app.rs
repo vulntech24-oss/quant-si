@@ -334,6 +334,78 @@ async fn filled_entries_get_a_stop_and_target_as_one_oco_group() {
     assert_eq!(submitted[1].oco_group(), Some(id));
     assert_eq!(submitted[2].oco_group(), Some(id));
     assert_eq!(submitted[1].quantity(), position.quantity);
+    // Stop and target reach the broker in one OCO call.
+    assert_eq!(*h.executor.oco_calls.lock().unwrap(), vec![2]);
+}
+
+fn protective_leg(
+    position: &qd_app::positions::Position,
+    group: Option<qd_domain::ids::PositionId>,
+    at: chrono::DateTime<chrono::Utc>,
+) -> qd_app::orders::OrderIntent {
+    qd_app::orders::OrderIntent::reducing(
+        qd_domain::ids::OrderIntentId::new_at(at),
+        position.account,
+        position.instrument,
+        position.strategy_version,
+        position.id,
+        position.side.exit(),
+        position.quantity,
+        qd_app::orders::OrderTerms {
+            order_type: qd_domain::instrument::OrderType::StopMarket,
+            limit: None,
+            trigger: Some(position.stop),
+            validity: qd_domain::instrument::Validity::GoodTillCancelled,
+            product: ProductType::Delivery,
+        },
+        qd_app::orders::OrderPurpose::ProtectiveStop,
+        group,
+        at,
+    )
+}
+
+#[tokio::test]
+async fn an_oco_group_is_sent_whole_or_not_at_all() {
+    let h = harness(AccountMode::Paper, LivePolicy::default(), false);
+    let (pm, id) = filled_position(&h).await;
+    let position = pm.positions().into_iter().find(|p| p.id == id).unwrap();
+    let now = at_close(decision_date());
+    let sent = h.executor.submits();
+
+    // A lone leg or legs of different groups are not an OCO group.
+    let lone = vec![protective_leg(&position, Some(id), now)];
+    assert!(matches!(
+        h.gateway.submit_oco(lone, None).await,
+        Err(GatewayRejection::InvalidTerms(_))
+    ));
+    let mixed = vec![
+        protective_leg(&position, Some(id), now),
+        protective_leg(&position, None, now),
+    ];
+    assert!(matches!(
+        h.gateway.submit_oco(mixed, None).await,
+        Err(GatewayRejection::InvalidTerms(_))
+    ));
+
+    // The position's own stop and target already cover its quantity, so a
+    // second group is refused and none of its legs is sent.
+    let other = qd_domain::ids::PositionId::new_at(now);
+    let legs = vec![
+        protective_leg(&position, Some(other), now),
+        protective_leg(&position, Some(other), now),
+    ];
+    let ids: Vec<_> = legs.iter().map(qd_app::orders::OrderIntent::id).collect();
+    assert!(matches!(
+        h.gateway.submit_oco(legs, None).await,
+        Err(GatewayRejection::ExitExceedsOpen(_))
+    ));
+    assert_eq!(h.executor.submits(), sent);
+    for id in ids {
+        assert_eq!(
+            h.gateway.intent_state(id),
+            Some(OrderIntentState::GatewayRejected)
+        );
+    }
 }
 
 #[tokio::test]
@@ -603,6 +675,10 @@ async fn invariant_05_the_journal_alone_rebuilds_the_book_and_the_order_ledger()
             .unwrap();
     restored.check().unwrap();
     assert_eq!(restored.positions, pm.positions());
+    // Every acknowledged order keeps the broker's id (the fake uses the intent id).
+    for r in &restored.intents {
+        assert_eq!(r.broker_order_id, Some(r.intent.id().to_string()));
+    }
 
     // A fresh gateway and manager, rebuilt from the journal only.
     let fresh = harness(AccountMode::Paper, LivePolicy::default(), false);

@@ -78,6 +78,19 @@ pub enum BrokerError {
 pub trait BrokerOrderExecutor: Send + Sync {
     /// Places an order. Must be idempotent on `client_order_id`.
     async fn submit(&self, request: &BrokerOrderRequest) -> Result<BrokerOrderAck, BrokerError>;
+    /// Places the legs of one OCO group as one broker order where the broker
+    /// supports it. Returns one result per leg, in order. The default places
+    /// the legs one after the other (simulated venues link them themselves).
+    async fn submit_oco(
+        &self,
+        legs: &[BrokerOrderRequest],
+    ) -> Vec<Result<BrokerOrderAck, BrokerError>> {
+        let mut results = Vec::with_capacity(legs.len());
+        for leg in legs {
+            results.push(self.submit(leg).await);
+        }
+        results
+    }
     /// Cancels an order.
     async fn cancel(&self, client_order_id: OrderIntentId) -> Result<(), BrokerError>;
 }
