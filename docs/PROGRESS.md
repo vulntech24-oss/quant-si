@@ -11,8 +11,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 2 | `qd-risk`, `qd-strategy`, cost model | **Done** (2026-09-27) |
 | 3 | `qd-app` ports and use cases, `qd-backtest` | **Done** (2026-09-27) |
 | 4 | `qd-store`, `qd-server`, `qd-cli` | **Done** (2026-09-27) |
-| 5 | `qd-api` and frontend integration | Next (§10 missing: ADR will record the approach) |
-| 6 | Market data adapters, paper broker | Not started (needs §4 items 1, 5, 11) |
+| 5 | `qd-api` and frontend integration | **Done** (2026-09-27) |
+| 6 | Market data adapters, paper broker | Next (needs §4 items 1, 5, 11) |
 | 7 | Validation pipeline and review reports | Not started |
 | 8 | AI orchestrator (advisory) | Not started (needs §4 item 8) |
 | 9 | Kite live order executor (`live-orders`) | Not started (needs §4 items 5–7) |
@@ -193,6 +193,48 @@ New invariant tests: `invariant_16_history_tables_reject_updates_deletes_and_tru
 `invariant_07_without_a_broker_entries_stay_halted_after_startup`,
 `invariant_07_startup_clears_only_after_clean_reconciliation`.
 
+## Phase 5: HTTP API, authentication, frontend (2026-09-27)
+
+Built:
+
+- `qd-api`: the HTTP API under `/api`: login, logout, current user and
+  step-up; status (mode, halts, entries halted); decisions (post-risk
+  summaries, INV-17), journal, halts (create, step-up re-arm), strategy
+  registry and stage events (step-up for promotions and resumes),
+  instruments and bars, research backtests, live arming (step-up, live
+  accounts only), SSE journal events, hand-written OpenAPI.
+- Security: argon2id passwords, hashed session tokens in `HttpOnly`
+  `SameSite=Strict` cookies, CSRF header check, login throttling, owner and
+  viewer roles, audited actions, strict security headers.
+- `migrations/..._auth.sql`: users (one owner at most) and sessions.
+- `qd user create` (password on stdin); `qd-server` serves the API and, with
+  `frontend_dir`, the built frontend.
+- `qd-backtest/research.rs`: `ResearchBacktester`, the backtest port used by
+  the API and the CLI.
+- `frontend/`: Vite and strict TypeScript: login, decisions list and detail,
+  halts, strategies, backtest, journal; PAPER/LIVE and halt badges; decimal
+  formatting without floats; IST times; no `innerHTML`.
+- CI: a frontend job (npm ci, typecheck, tests, build).
+
+Decisions and assumptions: ADR 0008.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`.
+- `cargo test --workspace` with `DATABASE_URL`: 157 tests, including 7 API
+  tests through the full router against PostgreSQL.
+- Frontend: `npm run typecheck`, `npm test` (7 tests), `npm run build`,
+  `npm audit` 0 vulnerabilities (vitest upgraded to 5 for a dev-only advisory).
+- Smoke run: `qd migrate`, `qd user create`, `qd-server` with the built
+  frontend: `/` and a client route served `index.html`; `/api/auth/me`
+  returned 401 before login; login set the cookie; `/api/status` showed
+  paper mode and entries halted; the CSP and frame headers were present; the
+  server log contained no password.
+
+New invariant tests: `invariant_07_rearming_a_halt_needs_a_step_up`,
+`invariant_14_arming_needs_step_up_and_a_live_account`,
+`invariant_17_a_risk_blocked_decision_is_shown_as_no_trade_with_its_reason`.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -207,7 +249,7 @@ New invariant tests: `invariant_16_history_tables_reject_updates_deletes_and_tru
 - Assumptions to confirm (ADR 0005): cool-off lasts 24 hours; gap shocks
   equity 20%, precious metals 10%, energy 20%, crypto 30%.
 - Owner decisions still open (ADR 0004): crypto venue, stock universe, Kite
-  plan, VPS/static IP, DDPI, AI providers and budgets, frontend approach, FX source.
+  plan, VPS/static IP, DDPI, AI providers and budgets, FX source.
 - CI runs on GitHub for every push and passed for Phase 2.
 - Backtests over dates before 2026-01-01 fail closed until historical cost
   schedule versions exist; backtests support one currency only (ADR 0006).
@@ -219,12 +261,19 @@ New invariant tests: `invariant_16_history_tables_reject_updates_deletes_and_tru
 - `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
   from validation (Phase 7); until then it cannot pass the evidence gate.
 
-## Next steps (Phase 5)
+- Login throttling is in memory and resets on restart (ADR 0008).
+- A startup halt from a failed boot stays active until the owner re-arms it
+  (ADR 0008).
 
-1. `qd-api`: authentication (owner and read-only roles, step-up for live
-   arming and promotions), OpenAPI, endpoints for decisions (post-risk
-   headline and reason), proposals, positions, orders, journal, halts
-   (create, re-arm), strategy registry, backtests, health; SSE for updates.
-2. Frontend integration (spec §10 missing): record the approach in an ADR and
-   rebuild the Stitch screens against the API with the §6.3 labels, NO TRADE
-   states and a paper/live indicator.
+## Next steps (Phase 6)
+
+1. Persist positions and orders so reconciliation compares the stored book
+   with the broker.
+2. `qd-broker-paper`: a paper broker for live market data, using the same
+   fill rules as the backtest (INV-08).
+3. `qd-marketdata`: daily-bar ingestion adapters (read provider docs first;
+   record them in `docs/integrations/`).
+4. The scanner and daily run loop: after each close, run the Decision Engine
+   over the universe, then the Gateway and Position Manager in paper mode.
+5. Manual entries through the Decision Engine and Risk Gate (INV-03), and
+   positions and orders views in the frontend.

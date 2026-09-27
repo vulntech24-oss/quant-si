@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 4 (persistence, server, CLI) done; Phase 5 next**.
+- Current phase: **Phase 5 (HTTP API, auth, frontend) done; Phase 6 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -28,8 +28,18 @@ Tests need PostgreSQL: `export DATABASE_URL=postgres://USER@localhost:5432/DB` (
 must be able to create databases; `#[sqlx::test]` makes one per test). Queries are
 runtime-checked, so `cargo sqlx prepare` does not apply (ADR 0007).
 
-Run: `qd migrate` then `qd-server` with `QD_CONFIG` (see `config/quantdesk.example.toml`)
-and `QD_DATABASE_URL`. `qd --help` lists admin commands.
+Run: `qd migrate`, `qd user create --username NAME --role owner` (password on stdin),
+then `qd-server` with `QD_CONFIG` (see `config/quantdesk.example.toml`; set `frontend_dir`
+to serve the UI) and `QD_DATABASE_URL`. `qd --help` lists admin commands.
+
+Frontend, from `frontend/` (all must pass too):
+
+```sh
+npm ci
+npm run typecheck
+npm test
+npm run build              # dist/, served by qd-server; `npm run dev` proxies /api to :8080
+```
 
 Never disable a test or lint to get green. Allow a lint locally only with a
 comment explaining why.
@@ -79,20 +89,31 @@ backend/                     Cargo workspace (ADR 0002)
   crates/qd-backtest/        SimClock, SimBroker (simulate_fill), run_backtest, metrics
   crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
-  crates/qd-cli/             bin `qd`: migrate, accounts, instruments, bars, strategy, halts, backtest
+  crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
+  crates/qd-api/             HTTP API under /api (ADR 0008)
+    src/auth.rs              argon2id, session cookie, Caller extractor, step-up, login throttle
+    src/routes.rs            handlers: parse, authorize, call a port/use case, map
+    src/dto.rs               post-risk decision summaries (INV-17)
+    openapi.yaml             hand-written API description, served at /api/openapi.yaml
+    tests/api.rs             auth, CSRF, step-up, INV-07/14/17 through HTTP
   migrations/                SQL schema; history tables are append-only by trigger (INV-16)
   config/                    data, not code
     costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
     risk.toml                §4 default risk configuration
     quantdesk.example.toml   server settings (no secrets)
     instruments/examples/    example instrument spec (illustrative terms)
+frontend/                    Vite + strict TypeScript, no framework (ADR 0008)
+  src/format.ts              decimal strings → display (BigInt, Indian grouping), IST times
+  src/labels.ts              §6.3 action labels and NO TRADE reason text
+  src/api.ts, dom.ts         API client (CSRF header), textContent-only DOM builder
+  src/views.ts, main.ts      screens, top bar (PAPER/LIVE, halted), hash router
+  tests/                     vitest
 design/stitch-reference/     Stitch export: visual reference only, not requirements
 docs/                        spec, ADRs, progress log
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-api, qd-ai, qd-broker-kite, qd-broker-paper,
-qd-marketdata.
+Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-broker-paper, qd-marketdata.
 Create a crate only when it has real code.
 
 ## Rules of thumb
@@ -105,6 +126,8 @@ Create a crate only when it has real code.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
 - Only the Decision Engine can create an `EntryAuthorization`; only the Order Gateway
   can create a `BrokerOrderRequest`. Keep those constructors `pub(crate)`.
+- Frontend: never `innerHTML`; never parse decimals into JS numbers; dangerous actions
+  need step-up on the server, not just a UI prompt.
 - No `todo!`, `unimplemented!`, `dbg!`, `unwrap`, `expect` in runtime code.
 - Never place a real order. Never ask for secret values; name the `.env` variables.
 - Read the provider's current docs before any integration; record them in
