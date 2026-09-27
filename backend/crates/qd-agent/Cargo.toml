@@ -1,0 +1,34 @@
+[package]
+name = "qd-agent"
+version = "0.1.0"
+description = "QuantDesk AI agent: researches, predicts and requests trades through the deterministic Risk Gate and Order Gateway (ADR 0016)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+# The agent reaches trading only through qd-app's AgentDesk port, which runs
+# the Decision Engine, Risk Gate, Position Manager and Order Gateway. It has
+# no broker client, no secret store and no halt or limit writer (tested).
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+qd-ai-providers.workspace = true
+qd-app.workspace = true
+qd-domain.workspace = true
+qd-strategy.workspace = true
+reqwest.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+rust_decimal_macros.workspace = true
+
+[lints]
+workspace = true

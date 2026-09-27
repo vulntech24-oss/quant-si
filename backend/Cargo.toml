@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "crates/qd-agent",
     "crates/qd-ai",
     "crates/qd-ai-providers",
     "crates/qd-api",
@@ -26,6 +27,7 @@ qd-domain = { path = "crates/qd-domain" }
 qd-strategy = { path = "crates/qd-strategy" }
 qd-risk = { path = "crates/qd-risk" }
 qd-ai = { path = "crates/qd-ai" }
+qd-agent = { path = "crates/qd-agent" }
 qd-ai-providers = { path = "crates/qd-ai-providers" }
 qd-app = { path = "crates/qd-app" }
 qd-backtest = { path = "crates/qd-backtest" }

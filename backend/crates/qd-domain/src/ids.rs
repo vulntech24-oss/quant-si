@@ -115,6 +115,14 @@ define_id!(
     /// A stored AI review. AI output is advisory only (INV-04).
     AiReviewId
 );
+define_id!(
+    /// One run of the AI agent (ADR 0016).
+    AgentRunId
+);
+define_id!(
+    /// One AI prediction, tracked against the realized outcome (ADR 0016).
+    PredictionId
+);
 
 #[cfg(test)]
 mod tests {

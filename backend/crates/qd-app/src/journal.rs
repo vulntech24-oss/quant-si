@@ -80,6 +80,120 @@ pub struct AiAdvice {
     pub at: DateTime<Utc>,
 }
 
+/// Which way an AI prediction expects the price to move.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PredictedDirection {
+    /// Higher at the horizon.
+    Up,
+    /// Lower at the horizon.
+    Down,
+}
+
+/// One AI prediction (ADR 0016), journaled when it is made and scored
+/// against realized prices after its horizon.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct AiPrediction {
+    /// Id.
+    pub id: qd_domain::ids::PredictionId,
+    /// The agent run that made it.
+    pub run: qd_domain::ids::AgentRunId,
+    /// Model, e.g. `openai:gpt-6-astra`.
+    pub model: String,
+    /// Instrument.
+    pub instrument: InstrumentId,
+    /// Symbol, for display.
+    pub symbol: String,
+    /// Expected direction.
+    pub direction: PredictedDirection,
+    /// Horizon in trading days (completed daily bars).
+    pub horizon_days: u16,
+    /// Last completed close when the prediction was made.
+    pub reference_price: rust_decimal::Decimal,
+    /// Last completed bar date when the prediction was made.
+    pub reference_date: NaiveDate,
+    /// Price the move should reach, if stated.
+    pub target_price: Option<rust_decimal::Decimal>,
+    /// Price that proves it wrong, if stated.
+    pub stop_price: Option<rust_decimal::Decimal>,
+    /// The model's probability that it comes true (0–1).
+    pub probability: rust_decimal::Decimal,
+    /// The thesis in the model's words (bounded length).
+    pub thesis: String,
+    /// Sources the model cited.
+    pub sources: Vec<String>,
+    /// The decision it traded under, if it led to a trade.
+    pub decision: Option<DecisionId>,
+    /// Book of that trade (`paper` or `live`).
+    pub book: Option<String>,
+    /// When.
+    pub at: DateTime<Utc>,
+}
+
+/// How an AI prediction turned out (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct AiPredictionOutcome {
+    /// The prediction.
+    pub prediction: qd_domain::ids::PredictionId,
+    /// Bar date of the horizon (or of the first target/stop touch).
+    pub as_of: NaiveDate,
+    /// Close at the horizon bar.
+    pub end_price: rust_decimal::Decimal,
+    /// `end_price / reference_price − 1`.
+    pub return_pct: rust_decimal::Decimal,
+    /// Whether the price moved the predicted way by the horizon.
+    pub direction_correct: bool,
+    /// `target`, `stop` or `neither`, when levels were stated.
+    pub levels: Option<String>,
+    /// Whether the prediction counts as correct (target first when stated,
+    /// else the direction).
+    pub correct: bool,
+    /// When it was scored.
+    pub at: DateTime<Utc>,
+}
+
+/// One tool call in an agent run's trace.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct AgentStep {
+    /// Tool name.
+    pub tool: String,
+    /// Arguments as sent by the model (bounded).
+    pub arguments: serde_json::Value,
+    /// Result as returned to the model (bounded).
+    pub result: serde_json::Value,
+    /// Duration in milliseconds.
+    pub millis: u64,
+}
+
+/// One agent run: what the AI looked at, did and concluded (ADR 0016).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct AgentRunRecord {
+    /// Id.
+    pub id: qd_domain::ids::AgentRunId,
+    /// `research`, `monitor` or `manual` (not `kind`: that is the entry tag).
+    pub run_kind: String,
+    /// Model.
+    pub model: String,
+    /// Book traded (`paper` or `live`).
+    pub book: String,
+    /// Start.
+    pub started_at: DateTime<Utc>,
+    /// End.
+    pub finished_at: DateTime<Utc>,
+    /// `completed`, `budget_exhausted`, `timeout` or `failed`.
+    pub status: String,
+    /// The model's closing summary.
+    pub summary: String,
+    /// Tool calls in order.
+    pub steps: Vec<AgentStep>,
+    /// Decisions the run's trade requests produced.
+    pub decisions: Vec<DecisionId>,
+    /// Predictions it recorded.
+    pub predictions: Vec<qd_domain::ids::PredictionId>,
+    /// What went wrong, if anything.
+    pub error: Option<String>,
+}
+
 /// One journal entry.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -135,6 +249,12 @@ pub enum JournalEntry {
     DayClosed(Box<crate::session::DayRecord>),
     /// Advisory AI output about a decision (INV-04, shadow mode).
     AiAdvice(Box<AiAdvice>),
+    /// An AI agent run and its tool trace (ADR 0016).
+    AgentRun(Box<AgentRunRecord>),
+    /// An AI prediction (ADR 0016).
+    AiPrediction(Box<AiPrediction>),
+    /// How an AI prediction turned out (ADR 0016).
+    AiPredictionOutcome(Box<AiPredictionOutcome>),
     /// A halt was recorded or cleared.
     Halt {
         /// The halt.
