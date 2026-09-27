@@ -545,6 +545,17 @@ impl PaperTrading for PaperRunner {
 #[async_trait]
 impl Reconciler for PaperRunner {
     async fn reconcile(&self) -> Result<Vec<String>, StoreError> {
+        // A book for an account that does not exist, or is not a paper
+        // account, cannot be reconciled: entries stay halted (INV-07).
+        match self.deps.accounts.account(self.settings.account).await? {
+            None => return Ok(vec!["the configured account does not exist".to_owned()]),
+            Some(a) if a.mode != AccountMode::Paper => {
+                return Ok(vec![
+                    "the configured account is not a paper account".to_owned(),
+                ]);
+            }
+            Some(_) => {}
+        }
         let state = self.load_state().await.map_err(|e| store_error(&e))?;
         if let Err(e) = state.check() {
             return Ok(vec![e.to_string()]);

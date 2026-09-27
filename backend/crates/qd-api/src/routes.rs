@@ -252,7 +252,16 @@ async fn status(State(state): State<ApiState>, _caller: Caller) -> Result<Json<V
     };
     // Unknown halt state counts as halted (INV-06).
     let entries_halted = !known || !active.is_empty();
+    let health = qd_app::monitor::collect(
+        state.halts.as_ref(),
+        state.paper.as_deref(),
+        now,
+        qd_app::monitor::MonitorSettings::default(),
+    )
+    .await;
     Ok(Json(json!({
+        "alerts": health.alerts,
+        "paper": health.paper,
         "now": now,
         "environment": state.settings.environment,
         "account": account,

@@ -479,6 +479,21 @@ async fn paper_runs_refuse_live_accounts_and_concurrent_runs(pool: PgPool) {
         .await
         .unwrap_err();
     assert_eq!(err, PaperError::NotPaperAccount);
+    // Startup reconciliation fails closed for a live or missing account (INV-07).
+    let problems = runner(&w, live, Arc::new(FakeEvidence))
+        .reconcile()
+        .await
+        .unwrap();
+    assert_eq!(
+        problems,
+        vec!["the configured account is not a paper account"]
+    );
+    let missing = AccountId::new_at(FixedClock.now());
+    let problems = runner(&w, missing, Arc::new(FakeEvidence))
+        .reconcile()
+        .await
+        .unwrap();
+    assert_eq!(problems, vec!["the configured account does not exist"]);
 
     let acct = account(&w.stores, AccountMode::Paper).await;
     let _held = w

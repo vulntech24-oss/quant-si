@@ -9,6 +9,7 @@
 //! - [`journal`]: Decision Journal entries.
 //! - [`live`]: the live-trading gate (INV-14).
 //! - [`registry`]: the Strategy Registry (immutable versions, stage history).
+//! - [`monitor`]: health, alerts and Prometheus metrics.
 //! - [`memory`]: in-memory journal and halt store for backtests and tests.
 //! - [`evidence`]: recorded evidence (INV-11) and evidence tables.
 //! - [`review`]: predicted-vs-realized review, calibration and paper-review evidence.
@@ -21,6 +22,7 @@ pub mod gateway;
 pub mod journal;
 pub mod live;
 pub mod memory;
+pub mod monitor;
 pub mod orders;
 pub mod ports;
 pub mod positions;

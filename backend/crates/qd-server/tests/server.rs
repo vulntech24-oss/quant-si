@@ -129,6 +129,7 @@ async fn health_and_readiness_report_the_halt_state(pool: PgPool) {
     let app = router(HealthState {
         pool,
         halts: halts.clone() as Arc<dyn HaltStore>,
+        paper: None,
     });
     let health = app
         .clone()
@@ -136,6 +137,21 @@ async fn health_and_readiness_report_the_halt_state(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(health.status(), StatusCode::OK);
+    let metrics = app
+        .clone()
+        .oneshot(Request::get("/metrics").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(metrics.status(), StatusCode::OK);
+    let text = axum::body::to_bytes(metrics.into_body(), 1 << 20)
+        .await
+        .unwrap();
+    let text = String::from_utf8(text.to_vec()).unwrap();
+    assert!(text.contains("qd_up 1"), "{text}");
+    assert!(
+        text.contains("qd_entries_halted 1"),
+        "startup keeps entries halted: {text}"
+    );
     let ready = app
         .oneshot(Request::get("/ready").body(Body::empty()).unwrap())
         .await

@@ -11,8 +11,51 @@ use qd_server::startup::startup;
 use qd_store::Stores;
 use tracing_subscriber::EnvFilter;
 
-#[tokio::main]
-async fn main() -> std::process::ExitCode {
+/// `qd-server healthcheck`: exits 0 if `/health` answers 200 on
+/// `QD_HEALTH_ADDR` (default 127.0.0.1:8080). For container healthchecks
+/// without curl in the image.
+fn healthcheck() -> std::process::ExitCode {
+    use std::io::{Read, Write};
+    let addr = std::env::var("QD_HEALTH_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".to_owned());
+    let timeout = std::time::Duration::from_secs(3);
+    let ok = addr
+        .parse::<std::net::SocketAddr>()
+        .ok()
+        .and_then(|a| std::net::TcpStream::connect_timeout(&a, timeout).ok())
+        .and_then(|mut stream| {
+            stream.set_read_timeout(Some(timeout)).ok()?;
+            stream
+                .write_all(b"GET /health HTTP/1.0\r\nHost: localhost\r\n\r\n")
+                .ok()?;
+            let mut head = [0_u8; 12];
+            stream.read_exact(&mut head).ok()?;
+            Some(head.ends_with(b" 200"))
+        })
+        .unwrap_or(false);
+    if ok {
+        std::process::ExitCode::SUCCESS
+    } else {
+        std::process::ExitCode::FAILURE
+    }
+}
+
+fn main() -> std::process::ExitCode {
+    if std::env::args().nth(1).as_deref() == Some("healthcheck") {
+        return healthcheck();
+    }
+    match tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+    {
+        Ok(runtime) => runtime.block_on(serve()),
+        Err(e) => {
+            eprintln!("cannot start the runtime: {e}");
+            std::process::ExitCode::FAILURE
+        }
+    }
+}
+
+async fn serve() -> std::process::ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
@@ -100,6 +143,9 @@ async fn run() -> Result<(), String> {
         clock.clone(),
     )
     .map_err(|e| e.to_string())?;
+    let paper_port = paper
+        .clone()
+        .map(|r| r as Arc<dyn qd_app::ports::PaperTrading>);
     let api_state = qd_api::ApiState {
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
@@ -109,7 +155,7 @@ async fn run() -> Result<(), String> {
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
         backtests: Arc::new(backtests),
-        paper: paper.map(|r| r as Arc<dyn qd_app::ports::PaperTrading>),
+        paper: paper_port.clone(),
         validator: Arc::new(validator),
         ai,
         reviewer: Arc::new(qd_app::review::JournalReviewer {
@@ -132,10 +178,13 @@ async fn run() -> Result<(), String> {
         },
         limiter: Arc::new(qd_api::auth::LoginLimiter::default()),
     };
-    let mut app = qd_api::router(api_state).merge(router(HealthState {
+    let health = HealthState {
         pool,
         halts: Arc::clone(&stores.halts) as Arc<dyn qd_app::ports::HaltStore>,
-    }));
+        paper: paper_port,
+    };
+    qd_server::http::spawn_alert_log(health.clone(), std::time::Duration::from_secs(300));
+    let mut app = qd_api::router(api_state).merge(router(health));
     if let Some(dir) = &config.file.frontend_dir {
         let dir = config.base_dir.join(dir);
         tracing::info!(dir = %dir.display(), "serving frontend");

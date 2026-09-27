@@ -1,4 +1,5 @@
-//! Health endpoints. The full API arrives with `qd-api` (Phase 5).
+//! Health endpoints: `/health` (liveness), `/ready` (readiness and halt
+//! state) and `/metrics` (Prometheus text; keep it off the public proxy).
 
 use std::sync::Arc;
 
@@ -21,6 +22,8 @@ pub struct HealthState {
     pub pool: PgPool,
     /// Kill-switch state.
     pub halts: Arc<dyn HaltStore>,
+    /// The paper book, when paper trading is configured.
+    pub paper: Option<Arc<dyn qd_app::ports::PaperTrading>>,
 }
 
 #[derive(Serialize)]
@@ -96,10 +99,63 @@ async fn ready(State(state): State<HealthState>) -> impl IntoResponse {
     )
 }
 
-/// The health router: `/health` (liveness) and `/ready` (readiness and halt state).
+async fn metrics(State(state): State<HealthState>) -> impl IntoResponse {
+    let health = qd_app::monitor::collect(
+        state.halts.as_ref(),
+        state.paper.as_deref(),
+        Utc::now(),
+        qd_app::monitor::MonitorSettings::default(),
+    )
+    .await;
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "text/plain; version=0.0.4; charset=utf-8",
+        )],
+        qd_app::monitor::prometheus(&health),
+    )
+}
+
+/// The health router: `/health`, `/ready` and `/metrics`.
 pub fn router(state: HealthState) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
+        .route("/metrics", get(metrics))
         .with_state(state)
+}
+
+/// Logs alert changes as structured events every `interval`: a raised
+/// critical alert at error level, a warning at warn level, a cleared one at
+/// info. A log shipper can turn these into notifications.
+pub fn spawn_alert_log(state: HealthState, interval: std::time::Duration) {
+    tokio::spawn(async move {
+        let mut previous: std::collections::HashSet<qd_app::monitor::Alert> =
+            std::collections::HashSet::new();
+        loop {
+            let health = qd_app::monitor::collect(
+                state.halts.as_ref(),
+                state.paper.as_deref(),
+                Utc::now(),
+                qd_app::monitor::MonitorSettings::default(),
+            )
+            .await;
+            let current: std::collections::HashSet<_> = health.alerts.into_iter().collect();
+            for alert in current.difference(&previous) {
+                match alert.severity {
+                    qd_app::monitor::Severity::Critical => {
+                        tracing::error!(alert = alert.code, message = %alert.message, "alert raised");
+                    }
+                    qd_app::monitor::Severity::Warning => {
+                        tracing::warn!(alert = alert.code, message = %alert.message, "alert raised");
+                    }
+                }
+            }
+            for alert in previous.difference(&current) {
+                tracing::info!(alert = alert.code, "alert cleared");
+            }
+            previous = current;
+            tokio::time::sleep(interval).await;
+        }
+    });
 }

@@ -125,6 +125,9 @@ enum AccountCommand {
         mode: Mode,
         #[arg(long, default_value = "INR")]
         currency: String,
+        /// Use this id (the one in the server configuration) instead of a new one.
+        #[arg(long)]
+        id: Option<AccountId>,
     },
 }
 
@@ -302,10 +305,11 @@ async fn run(cli: Cli) -> Result<(), String> {
             name,
             mode,
             currency,
+            id,
         }) => {
             Currency::new(&currency).map_err(|e| e.to_string())?;
             let record = AccountRecord {
-                id: AccountId::new_at(now),
+                id: id.unwrap_or_else(|| AccountId::new_at(now)),
                 name,
                 mode: match mode {
                     Mode::Paper => AccountMode::Paper,
