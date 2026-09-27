@@ -2,13 +2,14 @@
 //!
 //! 1. Record a global `Startup` halt: entries are halted from the first moment.
 //! 2. Run health checks (database, halt store readable).
-//! 3. Reconcile with the broker. Without a configured broker there is nothing
-//!    to reconcile against, so entries stay halted.
+//! 3. Reconcile the book restored from the journal with the broker (the
+//!    paper venue until a live broker exists). Without a configured broker
+//!    there is nothing to reconcile against, so entries stay halted.
 //! 4. Only if every check passed, the system clears the startup halt. Hard
 //!    halts from before the restart are untouched: only a human re-arms them.
 
 use chrono::{DateTime, Utc};
-use qd_app::ports::{BrokerAccountReader, HaltStore};
+use qd_app::ports::{HaltStore, Reconciler};
 use qd_domain::halt::{ClearedBy, Halt, HaltKind, HaltScope};
 use qd_domain::ids::HaltId;
 use serde::Serialize;
@@ -59,7 +60,7 @@ pub async fn check_database(pool: &PgPool) -> HealthCheck {
 pub async fn startup(
     pool: &PgPool,
     halts: &dyn HaltStore,
-    broker: Option<&dyn BrokerAccountReader>,
+    reconciler: Option<&dyn Reconciler>,
     now: DateTime<Utc>,
 ) -> Result<StartupReport, qd_app::ports::StoreError> {
     let halt = Halt::new(
@@ -87,25 +88,23 @@ pub async fn startup(
             detail: e.to_string(),
         },
     });
-    checks.push(match broker {
+    checks.push(match reconciler {
         None => HealthCheck {
             name: "broker_reconciliation",
             ok: false,
             detail: "no broker configured; entries stay halted".to_owned(),
         },
-        Some(reader) => match reader.positions().await {
-            // The server holds no positions of its own at boot until the
-            // position book is persisted (Phase 6); any broker position is a
-            // mismatch that a human must look at.
-            Ok(positions) if positions.is_empty() => HealthCheck {
+        Some(reconciler) => match reconciler.reconcile().await {
+            Ok(problems) if problems.is_empty() => HealthCheck {
                 name: "broker_reconciliation",
                 ok: true,
-                detail: "broker reports no positions".to_owned(),
+                detail: "book and broker agree".to_owned(),
             },
-            Ok(positions) => HealthCheck {
+            // A mismatch is for a human to look at; nothing trades to "fix" it.
+            Ok(problems) => HealthCheck {
                 name: "broker_reconciliation",
                 ok: false,
-                detail: format!("broker reports {} unreconciled positions", positions.len()),
+                detail: problems.join("; "),
             },
             Err(e) => HealthCheck {
                 name: "broker_reconciliation",

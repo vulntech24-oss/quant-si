@@ -1,44 +1,13 @@
 //! Backtest metrics. Money stays Decimal; `f64` appears only in statistics
 //! (Sharpe), as spec §6.1 allows.
 
-use chrono::NaiveDate;
-use qd_domain::action::Side;
-use qd_domain::num::Quantity;
-use qd_domain::outcome::ExitReason;
 use rust_decimal::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use serde::Serialize;
 
 use crate::engine::EquityPoint;
 
-/// One closed trade.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct TradeRecord {
-    /// Symbol.
-    pub instrument: String,
-    /// Side.
-    pub side: Side,
-    /// Entry fill date.
-    pub opened_on: NaiveDate,
-    /// Date the trade closed.
-    pub closed_on: NaiveDate,
-    /// Quantity entered.
-    pub quantity: Quantity,
-    /// Average entry price.
-    pub entry_price: Decimal,
-    /// Average exit price.
-    pub exit_price: Decimal,
-    /// P&L before costs.
-    pub gross_pnl: Decimal,
-    /// Round-trip costs from the cost model.
-    pub costs: Decimal,
-    /// P&L after costs.
-    pub net_pnl: Decimal,
-    /// Net P&L over the risk planned at entry.
-    pub r_multiple: Decimal,
-    /// Why it closed.
-    pub exit_reason: ExitReason,
-}
+pub use qd_app::session::TradeRecord;
 
 /// Summary statistics.
 #[derive(Clone, Debug, Default, PartialEq, Serialize)]

@@ -40,6 +40,10 @@ paths:
     get: {summary: Point-in-time daily bars; query from, to}
   /api/backtests:
     post: {summary: Run a research backtest (owner)}
+  /api/paper:
+    get: {summary: "The paper book restored from the journal: last day, positions, working orders (409 if paper trading is not configured)"}
+  /api/paper/run:
+    post: {summary: "Process paper trading days through a date, body {through: YYYY-MM-DD} (owner; 409 when busy, not configured, or the book cannot be restored)"}
   /api/account/live-armed:
     post: {summary: Arm (owner, step-up) or disarm (owner) live trading for the account}
   /api/events:

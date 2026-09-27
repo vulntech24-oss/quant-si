@@ -17,6 +17,7 @@ csv.workspace = true
 qd-api.workspace = true
 qd-app.workspace = true
 qd-backtest.workspace = true
+qd-broker-paper.workspace = true
 qd-domain.workspace = true
 qd-risk.workspace = true
 qd-server.workspace = true

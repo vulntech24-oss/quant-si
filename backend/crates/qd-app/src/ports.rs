@@ -237,6 +237,14 @@ pub trait JournalReader: Send + Sync {
     ) -> Result<Vec<StoredJournalEntry>, StoreError>;
     /// Entries after a sequence number, oldest first (for streaming).
     async fn after(&self, seq: i64, limit: i64) -> Result<Vec<StoredJournalEntry>, StoreError>;
+    /// Entries of the given kinds after a sequence number, oldest first (for
+    /// restoring state; the caller pages with the last sequence number).
+    async fn replay(
+        &self,
+        kinds: &[&str],
+        after: i64,
+        limit: i64,
+    ) -> Result<Vec<StoredJournalEntry>, StoreError>;
     /// The latest decision with this id, if any.
     async fn decision(
         &self,
@@ -294,4 +302,35 @@ pub struct BacktestRequest {
 pub trait BacktestRunner: Send + Sync {
     /// Runs one backtest and returns its report as JSON.
     async fn run(&self, request: &BacktestRequest) -> Result<serde_json::Value, StoreError>;
+}
+
+/// Held while a run owns a named lock; dropping it releases the lock.
+pub trait RunGuard: Send {}
+
+/// Exclusive runs across processes (for example the server's scheduled paper
+/// run and a manual `qd paper run`), so a trading day is never processed twice at once.
+#[async_trait]
+pub trait RunLock: Send + Sync {
+    /// Takes the lock if it is free. `None` means another run holds it.
+    async fn try_acquire(&self, name: &str) -> Result<Option<Box<dyn RunGuard>>, StoreError>;
+}
+
+/// Startup reconciliation of the restored book with the broker (INV-07).
+#[async_trait]
+pub trait Reconciler: Send + Sync {
+    /// Problems found; empty means the book and the broker agree.
+    async fn reconcile(&self) -> Result<Vec<String>, StoreError>;
+}
+
+/// Paper trading, for the API and the CLI.
+#[async_trait]
+pub trait PaperTrading: Send + Sync {
+    /// Processes every trading day after the last processed one, through
+    /// `through`, and returns a summary as JSON.
+    async fn run_through(
+        &self,
+        through: chrono::NaiveDate,
+    ) -> Result<serde_json::Value, StoreError>;
+    /// The current book: positions, working orders and account state, as JSON.
+    async fn state(&self) -> Result<serde_json::Value, StoreError>;
 }

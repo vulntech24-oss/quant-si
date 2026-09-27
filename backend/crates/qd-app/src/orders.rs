@@ -18,7 +18,7 @@ use qd_domain::ids::{
 use qd_domain::instrument::{OrderType, ProductType, Validity};
 use qd_domain::num::{Price, Quantity};
 use qd_domain::outcome::ExitReason;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 /// Permission to open a position, issued only after a Risk Gate approval.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -88,7 +88,7 @@ impl EntryAuthorization {
 }
 
 /// Why an order exists.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "purpose", rename_all = "snake_case")]
 pub enum OrderPurpose {
     /// Opens a position under an entry authorization.
@@ -108,7 +108,7 @@ pub enum OrderPurpose {
 }
 
 /// Price terms of an order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct OrderTerms {
     /// Order type.
     pub order_type: OrderType,
@@ -275,6 +275,45 @@ impl OrderIntent {
     pub(crate) const fn authorized_quantity(&self) -> Option<Quantity> {
         self.authorized_quantity
     }
+
+    /// Reads an intent back from its journal JSON. Crate-private: only the
+    /// restore path may rebuild intents, and a restored intent is never sent
+    /// again (it was sent before it was journaled as accepted).
+    pub(crate) fn from_journal(value: &serde_json::Value) -> Result<Self, serde_json::Error> {
+        let d: IntentData = serde_json::from_value(value.clone())?;
+        Ok(Self {
+            id: d.id,
+            account: d.account,
+            instrument: d.instrument,
+            strategy_version: d.strategy_version,
+            position: d.position,
+            action: d.action,
+            quantity: d.quantity,
+            terms: d.terms,
+            purpose: d.purpose,
+            oco_group: d.oco_group,
+            created_at: d.created_at,
+            authorized_quantity: d.authorized_quantity,
+        })
+    }
+}
+
+/// The journal shape of an [`OrderIntent`]. Private so that deserializing
+/// cannot become a public way to build an authorized entry.
+#[derive(Deserialize)]
+struct IntentData {
+    id: OrderIntentId,
+    account: AccountId,
+    instrument: InstrumentId,
+    strategy_version: Option<StrategyVersionId>,
+    position: Option<PositionId>,
+    action: TradeAction,
+    quantity: Quantity,
+    terms: OrderTerms,
+    purpose: OrderPurpose,
+    oco_group: Option<PositionId>,
+    created_at: DateTime<Utc>,
+    authorized_quantity: Option<Quantity>,
 }
 
 /// An order as sent to a broker. Only the Order Gateway can build one.

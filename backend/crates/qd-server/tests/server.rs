@@ -11,7 +11,7 @@ use std::sync::Arc;
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::{TimeZone, Utc};
-use qd_app::ports::{BrokerAccountReader, BrokerError, BrokerPosition, HaltStore};
+use qd_app::ports::{BrokerPosition, HaltStore, Reconciler};
 use qd_domain::halt::HaltKind;
 use qd_domain::ids::InstrumentId;
 use qd_server::config::{ConfigError, ServerConfig};
@@ -65,12 +65,14 @@ fn invariant_14_live_trading_outside_production_or_with_unverified_costs_refuses
     assert!(matches!(config.validate(), Err(ConfigError::Unsafe(_))));
 }
 
+/// A broker whose positions the (empty) book does not hold.
 struct FakeBroker(Vec<BrokerPosition>);
 
 #[async_trait::async_trait]
-impl BrokerAccountReader for FakeBroker {
-    async fn positions(&self) -> Result<Vec<BrokerPosition>, BrokerError> {
-        Ok(self.0.clone())
+impl Reconciler for FakeBroker {
+    async fn reconcile(&self) -> Result<Vec<String>, qd_app::ports::StoreError> {
+        let book = qd_app::positions::reconcile_book(&[], &self.0);
+        Ok(book.iter().map(|m| format!("{m:?}")).collect())
     }
 }
 

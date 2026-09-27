@@ -19,7 +19,7 @@ use axum::response::{IntoResponse, Response};
 use qd_app::live::Environment;
 use qd_app::ports::{
     AccountStore, AuditLog, AuthStore, BacktestRunner, Clock, HaltStore, HistoricalMarketData,
-    JournalReader,
+    JournalReader, PaperTrading,
 };
 use qd_app::registry::StrategyRegistry;
 use qd_domain::ids::AccountId;
@@ -64,6 +64,8 @@ pub struct ApiState {
     pub audit: Arc<dyn AuditLog>,
     /// Research backtests.
     pub backtests: Arc<dyn BacktestRunner>,
+    /// Paper trading, when configured.
+    pub paper: Option<Arc<dyn PaperTrading>>,
     /// Clock.
     pub clock: Arc<dyn Clock>,
     /// Settings.

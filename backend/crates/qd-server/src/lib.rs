@@ -4,10 +4,12 @@
 //! - [`config`]: validated configuration; secrets from the environment only.
 //! - [`startup`]: conservative startup (INV-07).
 //! - [`http`]: health and readiness endpoints.
+//! - [`paper`]: the paper runner and its optional daily schedule.
 //! - [`SystemClock`]: the real clock, used only by binaries.
 
 pub mod config;
 pub mod http;
+pub mod paper;
 pub mod startup;
 
 use chrono::{DateTime, Utc};

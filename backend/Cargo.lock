@@ -1384,6 +1384,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "qd-app",
+ "qd-broker-paper",
  "qd-domain",
  "qd-risk",
  "qd-strategy",
@@ -1394,6 +1395,29 @@ dependencies = [
  "thiserror",
  "tokio",
  "toml",
+ "uuid",
+]
+
+[[package]]
+name = "qd-broker-paper"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "qd-app",
+ "qd-domain",
+ "qd-risk",
+ "qd-store",
+ "qd-strategy",
+ "rust_decimal",
+ "rust_decimal_macros",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tracing",
 ]
 
 [[package]]
@@ -1406,6 +1430,7 @@ dependencies = [
  "qd-api",
  "qd-app",
  "qd-backtest",
+ "qd-broker-paper",
  "qd-domain",
  "qd-risk",
  "qd-server",
@@ -1460,6 +1485,7 @@ dependencies = [
  "qd-api",
  "qd-app",
  "qd-backtest",
+ "qd-broker-paper",
  "qd-domain",
  "qd-risk",
  "qd-store",

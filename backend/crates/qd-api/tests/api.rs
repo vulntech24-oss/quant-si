@@ -94,6 +94,7 @@ async fn app(pool: PgPool) -> App {
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
         backtests: Arc::new(FakeBacktests),
+        paper: None,
         clock: Arc::new(FixedClock),
         settings: ApiSettings {
             account_id: account,
@@ -465,4 +466,38 @@ async fn strategy_promotion_needs_step_up_and_uses_the_authenticated_owner(pool:
             .unwrap();
     let approved_by: String = sqlx::query_scalar("SELECT event->'approval'->>'approved_by' FROM strategy_stage_events WHERE event->>'event' = 'promote'").fetch_one(&pool).await.unwrap();
     assert_eq!(approved_by, owner_id);
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn paper_endpoints_report_when_paper_trading_is_not_configured(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let (status, _, body) = call(&app, "GET", "/api/paper", Some(&owner), None, false).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "conflict");
+    let run = serde_json::json!({"through": "2026-03-16"});
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/paper/run",
+        Some(&owner),
+        Some(run.clone()),
+        false,
+    )
+    .await;
+    assert_eq!(
+        status,
+        StatusCode::FORBIDDEN,
+        "the CSRF header is still required"
+    );
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/paper/run",
+        Some(&owner),
+        Some(run),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
 }

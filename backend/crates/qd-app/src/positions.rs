@@ -28,15 +28,16 @@ use qd_domain::outcome::ExitReason;
 use qd_domain::plan::InvalidationRule;
 use qd_domain::proposal::TradeProposal;
 use rust_decimal::Decimal;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::gateway::{FillReport, GatewayRejection, OrderGateway};
 use crate::journal::JournalEntry;
 use crate::orders::{EntryAuthorization, OrderIntent, OrderPurpose, OrderTerms};
 use crate::ports::{BrokerPosition, Clock, Journal};
 
-/// One position.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// One position. Every change is journaled as a full snapshot, so the book
+/// can be rebuilt from the journal after a restart.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Position {
     /// Position id.
     pub id: PositionId,
@@ -78,6 +79,9 @@ pub struct Position {
     pub opened_on: Option<NaiveDate>,
     /// Completed bars held since the entry bar.
     pub bars_held: u16,
+    /// The last bar counted in `bars_held` (makes re-processing a day idempotent).
+    #[serde(default)]
+    pub last_bar_counted: Option<NaiveDate>,
     /// Realized P&L, instrument currency, before costs.
     pub realized_gross: Decimal,
     /// Why it closed.
@@ -105,7 +109,7 @@ pub struct PositionUpdate {
 }
 
 /// A difference between the book and the broker.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReconciliationMismatch {
     /// Instrument.
     pub instrument: InstrumentId,
@@ -188,7 +192,9 @@ impl PositionManager {
             next
         };
         // Best effort for position events: the orders themselves were journaled
-        // by the gateway before any broker call.
+        // by the gateway before any broker call. A lost snapshot makes the
+        // restored book disagree with the order ledger, and a restore then
+        // fails closed (ADR 0009).
         let _ = self
             .journal
             .append(&JournalEntry::PositionEvent {
@@ -198,7 +204,37 @@ impl PositionManager {
                 at: self.clock.now(),
             })
             .await;
+        self.snapshot(id).await;
         Some(next)
+    }
+
+    /// Journals the full current state of a position.
+    async fn snapshot(&self, id: PositionId) {
+        let Some(position) = lock(&self.positions).get(&id).cloned() else {
+            return;
+        };
+        let _ = self
+            .journal
+            .append(&JournalEntry::PositionSnapshot {
+                position: Box::new(position),
+                at: self.clock.now(),
+            })
+            .await;
+    }
+
+    /// Rebuilds the book from restored journal state. Call once, before use,
+    /// after [`OrderGateway::restore`].
+    pub fn restore(&self, restored: &crate::restore::RestoredState) {
+        let mut positions = lock(&self.positions);
+        let mut by_intent = lock(&self.by_intent);
+        for p in &restored.positions {
+            positions.insert(p.id, p.clone());
+        }
+        for r in &restored.intents {
+            if let Some(position) = r.intent.position() {
+                by_intent.insert(r.intent.id(), position);
+            }
+        }
     }
 
     /// Opens a position: records it and submits the entry through the gateway.
@@ -248,12 +284,14 @@ impl PositionManager {
             multiplier: spec.multiplier,
             opened_on: None,
             bars_held: 0,
+            last_bar_counted: None,
             realized_gross: Decimal::ZERO,
             exit_reason: None,
             product,
         };
         lock(&self.positions).insert(id, position);
         lock(&self.by_intent).insert(intent.id(), id);
+        self.snapshot(id).await;
         match self.gateway.submit(intent, Some(stage)).await {
             Ok(_) => Ok(id),
             Err(rejection) => {
@@ -307,6 +345,8 @@ impl PositionManager {
                 };
                 if first {
                     self.transition(id, PositionEvent::EntryFilled).await;
+                } else {
+                    self.snapshot(id).await;
                 }
                 if report.complete {
                     self.protect(id, &mut update).await;
@@ -334,7 +374,9 @@ impl PositionManager {
                         .unwrap_or(Quantity::ZERO);
                     (p.quantity, p.state)
                 };
-                if state != PositionState::Exiting {
+                if state == PositionState::Exiting {
+                    self.snapshot(id).await;
+                } else {
                     self.transition(id, PositionEvent::ExitStarted { reason })
                         .await;
                 }
@@ -419,13 +461,19 @@ impl PositionManager {
                         )
                 })
                 .map(|p| {
-                    if p.opened_on.is_some_and(|d| bar.date() > d) {
+                    if p.opened_on.is_some_and(|d| bar.date() > d)
+                        && p.last_bar_counted.is_none_or(|last| bar.date() > last)
+                    {
+                        p.last_bar_counted = Some(bar.date());
                         p.bars_held = p.bars_held.saturating_add(1);
                     }
                     p.clone()
                 })
                 .collect()
         };
+        for p in &candidates {
+            self.snapshot(p.id).await;
+        }
         for p in candidates {
             let close = bar.close();
             let invalidated = p.invalidation.iter().any(|rule| match rule {
@@ -511,34 +559,7 @@ impl PositionManager {
     /// never trades to fix them.
     #[must_use]
     pub fn reconcile(&self, broker: &[BrokerPosition]) -> Vec<ReconciliationMismatch> {
-        let mut book: HashMap<InstrumentId, Decimal> = HashMap::new();
-        for p in self.active() {
-            let signed = match p.side {
-                Side::Long => p.quantity.value(),
-                Side::Short => -p.quantity.value(),
-            };
-            *book.entry(p.instrument).or_default() += signed;
-        }
-        let mut broker_map: HashMap<InstrumentId, Decimal> = HashMap::new();
-        for b in broker {
-            *broker_map.entry(b.instrument).or_default() += b.net_quantity;
-        }
-        let mut instruments: Vec<InstrumentId> =
-            book.keys().chain(broker_map.keys()).copied().collect();
-        instruments.sort();
-        instruments.dedup();
-        instruments
-            .into_iter()
-            .filter_map(|instrument| {
-                let b = book.get(&instrument).copied().unwrap_or_default();
-                let r = broker_map.get(&instrument).copied().unwrap_or_default();
-                (b != r).then_some(ReconciliationMismatch {
-                    instrument,
-                    book: b,
-                    broker: r,
-                })
-            })
-            .collect()
+        reconcile_book(&self.active(), broker)
     }
 
     /// Time of the manager's clock (for callers without their own).
@@ -546,4 +567,43 @@ impl PositionManager {
     pub fn now(&self) -> DateTime<Utc> {
         self.clock.now()
     }
+}
+
+/// Compares a book of positions with the broker's net positions.
+#[must_use]
+pub fn reconcile_book(
+    positions: &[Position],
+    broker: &[BrokerPosition],
+) -> Vec<ReconciliationMismatch> {
+    let mut book: HashMap<InstrumentId, Decimal> = HashMap::new();
+    for p in positions
+        .iter()
+        .filter(|p| p.state != PositionState::Closed)
+    {
+        let signed = match p.side {
+            Side::Long => p.quantity.value(),
+            Side::Short => -p.quantity.value(),
+        };
+        *book.entry(p.instrument).or_default() += signed;
+    }
+    let mut broker_map: HashMap<InstrumentId, Decimal> = HashMap::new();
+    for b in broker {
+        *broker_map.entry(b.instrument).or_default() += b.net_quantity;
+    }
+    let mut instruments: Vec<InstrumentId> =
+        book.keys().chain(broker_map.keys()).copied().collect();
+    instruments.sort();
+    instruments.dedup();
+    instruments
+        .into_iter()
+        .filter_map(|instrument| {
+            let b = book.get(&instrument).copied().unwrap_or_default();
+            let r = broker_map.get(&instrument).copied().unwrap_or_default();
+            (b != r).then_some(ReconciliationMismatch {
+                instrument,
+                book: b,
+                broker: r,
+            })
+        })
+        .collect()
 }

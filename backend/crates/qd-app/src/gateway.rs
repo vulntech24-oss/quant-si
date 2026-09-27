@@ -203,6 +203,53 @@ impl OrderGateway {
         }
     }
 
+    /// Rebuilds intents and the open-quantity ledger from restored journal
+    /// state. Nothing is sent: restored intents were sent before they were
+    /// journaled as accepted. Intents of other accounts are ignored.
+    pub fn restore(&self, restored: &crate::restore::RestoredState) {
+        let mut state = self.lock();
+        let mut totals: HashMap<(InstrumentId, Side), rust_decimal::Decimal> = HashMap::new();
+        for r in restored
+            .intents
+            .iter()
+            .filter(|r| r.intent.account() == self.account.id)
+        {
+            let total = totals
+                .entry((r.intent.instrument(), r.intent.action().side()))
+                .or_default();
+            match r.intent.risk_effect() {
+                RiskEffect::Increasing => *total += r.filled.value(),
+                RiskEffect::Reducing => *total -= r.filled.value(),
+            }
+            state.intents.insert(
+                r.intent.id(),
+                IntentRecord {
+                    intent: r.intent.clone(),
+                    state: r.state,
+                    filled: r.filled,
+                },
+            );
+        }
+        for (key, total) in totals {
+            // A negative total cannot come from the gateway's own ledger; the
+            // restore consistency check reports it before trading resumes.
+            state
+                .open
+                .insert(key, Quantity::new(total).unwrap_or(Quantity::ZERO));
+        }
+    }
+
+    /// Intents in the `Unknown` state (outcome not known; reconcile them).
+    #[must_use]
+    pub fn unknown_intents(&self) -> Vec<OrderIntent> {
+        self.lock()
+            .intents
+            .values()
+            .filter(|r| r.state == OrderIntentState::Unknown)
+            .map(|r| r.intent.clone())
+            .collect()
+    }
+
     fn lock(&self) -> MutexGuard<'_, GatewayState> {
         // A poisoned lock means a panic mid-update; the state is still the
         // best record we have, and every caller re-validates.

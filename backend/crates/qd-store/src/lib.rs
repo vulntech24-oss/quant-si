@@ -582,6 +582,26 @@ impl JournalReader for PgJournal {
         rows.iter().map(entry_from_row).collect()
     }
 
+    async fn replay(
+        &self,
+        kinds: &[&str],
+        after: i64,
+        limit: i64,
+    ) -> Result<Vec<StoredJournalEntry>, StoreError> {
+        let kinds: Vec<String> = kinds.iter().map(|k| (*k).to_owned()).collect();
+        let rows = sqlx::query(
+            "SELECT seq, kind, entry, recorded_at FROM journal \
+             WHERE kind = ANY($1) AND seq > $2 ORDER BY seq LIMIT $3",
+        )
+        .bind(kinds)
+        .bind(after)
+        .bind(limit.clamp(1, 5000))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter().map(entry_from_row).collect()
+    }
+
     async fn decision(&self, id: DecisionId) -> Result<Option<StoredJournalEntry>, StoreError> {
         let row = sqlx::query(
             "SELECT seq, kind, entry, recorded_at FROM journal \
@@ -725,6 +745,54 @@ impl AuthStore for PgAuth {
     }
 }
 
+/// Cross-process run locks: PostgreSQL session-level advisory locks.
+#[derive(Clone, Debug)]
+pub struct PgRunLock {
+    pool: PgPool,
+}
+
+impl PgRunLock {
+    /// Creates the lock service.
+    #[must_use]
+    pub const fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+/// Holds the connection that owns an advisory lock. Dropping it closes that
+/// connection (it never returns to the pool), which releases the lock.
+struct PgRunGuard {
+    conn: Option<sqlx::pool::PoolConnection<sqlx::Postgres>>,
+}
+
+impl qd_app::ports::RunGuard for PgRunGuard {}
+
+impl Drop for PgRunGuard {
+    fn drop(&mut self) {
+        if let Some(conn) = self.conn.take() {
+            drop(conn.detach());
+        }
+    }
+}
+
+#[async_trait]
+impl qd_app::ports::RunLock for PgRunLock {
+    async fn try_acquire(
+        &self,
+        name: &str,
+    ) -> Result<Option<Box<dyn qd_app::ports::RunGuard>>, StoreError> {
+        let mut conn = self.pool.acquire().await.map_err(store_error)?;
+        let locked: bool =
+            sqlx::query_scalar("SELECT pg_try_advisory_lock(hashtextextended($1, 0))")
+                .bind(name)
+                .fetch_one(&mut *conn)
+                .await
+                .map_err(store_error)?;
+        Ok(locked
+            .then(|| Box::new(PgRunGuard { conn: Some(conn) }) as Box<dyn qd_app::ports::RunGuard>))
+    }
+}
+
 /// All PostgreSQL adapters over one pool.
 #[derive(Clone, Debug)]
 pub struct Stores {
@@ -742,6 +810,8 @@ pub struct Stores {
     pub accounts: Arc<PgAccounts>,
     /// Users and sessions.
     pub auth: Arc<PgAuth>,
+    /// Run locks.
+    pub locks: Arc<PgRunLock>,
 }
 
 impl Stores {
@@ -756,6 +826,7 @@ impl Stores {
             audit: Arc::new(PgAuditLog::new(pool.clone())),
             accounts: Arc::new(PgAccounts::new(pool.clone())),
             auth: Arc::new(PgAuth::new(pool.clone())),
+            locks: Arc::new(PgRunLock::new(pool.clone())),
         }
     }
 }

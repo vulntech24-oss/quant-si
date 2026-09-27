@@ -4,6 +4,7 @@ members = [
     "crates/qd-api",
     "crates/qd-app",
     "crates/qd-backtest",
+    "crates/qd-broker-paper",
     "crates/qd-domain",
     "crates/qd-cli",
     "crates/qd-risk",
@@ -23,6 +24,7 @@ qd-strategy = { path = "crates/qd-strategy" }
 qd-risk = { path = "crates/qd-risk" }
 qd-app = { path = "crates/qd-app" }
 qd-backtest = { path = "crates/qd-backtest" }
+qd-broker-paper = { path = "crates/qd-broker-paper" }
 qd-store = { path = "crates/qd-store" }
 qd-server = { path = "crates/qd-server" }
 qd-api = { path = "crates/qd-api" }

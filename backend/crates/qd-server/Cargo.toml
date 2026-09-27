@@ -15,10 +15,12 @@ axum.workspace = true
 chrono = { workspace = true, features = ["clock"] }
 qd-api.workspace = true
 qd-backtest.workspace = true
+qd-broker-paper.workspace = true
 qd-app.workspace = true
 qd-domain.workspace = true
 qd-risk.workspace = true
 qd-store.workspace = true
+rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sqlx.workspace = true
@@ -32,7 +34,6 @@ uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
-rust_decimal.workspace = true
 tower = { version = "0.5", default-features = false, features = ["util"] }
 
 [lints]

@@ -49,6 +49,8 @@ pub fn router(state: ApiState) -> Router {
         .route("/instruments", get(instruments))
         .route("/instruments/{id}/bars", get(bars))
         .route("/backtests", post(backtest))
+        .route("/paper", get(paper_state))
+        .route("/paper/run", post(paper_run))
         .route("/account/live-armed", post(live_armed))
         .route("/events", get(events))
         .route("/openapi.yaml", get(openapi))
@@ -538,6 +540,58 @@ async fn bars(
         .await
         .map_err(internal)?;
     Ok(Json(serde_json::to_value(bars).map_err(internal)?))
+}
+
+// ---------- paper trading ----------
+
+fn paper(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::PaperTrading>, ApiError> {
+    state
+        .paper
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("paper trading is not configured".to_owned()))
+}
+
+async fn paper_state(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    let runner = paper(&state)?;
+    runner.state().await.map(Json).map_err(internal)
+}
+
+#[derive(Deserialize)]
+struct PaperRunBody {
+    through: NaiveDate,
+}
+
+async fn paper_run(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<PaperRunBody>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    if body.through > state.clock.now().date_naive() {
+        return Err(ApiError::BadRequest(
+            "through cannot be in the future".to_owned(),
+        ));
+    }
+    let runner = paper(&state)?;
+    state
+        .audit
+        .record(
+            &caller.actor(),
+            "paper.run",
+            json!({ "through": body.through }),
+        )
+        .await
+        .map_err(internal)?;
+    // Paper runs only simulate; their failures (busy, restore refused) are
+    // shown to the owner as conflicts rather than hidden as internal errors.
+    runner
+        .run_through(body.through)
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
 }
 
 async fn backtest(

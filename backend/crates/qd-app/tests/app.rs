@@ -582,3 +582,82 @@ fn invariant_14_every_live_condition_is_required() {
         Ok(())
     );
 }
+
+// ---------- restore from the journal (ADR 0009) ----------
+
+fn journal_json(h: &Harness) -> Vec<serde_json::Value> {
+    h.journal
+        .inner
+        .entries()
+        .iter()
+        .map(|e| serde_json::to_value(e).unwrap())
+        .collect()
+}
+
+#[tokio::test]
+async fn invariant_05_the_journal_alone_rebuilds_the_book_and_the_order_ledger() {
+    let h = harness(AccountMode::Paper, LivePolicy::default(), false);
+    let (pm, id) = filled_position(&h).await;
+    let restored =
+        qd_app::restore::RestoredState::from_entries(account_id(), journal_json(&h).iter())
+            .unwrap();
+    restored.check().unwrap();
+    assert_eq!(restored.positions, pm.positions());
+
+    // A fresh gateway and manager, rebuilt from the journal only.
+    let fresh = harness(AccountMode::Paper, LivePolicy::default(), false);
+    fresh.gateway.restore(&restored);
+    let pm2 = PositionManager::new(
+        fresh.gateway.clone(),
+        fresh.journal.clone(),
+        fresh.clock.clone(),
+    );
+    pm2.restore(&restored);
+    assert_eq!(pm2.positions(), pm.positions());
+    let p = &pm.positions()[0];
+    assert_eq!(p.id, id);
+    assert_eq!(
+        fresh.gateway.open_quantity(p.instrument, p.side),
+        h.gateway.open_quantity(p.instrument, p.side)
+    );
+    // The protective orders are still working, and the exit rule still
+    // holds: no exit beyond the open quantity is accepted after a restart.
+    assert_eq!(fresh.gateway.working_intents(id).len(), 2);
+    assert_eq!(fresh.executor.submits(), 0);
+    let update = &mut qd_app::positions::PositionUpdate::default();
+    pm2.exit(id, qd_domain::outcome::ExitReason::Manual, update)
+        .await;
+    assert!(update.rejections.is_empty(), "{update:?}");
+    assert_eq!(fresh.executor.submits(), 1);
+}
+
+#[tokio::test]
+async fn invariant_06_restore_keeps_unanswered_orders_unknown_and_refuses_lost_snapshots() {
+    let h = harness(AccountMode::Paper, LivePolicy::default(), false);
+    h.executor.transport_error.store(true, Ordering::SeqCst);
+    let decided = approved(AccountMode::Paper).await;
+    submit_entry(&h, &decided).await.unwrap();
+    let restored =
+        qd_app::restore::RestoredState::from_entries(account_id(), journal_json(&h).iter())
+            .unwrap();
+    assert_eq!(restored.intents.len(), 1);
+    assert_eq!(restored.intents[0].state, OrderIntentState::Unknown);
+    // Another account's restore sees nothing of this one.
+    let other = qd_app::restore::RestoredState::from_entries(
+        qd_domain::ids::AccountId::new_at(at_close(decision_date())),
+        journal_json(&h).iter(),
+    )
+    .unwrap();
+    assert!(other.intents.is_empty());
+
+    // A fill whose position snapshot never reached the journal: refused.
+    let h = harness(AccountMode::Paper, LivePolicy::default(), false);
+    let _ = filled_position(&h).await;
+    let entries: Vec<serde_json::Value> = journal_json(&h)
+        .into_iter()
+        .filter(|e| e["kind"] != "position_snapshot")
+        .collect();
+    let restored =
+        qd_app::restore::RestoredState::from_entries(account_id(), entries.iter()).unwrap();
+    assert!(restored.check().is_err());
+}

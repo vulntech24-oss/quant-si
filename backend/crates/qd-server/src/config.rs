@@ -74,6 +74,46 @@ pub struct ConfigFile {
     /// Session lifetime in hours. Default: 12.
     #[serde(default = "default_session_hours")]
     pub session_hours: i64,
+    /// Paper trading. Absent: no paper runner, and entries stay halted
+    /// because no venue can be reconciled.
+    #[serde(default)]
+    pub paper: Option<PaperConfig>,
+}
+
+fn default_close_time_utc() -> chrono::NaiveTime {
+    // 15:30 IST, the NSE close, is 10:00 UTC.
+    chrono::NaiveTime::from_hms_opt(10, 0, 0).unwrap_or(chrono::NaiveTime::MIN)
+}
+
+const fn default_slippage_ticks() -> rust_decimal::Decimal {
+    rust_decimal::Decimal::ONE
+}
+
+const fn default_warm_up_days() -> i64 {
+    400
+}
+
+/// Paper-trading settings (ADR 0009).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PaperConfig {
+    /// Starting equity in the account currency.
+    #[serde(with = "rust_decimal::serde::str")]
+    pub initial_equity: rust_decimal::Decimal,
+    /// First trading date to process.
+    pub start_date: chrono::NaiveDate,
+    /// When a date's daily bar counts as complete (UTC). Default 10:00 (15:30 IST).
+    #[serde(default = "default_close_time_utc")]
+    pub close_time_utc: chrono::NaiveTime,
+    /// Adverse slippage on market and stop fills, in ticks. Default 1.
+    #[serde(default = "default_slippage_ticks", with = "rust_decimal::serde::str")]
+    pub slippage_ticks: rust_decimal::Decimal,
+    /// Calendar days of history loaded for indicator warm-up. Default 400.
+    #[serde(default = "default_warm_up_days")]
+    pub warm_up_days: i64,
+    /// Time (UTC) of the automatic daily run; absent means runs are manual only.
+    #[serde(default)]
+    pub daily_run_utc: Option<chrono::NaiveTime>,
 }
 
 const fn default_session_hours() -> i64 {
@@ -170,6 +210,18 @@ impl ServerConfig {
             environment: file.environment,
             live_trading_enabled: file.live_trading_enabled,
         };
+        if let Some(paper) = &file.paper {
+            if paper.initial_equity <= rust_decimal::Decimal::ZERO
+                || paper.slippage_ticks < rust_decimal::Decimal::ZERO
+                || !(250..=3650).contains(&paper.warm_up_days)
+            {
+                return Err(ConfigError::Unsafe(
+                    "paper: initial_equity must be positive, slippage_ticks non-negative, \
+                     warm_up_days between 250 and 3650"
+                        .to_owned(),
+                ));
+            }
+        }
         if !(1..=168).contains(&file.session_hours) {
             return Err(ConfigError::Unsafe(
                 "session_hours must be between 1 and 168".to_owned(),

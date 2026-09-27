@@ -88,6 +88,15 @@ pub enum JournalEntry {
         /// When.
         at: DateTime<Utc>,
     },
+    /// The full state of a position after a change (restore source).
+    PositionSnapshot {
+        /// The position.
+        position: Box<crate::positions::Position>,
+        /// When.
+        at: DateTime<Utc>,
+    },
+    /// A trading day finished for an account: its book and closed trades.
+    DayClosed(Box<crate::session::DayRecord>),
     /// A halt was recorded or cleared.
     Halt {
         /// The halt.

@@ -48,9 +48,15 @@ async fn run() -> Result<(), String> {
     .map_err(|e| e.to_string())?;
     qd_store::migrate(&pool).await.map_err(|e| e.to_string())?;
     let stores = Stores::new(&pool);
+    let clock: Arc<dyn qd_app::ports::Clock> = Arc::new(qd_server::SystemClock);
+    let paper = qd_server::paper::paper_runner(&config, &stores, clock.clone())?;
 
-    // No broker adapter is wired yet (Phase 6), so entries stay halted.
-    let report = startup(&pool, stores.halts.as_ref(), None, Utc::now())
+    // Reconciliation is against the paper venue when paper trading is
+    // configured; with no venue at all, entries stay halted (INV-07).
+    let reconciler = paper
+        .as_deref()
+        .map(|r| r as &dyn qd_app::ports::Reconciler);
+    let report = startup(&pool, stores.halts.as_ref(), reconciler, Utc::now())
         .await
         .map_err(|e| e.to_string())?;
     for check in &report.checks {
@@ -61,7 +67,13 @@ async fn run() -> Result<(), String> {
         "startup complete"
     );
 
-    let clock: Arc<dyn qd_app::ports::Clock> = Arc::new(qd_server::SystemClock);
+    if let (Some(runner), Some(run_at)) = (
+        &paper,
+        config.file.paper.as_ref().and_then(|p| p.daily_run_utc),
+    ) {
+        tracing::info!(%run_at, "automatic daily paper run enabled");
+        qd_server::paper::spawn_daily(runner.clone(), clock.clone(), run_at);
+    }
     let backtests = qd_backtest::research::ResearchBacktester::new(
         stores.market.clone(),
         Arc::new(config.costs.clone()),
@@ -81,6 +93,7 @@ async fn run() -> Result<(), String> {
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
         backtests: Arc::new(backtests),
+        paper: paper.map(|r| r as Arc<dyn qd_app::ports::PaperTrading>),
         clock,
         settings: qd_api::ApiSettings {
             account_id: config.file.account_id,

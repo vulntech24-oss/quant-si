@@ -241,7 +241,18 @@ async fn backtests_are_deterministic() {
     )
     .await
     .unwrap();
-    assert_eq!(a.trades, b.trades);
+    // Ids are UUIDv7 with random bits; everything else must match exactly.
+    let without_ids = |trades: &[qd_backtest::metrics::TradeRecord]| {
+        trades
+            .iter()
+            .map(|t| {
+                let mut t = t.clone();
+                t.position = qd_domain::ids::PositionId::from_uuid(uuid::Uuid::nil());
+                t
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(without_ids(&a.trades), without_ids(&b.trades));
     assert_eq!(a.equity_curve, b.equity_curve);
     assert_eq!(a.decisions, b.decisions);
 }

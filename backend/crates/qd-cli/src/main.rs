@@ -64,6 +64,28 @@ enum Command {
     },
     /// Research backtest of trend-pullback on stored bars (neutral evidence prior).
     Backtest(BacktestArgs),
+    /// Paper trading with the server's `[paper]` configuration.
+    #[command(subcommand)]
+    Paper(PaperCommand),
+}
+
+#[derive(Subcommand)]
+enum PaperCommand {
+    /// Process every trading day after the last processed one, through a date.
+    Run {
+        /// Server configuration file (the same one `qd-server` uses).
+        #[arg(long, env = "QD_CONFIG")]
+        config: PathBuf,
+        /// Last date to process (default: today, UTC).
+        #[arg(long)]
+        through: Option<NaiveDate>,
+    },
+    /// Show the paper book restored from the journal.
+    State {
+        /// Server configuration file.
+        #[arg(long, env = "QD_CONFIG")]
+        config: PathBuf,
+    },
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -328,6 +350,46 @@ async fn run(cli: Cli) -> Result<(), String> {
                 .map_err(|e| e.to_string())?,
         ),
         Command::Backtest(args) => backtest(args, &stores).await,
+        Command::Paper(cmd) => paper(cmd, &stores, actor, now).await,
+    }
+}
+
+async fn paper(
+    cmd: PaperCommand,
+    stores: &Stores,
+    actor: &str,
+    now: chrono::DateTime<Utc>,
+) -> Result<(), String> {
+    use qd_app::ports::PaperTrading;
+    let path = match &cmd {
+        PaperCommand::Run { config, .. } | PaperCommand::State { config } => config.clone(),
+    };
+    let config = qd_server::config::ServerConfig::load(&path, &|k| std::env::var(k).ok())
+        .map_err(|e| e.to_string())?;
+    let clock: std::sync::Arc<dyn qd_app::ports::Clock> =
+        std::sync::Arc::new(qd_server::SystemClock);
+    let runner = qd_server::paper::paper_runner(&config, stores, clock)?
+        .ok_or("the configuration has no [paper] section")?;
+    match cmd {
+        PaperCommand::Run { through, .. } => {
+            let through = through.unwrap_or_else(|| now.date_naive());
+            stores
+                .audit
+                .record(
+                    actor,
+                    "paper.run",
+                    serde_json::json!({ "through": through }),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            print(
+                &runner
+                    .run_through(through)
+                    .await
+                    .map_err(|e| e.to_string())?,
+            )
+        }
+        PaperCommand::State { .. } => print(&runner.state().await.map_err(|e| e.to_string())?),
     }
 }
 
