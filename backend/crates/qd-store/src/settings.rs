@@ -53,6 +53,28 @@ impl SettingsStore for PgSettings {
             .collect()
     }
 
+    async fn history(&self, section: &str) -> Result<Vec<SettingVersion>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT section, version, value, updated_by, updated_at FROM settings_versions \
+             WHERE section = $1 ORDER BY version DESC",
+        )
+        .bind(section)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter()
+            .map(|r| {
+                Ok(SettingVersion {
+                    section: r.try_get("section").map_err(store_error)?,
+                    value: r.try_get("value").map_err(store_error)?,
+                    version: r.try_get("version").map_err(store_error)?,
+                    updated_by: r.try_get("updated_by").map_err(store_error)?,
+                    updated_at: r.try_get("updated_at").map_err(store_error)?,
+                })
+            })
+            .collect()
+    }
+
     async fn put(
         &self,
         section: &str,
@@ -99,14 +121,14 @@ impl std::fmt::Debug for MasterKey {
 /// another name. Without a master key nothing can be stored or read.
 pub struct PgSecrets {
     pool: PgPool,
-    key: Option<MasterKey>,
+    key: std::sync::RwLock<Option<MasterKey>>,
     audit: Arc<dyn AuditLog>,
 }
 
 impl std::fmt::Debug for PgSecrets {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PgSecrets")
-            .field("available", &self.key.is_some())
+            .field("available", &self.available_key())
             .finish_non_exhaustive()
     }
 }
@@ -117,53 +139,168 @@ impl PgSecrets {
     /// Creates the store.
     #[must_use]
     pub fn new(pool: PgPool, key: Option<MasterKey>, audit: Arc<dyn AuditLog>) -> Self {
-        Self { pool, key, audit }
+        Self {
+            pool,
+            key: std::sync::RwLock::new(key),
+            audit,
+        }
+    }
+
+    fn available_key(&self) -> bool {
+        self.key
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 
     fn cipher(&self) -> Result<XChaCha20Poly1305, StoreError> {
-        let key = self.key.as_ref().ok_or_else(|| {
+        let guard = self
+            .key
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let key = guard.as_ref().ok_or_else(|| {
             StoreError("no master key is configured, so secrets cannot be stored".to_owned())
         })?;
         Ok(XChaCha20Poly1305::new((&key.0).into()))
     }
 
     fn seal(&self, name: &str, value: &str) -> Result<Vec<u8>, StoreError> {
-        let mut nonce = [0_u8; NONCE_LEN];
-        getrandom::fill(&mut nonce).map_err(store_error)?;
-        let sealed = self
-            .cipher()?
-            .encrypt(
-                XNonce::from_slice(&nonce),
-                Payload {
-                    msg: value.as_bytes(),
-                    aad: name.as_bytes(),
-                },
-            )
-            .map_err(|_| StoreError("encryption failed".to_owned()))?;
-        let mut out = nonce.to_vec();
-        out.extend(sealed);
-        Ok(out)
+        seal_with(&self.cipher()?, name, value)
     }
 
     fn open(&self, name: &str, blob: &[u8]) -> Result<String, StoreError> {
-        if blob.len() <= NONCE_LEN {
-            return Err(StoreError("stored secret is corrupt".to_owned()));
-        }
-        let (nonce, sealed) = blob.split_at(NONCE_LEN);
-        let plain = self
-            .cipher()?
-            .decrypt(
-                XNonce::from_slice(nonce),
-                Payload {
-                    msg: sealed,
-                    aad: name.as_bytes(),
-                },
-            )
-            .map_err(|_| {
-                StoreError("secret cannot be decrypted (was the master key changed?)".to_owned())
-            })?;
-        String::from_utf8(plain).map_err(|_| StoreError("stored secret is corrupt".to_owned()))
+        open_with(&self.cipher()?, name, blob)
     }
+
+    /// Every encrypted value as (table, key column value, associated data, blob).
+    async fn sealed_rows(
+        &self,
+    ) -> Result<Vec<(&'static str, String, String, Vec<u8>)>, StoreError> {
+        let mut rows = Vec::new();
+        for r in sqlx::query("SELECT name, ciphertext FROM secrets")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(store_error)?
+        {
+            let name: String = r.try_get("name").map_err(store_error)?;
+            rows.push((
+                "secrets",
+                name.clone(),
+                name,
+                r.try_get("ciphertext").map_err(store_error)?,
+            ));
+        }
+        for r in sqlx::query("SELECT user_id, ciphertext FROM user_totp")
+            .fetch_all(&self.pool)
+            .await
+            .map_err(store_error)?
+        {
+            let user: uuid::Uuid = r.try_get("user_id").map_err(store_error)?;
+            let user = qd_domain::ids::UserId::from_uuid(user);
+            rows.push((
+                "user_totp",
+                user.to_string(),
+                totp_aad(user),
+                r.try_get("ciphertext").map_err(store_error)?,
+            ));
+        }
+        Ok(rows)
+    }
+
+    /// Switches to another key (after a recovered rotation).
+    pub fn use_key(&self, key: MasterKey) {
+        *self
+            .key
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(key);
+    }
+
+    /// Whether `key` opens every stored value (true when nothing is stored).
+    pub async fn key_opens_all(&self, key: &MasterKey) -> Result<bool, StoreError> {
+        let cipher = XChaCha20Poly1305::new((&key.0).into());
+        Ok(self
+            .sealed_rows()
+            .await?
+            .iter()
+            .all(|(_, _, aad, blob)| open_with(&cipher, aad, blob).is_ok()))
+    }
+
+    /// Re-encrypts every stored value (API keys and TOTP secrets) under
+    /// `new_key` in one transaction, then uses it. If anything fails, the
+    /// transaction rolls back and the old key stays in use. Returns how
+    /// many values were re-encrypted. The caller persists the new key
+    /// first (ADR 0015).
+    pub async fn rotate(&self, new_key: MasterKey, actor: &str) -> Result<u64, StoreError> {
+        let old = self.cipher()?;
+        let new = XChaCha20Poly1305::new((&new_key.0).into());
+        let rows = self.sealed_rows().await?;
+        let mut tx = self.pool.begin().await.map_err(store_error)?;
+        for (table, id, aad, blob) in &rows {
+            let plain = open_with(&old, aad, blob)?;
+            let sealed = seal_with(&new, aad, &plain)?;
+            let sql = if *table == "secrets" {
+                "UPDATE secrets SET ciphertext = $2 WHERE name = $1"
+            } else {
+                "UPDATE user_totp SET ciphertext = $2 WHERE user_id::text = $1"
+            };
+            sqlx::query(sql)
+                .bind(id)
+                .bind(sealed)
+                .execute(&mut *tx)
+                .await
+                .map_err(store_error)?;
+        }
+        sqlx::query(
+            "INSERT INTO audit_log (actor, action, detail) VALUES ($1, 'secrets.key_rotated', $2)",
+        )
+        .bind(actor)
+        .bind(serde_json::json!({ "values": rows.len() }))
+        .execute(&mut *tx)
+        .await
+        .map_err(store_error)?;
+        tx.commit().await.map_err(store_error)?;
+        *self
+            .key
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(new_key);
+        Ok(u64::try_from(rows.len()).unwrap_or(u64::MAX))
+    }
+}
+
+fn seal_with(cipher: &XChaCha20Poly1305, name: &str, value: &str) -> Result<Vec<u8>, StoreError> {
+    let mut nonce = [0_u8; NONCE_LEN];
+    getrandom::fill(&mut nonce).map_err(store_error)?;
+    let sealed = cipher
+        .encrypt(
+            XNonce::from_slice(&nonce),
+            Payload {
+                msg: value.as_bytes(),
+                aad: name.as_bytes(),
+            },
+        )
+        .map_err(|_| StoreError("encryption failed".to_owned()))?;
+    let mut out = nonce.to_vec();
+    out.extend(sealed);
+    Ok(out)
+}
+
+fn open_with(cipher: &XChaCha20Poly1305, name: &str, blob: &[u8]) -> Result<String, StoreError> {
+    if blob.len() <= NONCE_LEN {
+        return Err(StoreError("stored secret is corrupt".to_owned()));
+    }
+    let (nonce, sealed) = blob.split_at(NONCE_LEN);
+    let plain = cipher
+        .decrypt(
+            XNonce::from_slice(nonce),
+            Payload {
+                msg: sealed,
+                aad: name.as_bytes(),
+            },
+        )
+        .map_err(|_| {
+            StoreError("secret cannot be decrypted (was the master key changed?)".to_owned())
+        })?;
+    String::from_utf8(plain).map_err(|_| StoreError("stored secret is corrupt".to_owned()))
 }
 
 fn known(name: &str) -> Result<(), StoreError> {
@@ -175,7 +312,7 @@ fn known(name: &str) -> Result<(), StoreError> {
 #[async_trait]
 impl SecretStore for PgSecrets {
     fn available(&self) -> bool {
-        self.key.is_some()
+        self.available_key()
     }
 
     async fn status(&self) -> Result<Vec<SecretStatus>, StoreError> {

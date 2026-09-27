@@ -467,6 +467,8 @@ pub struct SettingVersion {
 pub trait SettingsStore: Send + Sync {
     /// The latest version of every section that has one.
     async fn latest(&self) -> Result<Vec<SettingVersion>, StoreError>;
+    /// Every version of one section, newest first.
+    async fn history(&self, section: &str) -> Result<Vec<SettingVersion>, StoreError>;
     /// Saves a new version of a section and returns its version number.
     async fn put(
         &self,
@@ -563,6 +565,17 @@ pub trait SettingsAdmin: Send + Sync {
     ) -> Result<serde_json::Value, SettingsError>;
     /// Returns a section to its configuration-file default.
     async fn reset(&self, section: &str, actor: &str) -> Result<serde_json::Value, SettingsError>;
+    /// Every saved version of a section, newest first.
+    async fn history(&self, section: &str) -> Result<serde_json::Value, SettingsError>;
+    /// Saves an earlier version again as the newest one, after validating it.
+    async fn restore(
+        &self,
+        section: &str,
+        version: i64,
+        actor: &str,
+    ) -> Result<serde_json::Value, SettingsError>;
+    /// Re-encrypts every stored secret under a new master key (ADR 0015).
+    async fn rotate_master_key(&self, actor: &str) -> Result<serde_json::Value, SettingsError>;
 }
 
 /// The live broker connection (Zerodha Kite): login, data and live runs.

@@ -927,6 +927,68 @@ impl SettingsAdmin for Runtime {
             .map_err(SettingsError::Store)
     }
 
+    async fn history(&self, section: &str) -> Result<Value, SettingsError> {
+        if !SECTIONS.iter().any(|(n, _, _)| *n == section) {
+            return Err(SettingsError::Invalid(format!(
+                "unknown settings section {section}"
+            )));
+        }
+        let versions = self.stores.settings.history(section).await?;
+        let file_default = self.file_value(section)?;
+        Ok(json!({
+            "section": section,
+            "file_default": file_default,
+            "versions": versions.iter().map(|v| json!({
+                "version": v.version,
+                "value": v.value,
+                "updated_by": v.updated_by,
+                "updated_at": v.updated_at,
+            })).collect::<Vec<_>>(),
+        }))
+    }
+
+    async fn restore(
+        &self,
+        section: &str,
+        version: i64,
+        actor: &str,
+    ) -> Result<Value, SettingsError> {
+        let versions = self.stores.settings.history(section).await?;
+        let old = versions
+            .iter()
+            .find(|v| v.version == version)
+            .ok_or_else(|| SettingsError::Invalid(format!("{section} has no version {version}")))?;
+        // A restored value must still be valid today (types or limits may
+        // have changed since).
+        let normalized = match &old.value {
+            Some(value) => Some(validate_section(section, value).map_err(SettingsError::Invalid)?),
+            None => None,
+        };
+        let new_version = self
+            .stores
+            .settings
+            .put(section, normalized.as_ref(), actor)
+            .await?;
+        qd_app::ports::AuditLog::record(
+            self.stores.audit.as_ref(),
+            actor,
+            "settings.restore",
+            json!({ "section": section, "restored": version, "version": new_version }),
+        )
+        .await?;
+        let saved = self.saved().await?;
+        self.section_view(section, &saved)
+            .map_err(SettingsError::Store)
+    }
+
+    async fn rotate_master_key(&self, actor: &str) -> Result<Value, SettingsError> {
+        let count =
+            crate::keys::rotate(&self.secrets, self.config.master_key_file.as_deref(), actor)
+                .await
+                .map_err(SettingsError::Invalid)?;
+        Ok(json!({ "reencrypted": count }))
+    }
+
     async fn reset(&self, section: &str, actor: &str) -> Result<Value, SettingsError> {
         if !SECTIONS.iter().any(|(n, _, _)| *n == section) {
             return Err(SettingsError::Invalid(format!(

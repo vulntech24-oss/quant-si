@@ -557,6 +557,9 @@ pub struct ServerConfig {
     pub review: qd_app::review::ReviewCriteria,
     /// Master key for the secrets store (ADR 0013); `None` disables it.
     pub master_key: Option<qd_store::settings::MasterKey>,
+    /// The master key file, when the key comes from `data_dir` (not from
+    /// `QD_MASTER_KEY`); only such a key can be rotated from the web UI.
+    pub master_key_file: Option<PathBuf>,
     /// Exchange calendars (ADR 0015).
     pub calendars: qd_domain::calendar::Calendars,
     /// Directory the config file is in (relative paths resolve against it).
@@ -636,7 +639,7 @@ pub fn load_master_key(
 }
 
 /// Writes a new file readable only by its owner; refuses to overwrite.
-fn write_private(path: &Path, contents: &[u8]) -> Result<(), ConfigError> {
+pub fn write_private(path: &Path, contents: &[u8]) -> Result<(), ConfigError> {
     use std::io::Write;
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create_new(true);
@@ -733,6 +736,13 @@ impl ServerConfig {
                 ));
             }
         }
+        let master_key_file = match (
+            env("QD_MASTER_KEY").filter(|v| !v.trim().is_empty()),
+            &file.data_dir,
+        ) {
+            (None, Some(dir)) => Some(base.join(dir).join("master.key")),
+            _ => None,
+        };
         let master_key = load_master_key(
             env("QD_MASTER_KEY"),
             file.data_dir.as_ref().map(|d| base.join(d)).as_deref(),
@@ -752,6 +762,7 @@ impl ServerConfig {
             validation,
             review,
             master_key,
+            master_key_file,
             calendars,
             base_dir: base.to_owned(),
         };

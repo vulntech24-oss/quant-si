@@ -7,6 +7,7 @@
 //! - [`runtime`]: effective settings (files + web UI) read on every run.
 //! - [`paper`]: the paper runner and its optional daily schedule.
 //! - [`data`]: instruments and bar uploads from the web UI.
+//! - [`keys`]: crash-safe master-key rotation.
 //! - [`kite`]: the Zerodha connection, live trading and their schedules.
 //! - [`notify`]: Telegram notifications.
 //! - [`SystemClock`]: the real clock, used only by binaries.
@@ -14,6 +15,7 @@
 pub mod config;
 pub mod data;
 pub mod http;
+pub mod keys;
 pub mod kite;
 pub mod notify;
 pub mod paper;

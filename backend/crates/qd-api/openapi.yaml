@@ -80,6 +80,12 @@ paths:
     put: {summary: "Save new values for some fields of a section (owner, step-up). Body {values: {field: value}}; validated before it is stored and audited"}
   /api/settings/{section}/reset:
     post: {summary: "Return a section to its configuration-file default (owner, step-up)"}
+  /api/settings/{section}/history:
+    get: {summary: "Every saved version of a section with its value, newest first, and the file default (owner)"}
+  /api/settings/{section}/restore/{version}:
+    post: {summary: "Save an earlier version again as the newest, after validating it (owner, step-up; audited)"}
+  /api/secrets/rotate-key:
+    post: {summary: "Re-encrypt every stored API key and TOTP secret under a new master key (owner, step-up); only for a key kept in data_dir"}
   /api/secrets:
     get: {summary: "The secret catalog with status only (set, when, by whom). Values are never returned"}
   /api/secrets/{name}:

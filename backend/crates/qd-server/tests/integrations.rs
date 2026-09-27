@@ -340,3 +340,131 @@ async fn instruments_and_bars_from_the_web_ui_are_validated_and_checked(pool: Pg
         .collect();
     assert_eq!(kinds, vec!["missing_day", "price_jump"]);
 }
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn settings_history_restores_a_validated_earlier_version(pool: PgPool) {
+    let rt = runtime(&pool, "http://unused").await;
+    for v in ["0.10", "0.30"] {
+        rt.update("data", &values(&[("max_close_jump", json!(v))]), "owner")
+            .await
+            .unwrap();
+    }
+    let history = rt.history("data").await.unwrap();
+    let versions = history["versions"].as_array().unwrap();
+    assert_eq!(versions.len(), 2);
+    assert_eq!(versions[0]["version"], 2, "newest first");
+    assert_eq!(versions[1]["value"]["max_close_jump"], "0.10");
+    assert!(history["file_default"].is_object());
+
+    rt.restore("data", 1, "owner").await.unwrap();
+    assert_eq!(
+        rt.effective()
+            .await
+            .unwrap()
+            .data
+            .max_close_jump
+            .to_string(),
+        "0.10"
+    );
+    // A restore is a new version; history is never rewritten.
+    assert_eq!(
+        rt.history("data").await.unwrap()["versions"]
+            .as_array()
+            .unwrap()
+            .len(),
+        3
+    );
+    assert!(rt.restore("data", 99, "owner").await.is_err());
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn a_master_key_rotation_reencrypts_everything_and_survives_a_crash(pool: PgPool) {
+    use qd_app::ports::{AuthStore, SecretReader, TotpStore};
+    let dir = std::env::temp_dir().join(format!("qd-keys-{}", uuid::Uuid::now_v7()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let file = dir.join("master.key");
+    let old = qd_server::config::load_master_key(None, Some(&dir))
+        .unwrap()
+        .unwrap();
+    let stores = Stores::new(&pool);
+    let secrets =
+        qd_store::settings::PgSecrets::new(pool.clone(), Some(old.clone()), stores.audit.clone());
+    secrets
+        .set(
+            "openai_api_key",
+            &SecretValue::new("sk-1".to_owned()),
+            "owner",
+        )
+        .await
+        .unwrap();
+    let user = qd_domain::ids::UserId::new_at(chrono::Utc::now());
+    stores
+        .auth
+        .create_user(&qd_app::ports::UserRecord {
+            id: user,
+            username: "owner".to_owned(),
+            role: qd_app::ports::Role::Owner,
+            password_hash: "x".to_owned(),
+        })
+        .await
+        .unwrap();
+    secrets
+        .put_pending_totp(user, &SecretValue::new("GEZDGNBV".to_owned()))
+        .await
+        .unwrap();
+
+    // Without a key file (QD_MASTER_KEY), rotation is refused.
+    assert!(
+        qd_server::keys::rotate(&secrets, None, "owner")
+            .await
+            .is_err()
+    );
+
+    let count = qd_server::keys::rotate(&secrets, Some(&file), "owner")
+        .await
+        .unwrap();
+    assert_eq!(count, 2);
+    assert!(dir.join("master.key.previous").exists());
+    assert!(!dir.join("master.key.new").exists());
+    assert_eq!(
+        secrets
+            .get("openai_api_key")
+            .await
+            .unwrap()
+            .unwrap()
+            .expose(),
+        "sk-1"
+    );
+    let new = qd_server::config::load_master_key(None, Some(&dir))
+        .unwrap()
+        .unwrap();
+    assert!(secrets.key_opens_all(&new).await.unwrap());
+    assert!(!secrets.key_opens_all(&old).await.unwrap());
+
+    // Simulate a crash after the database commit but before the file swap:
+    // master.key holds the old key, master.key.new the one the data uses.
+    std::fs::rename(&file, dir.join("master.key.new")).unwrap();
+    std::fs::rename(dir.join("master.key.previous"), &file).unwrap();
+    let restarted =
+        qd_store::settings::PgSecrets::new(pool.clone(), Some(old), stores.audit.clone());
+    let key = qd_server::keys::recover(&restarted, Some(&file))
+        .await
+        .unwrap()
+        .unwrap();
+    restarted.use_key(key);
+    assert_eq!(
+        restarted
+            .get("openai_api_key")
+            .await
+            .unwrap()
+            .unwrap()
+            .expose(),
+        "sk-1"
+    );
+    assert_eq!(
+        restarted.totp(user).await.unwrap().unwrap().secret.expose(),
+        "GEZDGNBV"
+    );
+    assert!(!dir.join("master.key.new").exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -102,6 +102,12 @@ async fn run() -> Result<(), String> {
         clock.clone(),
     ));
     let secrets = runtime.secrets.clone();
+    // A master-key rotation interrupted by a crash is finished (or discarded)
+    // before anything reads a secret (ADR 0015).
+    if let Some(key) = qd_server::keys::recover(&secrets, config.master_key_file.as_deref()).await?
+    {
+        secrets.use_key(key);
+    }
     // Settings saved in the web UI are validated on every read; a bad one
     // stops the server here rather than failing later.
     runtime.effective().await.map_err(|e| e.to_string())?;

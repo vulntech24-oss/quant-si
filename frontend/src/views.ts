@@ -375,6 +375,48 @@ function fieldInput(f: SettingsField, disabled: boolean): HTMLInputElement {
   }
 }
 
+/** Flattens nested settings into dotted keys with display text. */
+export function flattenSettings(value: unknown, prefix = ""): Map<string, string> {
+  const out = new Map<string, string>();
+  if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      for (const [kk, vv] of flattenSettings(v, prefix ? `${prefix}.${k}` : k)) out.set(kk, vv);
+    }
+  } else if (prefix) {
+    out.set(prefix, value === null || value === undefined ? "" : typeof value === "string" ? value : JSON.stringify(value));
+  }
+  return out;
+}
+
+/** Fields that differ between two versions (null means the file default). */
+export function diffSettings(from: unknown, to: unknown): Array<{ key: string; from: string; to: string }> {
+  const a = flattenSettings(from);
+  const b = flattenSettings(to);
+  const keys = [...new Set([...a.keys(), ...b.keys()])].sort();
+  return keys.filter((k) => a.get(k) !== b.get(k)).map((k) => ({ key: k, from: a.get(k) ?? "—", to: b.get(k) ?? "—" }));
+}
+
+async function historyPanel(sec: SettingsSection, owner: boolean, rerender: () => void, message: HTMLElement): Promise<HTMLElement> {
+  const history = await api.settingsHistory(sec.name);
+  if (history.versions.length === 0) return h("p", { class: "muted" }, "No saved versions: the file defaults are in use.");
+  const current = history.versions[0]?.value ?? history.file_default;
+  const rows = history.versions.map((v) => {
+    const value = v.value ?? history.file_default;
+    const changes = diffSettings(value, current);
+    return h("tr", {},
+      h("td", { class: "mono" }, `v${v.version}`),
+      h("td", {}, `${formatIst(v.updated_at)} · ${v.updated_by}`),
+      h("td", {}, v.value === null ? "reset to file default" : ""),
+      h("td", {}, changes.length === 0 ? h("span", { class: "muted" }, "same as now") : h("details", {}, h("summary", {}, `${changes.length} difference(s) from now`), h("ul", {}, ...changes.map((c) => h("li", { class: "mono small" }, `${c.key}: ${c.from} → now ${c.to}`))))),
+      h("td", {}, owner && v !== history.versions[0] ? h("button", { type: "button", class: "ghost", onclick: async () => {
+        if (!window.confirm(`Restore "${sec.title}" to v${v.version}? It is saved as a new version.`)) return;
+        try { await withStepUp(() => api.restoreSettings(sec.name, v.version)); rerender(); } catch (err) { message.textContent = errorText(err); }
+      } }, "Restore") : null),
+    );
+  });
+  return h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Version", "Saved", "", "Compared with now", ""].map((t) => h("th", {}, t)))), h("tbody", {}, ...rows));
+}
+
 function sectionCard(ctx: Ctx, sec: SettingsSection, rerender: () => void): HTMLElement {
   const owner = isOwner(ctx);
   const message = h("p", { class: "error", role: "alert" });
@@ -404,7 +446,19 @@ function sectionCard(ctx: Ctx, sec: SettingsSection, rerender: () => void): HTML
     sec.problem ? h("p", { class: "error" }, `Saved value no longer valid: ${sec.problem}`) : null,
     h("div", { class: "settings-grid" }, ...inputs.map(({ f, input }) => h("label", { class: "setting" }, h("span", { class: "setting-label" }, f.label), input, f.help ? h("span", { class: "muted small" }, f.help) : null))),
     message,
-    owner ? h("div", { class: "row" }, h("button", { class: "primary" }, "Save (asks for your password)"), sec.source.kind === "saved" ? h("button", { type: "button", class: "ghost", onclick: reset }, "Reset to file default") : null) : h("p", { class: "muted" }, "Only the owner can change settings."));
+    owner ? h("div", { class: "row" }, h("button", { class: "primary" }, "Save (asks for your password)"), sec.source.kind === "saved" ? h("button", { type: "button", class: "ghost", onclick: reset }, "Reset to file default") : null) : h("p", { class: "muted" }, "Only the owner can change settings."),
+    owner ? historyBox(sec, rerender, message) : null);
+}
+
+function historyBox(sec: SettingsSection, rerender: () => void, message: HTMLElement): HTMLElement {
+  const box = h("details", { class: "history" }, h("summary", {}, "History, compare and restore"));
+  let loaded = false;
+  box.addEventListener("toggle", async () => {
+    if (!box.open || loaded) return;
+    loaded = true;
+    try { box.append(await historyPanel(sec, true, rerender, message)); } catch (err) { message.textContent = errorText(err); }
+  });
+  return box;
 }
 
 function secretsCard(ctx: Ctx, data: { available: boolean; secrets: SecretRow[] }, rerender: () => void): HTMLElement {
@@ -434,10 +488,14 @@ function secretsCard(ctx: Ctx, data: { available: boolean; secrets: SecretRow[] 
   };
   return h("section", { class: "card stack" },
     h("h2", {}, "API keys and credentials"),
-    h("p", { class: "muted" }, "Stored encrypted on the server and never shown again, not even to you: this page only knows whether a key is set. Saving or deleting asks for your password. Keys are used by server-side adapters only; the Kite, crypto and AI provider adapters are not built yet."),
+    h("p", { class: "muted" }, "Stored encrypted on the server and never shown again, not even to you: this page only knows whether a key is set. Saving or deleting asks for your password. Keys are used by server-side adapters only."),
     data.available ? null : h("p", { class: "error" }, "The server has no master key, so keys cannot be stored. In Docker this is automatic; otherwise set data_dir in the server configuration or QD_MASTER_KEY in the server environment."),
     message,
-    ...providers.map((p) => h("div", { class: "stack" }, h("h3", {}, p), ...data.secrets.filter((s) => s.provider === p).map(row))));
+    ...providers.map((p) => h("div", { class: "stack" }, h("h3", {}, p), ...data.secrets.filter((s) => s.provider === p).map(row))),
+    owner && data.available ? h("div", { class: "row wrap" }, h("button", { type: "button", class: "ghost", onclick: async () => {
+      if (!window.confirm("Re-encrypt every stored key under a new master key? Back up the new master.key afterwards; the old one no longer opens anything.")) return;
+      try { const out = await withStepUp(() => api.rotateMasterKey()); message.textContent = ""; window.alert(`Re-encrypted ${out.reencrypted} value(s). Back up the new master key now.`); rerender(); } catch (err) { message.textContent = errorText(err); }
+    } }, "Rotate master key"), h("span", { class: "muted small" }, "Re-encrypts all keys and authenticator secrets in one step; crash-safe.")) : null);
 }
 
 export async function settingsView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {

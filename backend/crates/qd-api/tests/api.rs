@@ -92,6 +92,34 @@ impl qd_app::ports::SettingsAdmin for FakeSettingsAdmin {
     ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
         Ok(serde_json::json!({ "name": section }))
     }
+    async fn history(
+        &self,
+        section: &str,
+    ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
+        Ok(serde_json::json!({ "section": section, "versions": [] }))
+    }
+    async fn restore(
+        &self,
+        section: &str,
+        version: i64,
+        actor: &str,
+    ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
+        self.updates
+            .lock()
+            .unwrap()
+            .push((format!("{section}@{version}"), actor.to_owned()));
+        Ok(serde_json::json!({ "name": section }))
+    }
+    async fn rotate_master_key(
+        &self,
+        actor: &str,
+    ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
+        self.updates
+            .lock()
+            .unwrap()
+            .push(("rotate".to_owned(), actor.to_owned()));
+        Ok(serde_json::json!({ "reencrypted": 0 }))
+    }
 }
 
 /// Accepts only the login state "good-state"; the real link is tested in qd-server.

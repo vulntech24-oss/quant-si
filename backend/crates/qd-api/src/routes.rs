@@ -69,6 +69,12 @@ pub fn router(state: ApiState) -> Router {
         .route("/settings", get(settings_view))
         .route("/settings/{section}", axum::routing::put(settings_update))
         .route("/settings/{section}/reset", post(settings_reset))
+        .route("/settings/{section}/history", get(settings_history))
+        .route(
+            "/settings/{section}/restore/{version}",
+            post(settings_restore),
+        )
+        .route("/secrets/rotate-key", post(rotate_master_key))
         .route("/secrets", get(secrets_status))
         .route(
             "/secrets/{name}",
@@ -1099,6 +1105,51 @@ async fn settings_reset(
 }
 
 /// Every catalog secret with its status. Values are never returned (INV-15).
+async fn settings_history(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(section): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    state
+        .settings_admin
+        .history(&section)
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+async fn settings_restore(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path((section, version)): Path<(String, i64)>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    state
+        .settings_admin
+        .restore(&section, version, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+/// Re-encrypts every stored secret under a new master key (owner, step-up).
+async fn rotate_master_key(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    state
+        .settings_admin
+        .rotate_master_key(&caller.actor())
+        .await
+        .map(Json)
+        .map_err(|e| match e {
+            qd_app::ports::SettingsError::Invalid(m) => ApiError::Conflict(m),
+            qd_app::ports::SettingsError::Store(e) => internal(e),
+        })
+}
+
 async fn secrets_status(
     State(state): State<ApiState>,
     _caller: Caller,
