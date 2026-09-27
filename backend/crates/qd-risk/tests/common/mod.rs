@@ -50,18 +50,20 @@ pub fn config() -> RiskConfig {
     RiskConfig::new(toml::from_str::<RiskConfigData>(RISK).unwrap()).unwrap()
 }
 
-/// The shipped (unverified) cost schedules.
+/// The shipped schedules, marked unverified: for testing that live refuses them.
 pub fn costs() -> ScheduleCostModel {
-    ScheduleCostModel::new(toml::from_str::<CostScheduleSet>(COSTS).unwrap()).unwrap()
-}
-
-/// The shipped schedules, marked verified: only for testing the live path.
-pub fn verified_costs() -> ScheduleCostModel {
     let mut set: CostScheduleSet = toml::from_str(COSTS).unwrap();
     for schedule in &mut set.schedules {
-        schedule.verification.status = VerificationStatus::Verified;
+        schedule.verification.status = VerificationStatus::Unverified;
     }
     ScheduleCostModel::new(set).unwrap()
+}
+
+/// The shipped schedules as they are (verified against zerodha.com/charges).
+pub fn verified_costs() -> ScheduleCostModel {
+    let model = ScheduleCostModel::new(toml::from_str::<CostScheduleSet>(COSTS).unwrap()).unwrap();
+    assert!(model.schedules().iter().all(|s| s.is_verified()));
+    model
 }
 
 pub fn equity_spec() -> InstrumentSpec {

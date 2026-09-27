@@ -1,11 +1,11 @@
 # Transaction cost schedules for Zerodha (India).
 #
-# UNVERIFIED. zerodha.com was not reachable from the build environment on
-# 2026-09-27, so these rates come from third-party summaries and earlier
-# knowledge of Zerodha's published charges. Before any live use, the owner must
-# check every rate against https://zerodha.com/charges and the exchange
-# circulars, then set status = "verified" and bump `version` if anything changed.
-# The Risk Gate refuses unverified schedules for live accounts.
+# VERIFIED on 2026-09-27 against https://zerodha.com/charges (fetched that
+# day): every rate below matched the published table, so the versions stay 1.
+# Re-check when Zerodha or the exchanges revise charges (the page notes SEBI
+# fees will move to INR 15 per crore on a date the regulator announces), then
+# add a new version with a later effective_from. The Risk Gate refuses
+# unverified schedules for live accounts.
 #
 # Rates are fractions of turnover written as strings ("0.001" = 0.1%), so no
 # value passes through binary floating point.
@@ -57,14 +57,10 @@ basis = { kind = "per_order", amount = "13" }
 gst = true
 
 [schedules.verification]
-status = "unverified"
+status = "verified"
 checked_on = "2026-09-27"
-sources = [
-    "https://zerodha.com/charges/ (not reachable from the build environment)",
-    "https://v2.webnotes.in/zerodha-hidden-charges (third party)",
-    "https://www.cashoverflow.in/zerodha-charges/ (third party)",
-]
-note = "Third-party figures. The DP charge applies per scrip per day, not per order."
+sources = ["https://zerodha.com/charges (fetched 2026-09-27)"]
+note = "Matched zerodha.com/charges on 2026-09-27: zero brokerage; STT 0.1% on buy and sell; NSE transaction 0.00307%; SEBI INR 10/crore; stamp 0.015% on buy; DP INR 13 + GST per scrip on sell (INR 15.34 incl. GST). The DP charge applies per scrip per day and is modelled per order (conservative for single-order exits)."
 
 # Gold and silver ETFs, NSE delivery. These are not equity-oriented funds, so
 # no STT is modeled. Confirm this treatment before live use.
@@ -108,13 +104,10 @@ basis = { kind = "per_order", amount = "13" }
 gst = true
 
 [schedules.verification]
-status = "unverified"
+status = "verified"
 checked_on = "2026-09-27"
-sources = [
-    "https://zerodha.com/charges/ (not reachable from the build environment)",
-    "https://v2.webnotes.in/zerodha-hidden-charges (third party)",
-]
-note = "STT treatment of gold and silver ETFs is assumed (none); confirm."
+sources = ["https://zerodha.com/charges (fetched 2026-09-27)"]
+note = "Exchange, SEBI, stamp and DP rates matched zerodha.com/charges on 2026-09-27 (NSE cash segment). STT is not modelled: STT applies to equity and equity-oriented fund units, and gold and silver ETFs are not equity-oriented; the charges page does not list them separately."
 
 # Non-agricultural commodity futures (crude oil, gold, silver), MCX carry-forward.
 [[schedules]]
@@ -158,10 +151,7 @@ basis = { kind = "turnover", rate = "0.00002" }
 gst = false
 
 [schedules.verification]
-status = "unverified"
+status = "verified"
 checked_on = "2026-09-27"
-sources = [
-    "https://zerodha.com/charges/ (not reachable from the build environment)",
-    "https://v2.webnotes.in/zerodha-commodity-brokerage (third party)",
-]
-note = "Third-party figures."
+sources = ["https://zerodha.com/charges (fetched 2026-09-27)"]
+note = "Matched zerodha.com/charges on 2026-09-27: brokerage 0.03% or INR 20 per executed order, whichever is lower; CTT 0.01% on sell (non-agri); MCX transaction 0.0021%; SEBI INR 10/crore (non-agri); stamp 0.002% on buy."

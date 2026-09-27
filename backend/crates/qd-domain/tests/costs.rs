@@ -53,17 +53,23 @@ fn request<'a>(
 }
 
 #[test]
-fn shipped_schedules_parse_validate_and_are_marked_unverified() {
+fn shipped_schedules_parse_validate_and_record_their_verification_source() {
     let model = shipped();
     assert_eq!(model.schedules().len(), 3);
     for schedule in model.schedules() {
+        let v = &schedule.data().verification;
         assert_eq!(
-            schedule.data().verification.status,
-            VerificationStatus::Unverified,
-            "{} must stay unverified until the owner confirms the rates",
+            v.status,
+            VerificationStatus::Verified,
+            "{}",
             schedule.data().id
         );
-        assert!(!schedule.is_verified());
+        assert!(schedule.is_verified());
+        assert!(
+            v.sources.iter().any(|s| s.contains("zerodha.com/charges")),
+            "{} must cite the official page",
+            schedule.data().id
+        );
     }
 }
 
@@ -89,7 +95,7 @@ fn equity_delivery_round_trip_worked_example() {
         quote.estimate.model_version(),
         "zerodha-nse-equity-delivery@1"
     );
-    assert!(!quote.verified);
+    assert!(quote.verified);
     assert_eq!(line(&quote, "brokerage"), Some(dec!(0)));
     assert_eq!(line(&quote, "stt"), Some(dec!(210.00)));
     assert_eq!(line(&quote, "exchange_transaction"), Some(dec!(6.45)));

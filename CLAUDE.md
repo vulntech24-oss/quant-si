@@ -114,7 +114,7 @@ backend/                     Cargo workspace (ADR 0002)
     tests/api.rs             auth, CSRF, step-up, INV-07/14/17 through HTTP
   migrations/                SQL schema; history tables are append-only by trigger (INV-16)
   config/                    data, not code
-    costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
+    costs/india-zerodha.toml cost schedules (verified 2026-09-27 against zerodha.com/charges)
     risk.toml                §4 default risk configuration
     validation.toml          validation protocol and pass criteria (ADR 0010)
     review.toml              paper-review pass criteria (ADR 0010)

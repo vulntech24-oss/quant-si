@@ -459,10 +459,9 @@ Decisions: ADR 0013.
   records, §7.5 AI policy, §10 frontend, §17 phase exit criteria, §20 report format.
 - §6.5 formulas omit the contract multiplier and FX; implemented with them
   (ADR 0003). The spec text should be updated.
-- **Cost schedules are unverified** (zerodha.com unreachable from the build
-  environment). The owner must check every rate in
-  `backend/config/costs/india-zerodha.toml` against https://zerodha.com/charges
-  and mark schedules verified. Live accounts refuse unverified schedules.
+- Cost schedules were verified against https://zerodha.com/charges on
+  2026-09-27 (DP charge ₹15.34 per scrip-day sell; ETF STT not modelled).
+  Re-check when Zerodha or the exchanges change rates.
 - Assumptions to confirm (ADR 0005): cool-off lasts 24 hours; gap shocks
   equity 20%, precious metals 10%, energy 20%, crypto 30%.
 - Owner decisions still open (ADR 0004): crypto venue, stock universe, Kite

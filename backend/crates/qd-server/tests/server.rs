@@ -61,8 +61,22 @@ fn invariant_14_live_trading_outside_production_or_with_unverified_costs_refuses
     config.live.live_trading_enabled = true;
     assert!(matches!(config.validate(), Err(ConfigError::Unsafe(_))));
     config.live.environment = qd_app::live::Environment::Production;
-    // Either the build lacks live-orders or the shipped schedules are unverified.
-    assert!(matches!(config.validate(), Err(ConfigError::Unsafe(_))));
+    // With unverified schedules it refuses whatever the build.
+    let mut unverified = config.cost_schedules.clone();
+    for s in &mut unverified {
+        s.verification.status = qd_domain::costs::VerificationStatus::Unverified;
+    }
+    let mut refused = config.clone();
+    refused.costs = qd_domain::costs::ScheduleCostModel::new(qd_domain::costs::CostScheduleSet {
+        schedules: unverified,
+    })
+    .unwrap();
+    assert!(matches!(refused.validate(), Err(ConfigError::Unsafe(_))));
+    // With the shipped (verified) schedules, only a live-orders build may start.
+    assert_eq!(
+        config.validate().is_ok(),
+        qd_app::live::live_orders_compiled()
+    );
 }
 
 /// A broker whose positions the (empty) book does not hold.

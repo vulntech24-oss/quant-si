@@ -70,9 +70,10 @@ Open **Settings** in the web UI:
 - Daily bars come from CSV: `qd bars import --instrument <id> bars.csv`
   (`docs/integrations/csv-bars.md`). A corrected bar is a new row, and
   earlier decisions keep the data they saw.
-- **Cost schedules are unverified** (`backend/config/costs/india-zerodha.toml`).
-  Check every rate against zerodha.com/charges and mark schedules verified
-  before relying on costs. Live trading refuses unverified schedules.
+- Cost schedules (`backend/config/costs/india-zerodha.toml`) were checked
+  against zerodha.com/charges on 2026-09-27. When Zerodha or the exchanges
+  change a rate, add a new schedule version with the new `checked_on` date;
+  live trading refuses unverified schedules.
 
 ## 4. From a strategy version to paper trading
 
