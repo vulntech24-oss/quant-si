@@ -8,8 +8,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 |---|---|---|
 | 0 | Audit and plan | Done, compressed (owner directed to start coding) |
 | 1 | Domain core `qd-domain` | **Done** (2026-09-27) |
-| 2 | `qd-risk`, `qd-strategy`, cost model | Next |
-| 3 | `qd-app` ports and use cases, `qd-backtest` | Not started |
+| 2 | `qd-risk`, `qd-strategy`, cost model | **Done** (2026-09-27) |
+| 3 | `qd-app` ports and use cases, `qd-backtest` | Next |
 | 4 | `qd-store`, `qd-server`, `qd-cli` | Not started |
 | 5 | `qd-api` and frontend integration | Not started (needs §10) |
 | 6 | Market data adapters, paper broker | Not started (needs §4 items 1, 5, 11) |
@@ -58,25 +58,80 @@ Invariant tests so far: `invariant_02_*` (4), `invariant_06_*`,
 domain half of each invariant; the Gateway, journal, store and API halves get
 their tests when those components exist.
 
+## Phase 2: Risk Gate, cost model, first strategy (2026-09-27)
+
+Built:
+
+- `qd-domain/costs.rs`: the `CostModel` port and a schedule-based model;
+  schedules are versioned data in `backend/config/costs/india-zerodha.toml`
+  (NSE equity delivery, NSE gold/silver ETFs, MCX futures), all marked
+  **unverified**.
+- `qd-domain/market.rs`: validated daily bars and point-in-time bar series.
+- `qd-risk`: validated `RiskConfig` (§4 defaults in `backend/config/risk.toml`),
+  the Risk Gate (halts, input consistency, stage, short permission, RR/EV
+  gates, daily/weekly/drawdown/cool-off limits, sizing with total/bucket/
+  strategy caps and cost re-pricing at the final quantity), halt triggers
+  (hard halt on drawdown, cool-off on consecutive losses).
+- `qd-strategy`: feature set `features-v1` (SMA 20/50/200, Wilder ATR 14,
+  20-day high/low, 20-day rate of change), regime classifier `regime-v1`, the
+  `Strategy` trait with `run_strategy`, and `trend-pullback-1.0.0`.
+- CI workflow `.github/workflows/ci.yml` running the §1.4 commands (not yet
+  run on GitHub: the repository has not received a push).
+
+Decisions and assumptions: ADR 0005.
+
+### Verified (all run on 2026-09-27, all passing)
+
+- `cargo fmt --all -- --check`
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`
+- `cargo test --workspace`: 113 tests (qd-domain 84, qd-risk 19, qd-strategy 10),
+  including hand-computed contract-note examples for NSE delivery and an MCX
+  short, and an end-to-end test: bars → strategy → proposal → Risk Gate approval.
+- `cargo deny check`: advisories, bans, licenses, sources all ok.
+- Mutation check: seven deliberate bugs (caps ignored, live accepting
+  unverified costs, daily loss check removed, GST base wrong, no resize when
+  costs rise, regime ignoring the 200-day slope, strategy ignoring its hold
+  rule). The first run caught four; tests were added for the other three and
+  all seven are now caught.
+
+New invariant tests: `invariant_02_active_halts_reject_entries`,
+`invariant_03_each_limit_can_reject_an_otherwise_good_entry`,
+`invariant_06_unknown_or_inconsistent_inputs_fail_closed`,
+`invariant_07_drawdown_triggers_a_hard_halt_only_a_human_can_clear`,
+`invariant_09_series_refuse_bars_after_the_last_completed_date`,
+`invariant_09_evaluations_use_only_bars_up_to_the_decision_date`,
+`invariant_10_only_trading_stages_pass`,
+`invariant_14_live_needs_a_live_stage_and_verified_costs`.
+
 ## Open issues
 
-- Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Needed before
-  Phase 2 risk limits (§7.8), AI policy (§7.5), frontend (§10), phase exit
-  criteria (§17) and report format (§20).
+- Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
+  the §4 defaults for risk limits (§7.8 unknown). Still needed: §7.3 scanner
+  records, §7.5 AI policy, §10 frontend, §17 phase exit criteria, §20 report format.
 - §6.5 formulas omit the contract multiplier and FX; implemented with them
   (ADR 0003). The spec text should be updated.
+- **Cost schedules are unverified** (zerodha.com unreachable from the build
+  environment). The owner must check every rate in
+  `backend/config/costs/india-zerodha.toml` against https://zerodha.com/charges
+  and mark schedules verified. Live accounts refuse unverified schedules.
+- Assumptions to confirm (ADR 0005): cool-off lasts 24 hours; gap shocks
+  equity 20%, precious metals 10%, energy 20%, crypto 30%.
 - Owner decisions still open (ADR 0004): crypto venue, stock universe, Kite
   plan, VPS/static IP, DDPI, AI providers and budgets, frontend approach, FX source.
-- No CI yet. Proposed with Phase 2: a GitHub Actions workflow running the
-  §1.4 commands.
+- GitHub push is blocked (Claude has no access to the repository); CI has
+  never run.
+- `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
+  from validation (Phase 7); until then it cannot pass the evidence gate.
 
-## Next steps (Phase 2)
+## Next steps (Phase 3)
 
-1. `qd-risk`: Risk Gate rules from the §4 default configuration (per-trade
-   risk, total/bucket/strategy open-risk caps, daily/weekly loss, drawdown
-   hard halt, consecutive-loss cool-off, stage multipliers), cost re-check at
-   the final quantity (sizing step 4), halt triggers.
-2. Versioned cost model for NSE delivery equity, ETFs and MCX futures, with
-   rates as dated data. Rates must come from current official schedules.
-3. `qd-strategy`: feature engine on completed daily bars, deterministic
-   regime classifier, `Strategy` trait, one strategy producing complete proposals.
+1. `qd-app`: ports (clock, market data, account reader, order executor,
+   repositories, journal) and use cases: Trade Proposal Engine (strategy →
+   reference-quantity costs → probabilities from evidence tables → proposal),
+   Decision Engine (regime, evidence ≥ 30, EV, RR, already-in-position,
+   staleness gates → `DecisionOutcome`), Risk Gate orchestration, Order
+   Gateway (the only order path, halts, idempotency, journal-before-send),
+   Position Manager (protection, exits, reconciliation).
+2. `qd-backtest`: simulated clock and broker with the shared fill and cost
+   model, running the same use cases (INV-08).
+3. In-memory repository fakes for tests only (`Fake*`, test support).

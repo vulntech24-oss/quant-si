@@ -10,7 +10,8 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 1 (domain core) done; Phase 2 next**. See `docs/PROGRESS.md`.
+- Current phase: **Phase 2 (Risk Gate, cost model, first strategy) done; Phase 3 next**.
+  See `docs/PROGRESS.md`.
 
 ## Commands
 
@@ -41,26 +42,43 @@ backend/                     Cargo workspace (ADR 0002)
     src/action.rs            TradeAction, Entry/ExitAction, Side, RiskEffect, UI labels
     src/outcome.rs           DecisionOutcome, NoTradeReason, ExitReason, RiskLimitBreach
     src/plan.rs              TradePlan (tick-rounded, validated), PlanDefect
-    src/economics.rs         costs, slippage, UnitEconomics, probabilities, EV
+    src/economics.rs         CostEstimate, slippage, UnitEconomics, probabilities, EV
+    src/costs.rs             CostModel port + versioned schedule-based cost model
+    src/market.rs            Bar, BarSeries (completed bars only)
     src/sizing.rs            sizing steps 1, 2, 3 (cap helper), 5
     src/portfolio.rs         open risk, daily P&L, drawdown, R-multiple
     src/proposal.rs          TradeProposal (complete or not built)
     src/halt.rs              halts / kill switch, check_order
     src/order_rules.rs       exit-quantity rule
     src/lifecycle/           strategy stage, order intent, position state machines
-    tests/                   formulas, lifecycle tables, properties, invariants
+    tests/                   formulas, costs, market, lifecycle tables, properties, invariants
+  crates/qd-risk/            Risk Gate (pure)
+    src/config.rs            RiskConfig (validated)
+    src/gate.rs              RiskGate::evaluate → Approved(size) | Rejected(NoTradeReason)
+    src/triggers.rs          hard-halt and cool-off triggers
+    tests/                   gate, triggers/config, end-to-end pipeline
+  crates/qd-strategy/        strategies (pure)
+    src/features.rs          features-v1 (SMA, Wilder ATR, highs/lows, ROC)
+    src/regime.rs            regime-v1 classifier
+    src/strategy.rs          Strategy trait, run_strategy (features → regime → strategy)
+    src/trend_pullback.rs    trend-pullback-1.0.0 (long only)
+  config/                    data, not code
+    costs/india-zerodha.toml cost schedules (UNVERIFIED, see ADR 0005)
+    risk.toml                §4 default risk configuration
 design/stitch-reference/     Stitch export: visual reference only, not requirements
 docs/                        spec, ADRs, progress log
+.github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-strategy, qd-risk, qd-app, qd-backtest,
-qd-ai, qd-broker-kite, qd-broker-paper, qd-marketdata, qd-store, qd-api,
-qd-server, qd-cli. Create a crate only when it has real code.
+Target crates not yet created (§5.3): qd-app, qd-backtest, qd-ai, qd-broker-kite,
+qd-broker-paper, qd-marketdata, qd-store, qd-api, qd-server, qd-cli.
+Create a crate only when it has real code.
 
 ## Rules of thumb
 
 - Decimal everywhere for prices, quantities and money; `f64` only inside statistics.
-- Pure crates never read the clock; pass time in (clippy bans it in qd-domain).
+- Pure crates never read the clock; pass time in (each pure crate's clippy.toml bans it).
+- Rates, limits and thresholds are config/data; strategy parameters belong to the logic version.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
