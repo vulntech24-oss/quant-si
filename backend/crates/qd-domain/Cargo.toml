@@ -1,0 +1,22 @@
+[package]
+name = "qd-domain"
+version = "0.1.0"
+description = "QuantDesk domain core: pure types, formulas, rounding and state machines (no I/O)"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+chrono.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+rust_decimal_macros.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
