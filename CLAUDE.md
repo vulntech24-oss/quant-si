@@ -10,8 +10,8 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phases 0–9 plus Zerodha Kite, live runner, hosted AI advisors and
-  Telegram done (ADR 0014). Remaining: crypto venue and owner decisions**
+- Current phase: **Phases 0–9, Zerodha/live/AI/Telegram (ADR 0014) and the upgrades
+  (ADR 0015) done. Remaining: crypto venue, 2027 holiday lists, owner decisions**
   (`docs/PROGRESS.md`, "What remains").
   See `docs/PROGRESS.md`.
 
@@ -64,6 +64,7 @@ backend/                     Cargo workspace (ADR 0002)
     src/economics.rs         CostEstimate, slippage, UnitEconomics, probabilities, EV
     src/costs.rs             CostModel port + versioned schedule-based cost model
     src/market.rs            Bar, BarSeries (completed bars only)
+    src/calendar.rs          trading calendars (data), check_bars (gaps, holiday bars, jumps)
     src/sizing.rs            sizing steps 1, 2, 3 (cap helper), 5
     src/portfolio.rs         open risk, daily P&L, drawdown, R-multiple
     src/proposal.rs          TradeProposal (complete or not built)
@@ -80,7 +81,8 @@ backend/                     Cargo workspace (ADR 0002)
     src/features.rs          features-v1 (SMA, Wilder ATR, highs/lows, ROC)
     src/regime.rs            regime-v1 classifier
     src/strategy.rs          Strategy trait, run_strategy (features → regime → strategy)
-    src/trend_pullback.rs    trend-pullback-1.0.0 (long only)
+    src/trend_pullback.rs    trend-pullback-1.0.0 (long only); trend_pullback_short.rs its mirror
+    src/breakout.rs, mean_reversion.rs   breakout-1.0.0, mean-reversion-1.0.0
     src/catalog.rs           implementations in the build, matched by logic version + parameters
   crates/qd-app/             use cases + ports (async)
     src/ports.rs             Clock, Journal, HaltStore, BrokerOrderExecutor, BrokerAccountReader, EvidenceSource
@@ -95,6 +97,7 @@ backend/                     Cargo workspace (ADR 0002)
     src/session.rs           daily trading cycle shared by backtest and paper (INV-08)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
     src/runs.rs              state, stage slots, instruments, book JSON for paper and live runs
+    src/book_view.rs         portfolio view: equity/drawdown, exposure, P&L per strategy
     src/evidence.rs          evidence records (INV-11), evidence tables, stored evidence source
     src/review.rs            predicted-vs-realized review, calibration, paper-review evidence
     src/secrets.rs           catalog of secrets the owner can enter in the web UI
@@ -109,22 +112,27 @@ backend/                     Cargo workspace (ADR 0002)
                              depends on nothing that can act on trading state (tested)
   crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
   crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics,
-                             validation (walk-forward/OOS/holdout), montecarlo, validator
+                             validation (walk-forward/OOS/holdout), montecarlo, validator,
+                             search (walk-forward parameter search; research only)
   crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
     src/settings.rs          settings versions; encrypted secrets (XChaCha20-Poly1305)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
     src/runtime.rs           effective settings (files + web UI), per-run services, SettingsAdmin (ADR 0013)
     src/kite.rs              Login with Zerodha, bar import, DynLive, schedules, reconcilers
     src/notify.rs            Telegram notifier
+    src/data.rs              instruments and bar CSV uploads with data-quality checks
+    src/keys.rs              crash-safe master-key rotation and startup recovery
   crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
   crates/qd-api/             HTTP API under /api (ADR 0008)
     src/auth.rs              argon2id, session cookie, Caller extractor, step-up, login throttle
+    src/totp.rs              RFC 6238 TOTP, base32
     src/routes.rs            handlers: parse, authorize, call a port/use case, map
     src/dto.rs               post-risk decision summaries (INV-17)
     openapi.yaml             hand-written API description, served at /api/openapi.yaml
     tests/api.rs             auth, CSRF, step-up, INV-07/14/17 through HTTP
   migrations/                SQL schema; history tables are append-only by trigger (INV-16)
   config/                    data, not code
+    calendars/india.toml     NSE/BSE/NFO and MCX holidays (2026, from Zerodha's list)
     costs/india-zerodha.toml cost schedules (verified 2026-09-27 against zerodha.com/charges)
     risk.toml                §4 default risk configuration
     validation.toml          validation protocol and pass criteria (ADR 0010)
@@ -138,7 +146,8 @@ frontend/                    Vite + strict TypeScript, no framework (ADR 0008)
   src/views.ts, main.ts      screens, top bar (PAPER/LIVE, halted), hash router
   tests/                     vitest
 deploy/                      compose stack (postgres, qd-server, Caddy TLS), container config,
-                             .env.example (names only), backup.sh (ADR 0012)
+                             .env.example (names only), backup.sh (encrypted, off-site),
+                             restore-test.sh (ADR 0012, 0015)
 Dockerfile                   multi-stage image, non-root, built-in healthcheck
 design/stitch-reference/     Stitch export: visual reference only, not requirements
 docs/                        spec, ADRs, progress log, OPERATIONS.md, integrations/ (provider notes)
@@ -175,6 +184,10 @@ Create a crate only when it has real code.
 - Broker adapters are tested against local fake servers only; order placement must stay
   behind `live_orders_compiled()` and the gateway's INV-14 check.
 - The live book is configured only in the server file (`[live]`), never in the UI.
+- Parameter-search results are research only: never evidence, never registrable; a
+  better set becomes a new logic version (INV-10). Keep grids at 12 candidates or fewer.
+- Anything encrypted with the master key must be included in `PgSecrets::sealed_rows`
+  so key rotation re-encrypts it.
 - Read the provider's current docs before any integration; record them in
   `docs/integrations/<provider>.md`.
 - Small conventional commits, only when every check passes.

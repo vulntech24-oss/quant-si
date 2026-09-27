@@ -17,6 +17,7 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 8 | Advisory AI in shadow mode (provider adapters blocked) | **Done** (2026-09-27) |
 | 9 | Deployment, monitoring, alerts, operator docs (live broker blocked) | **Done** (2026-09-27) |
 | — | Zerodha Kite, live runner, hosted AI advisors, Telegram, verified costs | **Done** (2026-09-27, ADR 0014) |
+| — | Upgrades: calendars and data quality, Data page, 3 strategies, portfolio and charts, TOTP and sessions, settings history, key rotation, backups, parameter search, mobile | **Done** (2026-09-27, ADR 0015) |
 
 ## Phase 0: audit (2026-09-27)
 
@@ -519,6 +520,50 @@ read first and recorded in `docs/integrations/`.
   - a forged callback was redirected to `login=failed`;
   - the secrets never appeared in the log.
 
+## Upgrades (2026-09-27, ADR 0015)
+
+- **Calendars and data quality:** NSE/BSE/MCX 2026 holiday calendars from
+  Zerodha's list, with gap and jump checks on every import. Suspect Kite
+  bars are held back, CSV jumps need "accept jumps", and the stale alert
+  counts trading days.
+- **Data page:** add instrument specs (TOML), upload bar CSVs, check stored
+  bars.
+- **Strategies:** `breakout-1.0.0`, `mean-reversion-1.0.0` and
+  `trend-pullback-short-1.0.0`, with a generic register command and
+  research backtests for any catalog version.
+- **Portfolio page:** equity and drawdown, exposure by bucket and asset
+  class, P&L per strategy. Decision pages have a price chart with entry,
+  stop and target.
+- **Security:**
+  - TOTP login (RFC 6238, encrypted secret, replay-proof), plus
+    `qd user reset-totp`;
+  - session list, revoke, log out everywhere;
+  - settings history with compare and restore;
+  - crash-safe master-key rotation.
+- **Operations:** encrypted off-site backups (rclone), a monthly restore
+  test script, Telegram messages for live fills.
+- **Parameter search:** walk-forward over grids of at most 12 candidates,
+  compared with training and with the catalog parameters. Research only.
+- **Mobile:** menu toggle and a bottom bar with the Kill switch.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, 16
+  tests, build.
+- New tests include:
+  - calendar coverage, gaps, holiday bars and jumps; the Kite import
+    holding back a suspect bar; the CSV import refusing a jump; staleness
+    by trading days;
+  - the new strategies' plans and regimes, and the catalog;
+  - the portfolio view over a paper run;
+  - TOTP against the RFC vectors, login with a code and replay refusal,
+    sessions and log out everywhere;
+  - settings restore; key rotation including recovery after a simulated
+    crash;
+  - the search's training-only selection and determinism;
+  - chart geometry and the settings diff.
+- Phone layout checked in Chromium at 390×844 (Playwright screenshots).
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -561,6 +606,9 @@ read first and recorded in `docs/integrations/`.
 
 ## What remains (blocked or owner decisions)
 
+0. **2027 holiday lists:** add them to `config/calendars/india.toml` when
+   NSE and MCX publish them. Until then, 2027 dates are "unknown" and the
+   checks fall back to calendar days.
 1. **Crypto venue**: Binance refuses this region (HTTP 451). The owner
    chooses a venue that serves their country; its adapter comes after its
    docs are read.

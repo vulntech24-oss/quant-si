@@ -25,7 +25,11 @@ TypeScript frontend.
 | Zerodha Kite: daily login, bar import, account sync, live orders (GTT stop/target), live runner | Built (tested against a fake Kite; see ADR 0014 before real money) |
 | Automatic demotion of live strategies on a hard halt | Built |
 | Hosted AI advisors: OpenAI, Gemini, xAI (advisory only) | Built |
-| Telegram alerts and daily summaries | Built |
+| Telegram alerts, live fills and daily summaries | Built |
+| Holiday calendars (NSE/BSE/MCX 2026), data-quality checks, Data page (instruments, CSV upload) | Built |
+| Strategies: trend pullback (long and short), breakout, mean reversion; parameter search (research) | Built |
+| Portfolio page, decision charts, phone layout with a one-tap kill switch | Built |
+| TOTP login, session management, settings history, master-key rotation, encrypted off-site backups | Built |
 | Crypto venue | **Not built**: Binance refuses this region (HTTP 451); the venue is an owner decision |
 
 Real money is disabled by default and cannot be enabled by configuration

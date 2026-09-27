@@ -66,8 +66,15 @@ Open **Settings** in the web UI:
 
 ## 3. Instruments and data
 
-- Add instrument specs with `qd instrument add <spec.toml>`. See
-  `backend/config/instruments/examples/`.
+- Add instrument specs on the **Data** page (paste the TOML), or with
+  `qd instrument add <spec.toml>`. See `backend/config/instruments/examples/`.
+- Every bar import is checked against the exchange holiday calendar
+  (`backend/config/calendars/india.toml`, 2026; add next year's list when
+  it is published) for missing days and for jumps above
+  `data.max_close_jump`.
+  - An automatic import stops at a suspect bar and tells you on Telegram.
+  - Check for a split or bonus, then upload adjusted bars on the **Data**
+    page with "accept jumps".
 - Daily bars come from Zerodha:
   - give each instrument spec a broker reference: `broker = "kite"`,
     `symbol` = the Kite trading symbol, and optionally `token`;
@@ -173,6 +180,34 @@ tiny order yourself and check that the journal, the book and Kite agree.
 What you get: critical alerts (or warnings too), daily run summaries, and
 job failures (once a day each).
 
+## 6c. Strategies, portfolio and research
+
+- Strategies in this build: `qd strategy catalog`. Register one with
+  `qd strategy register --logic-version breakout-1.0.0 --version-number 1 --git-sha <sha>`.
+  Each new version starts at Draft and needs validation like any other.
+- **Portfolio** shows each book's equity curve and drawdown, open exposure
+  by bucket and asset class, and results per strategy.
+- **Backtest → Parameter search** tries a small grid with honest
+  walk-forward selection. It is research only: a better setting has to
+  become a new strategy version in code.
+
+## 6d. Security
+
+- **Security → Two-factor login:** set up an authenticator app (TOTP).
+  From then on, logging in needs the code too.
+  - Keep the key it shows somewhere safe.
+  - If you lose the app, run
+    `docker compose exec qd-server qd user reset-totp --username owner` on
+    the server.
+- **Security → Active sessions:** log out one session, or everywhere.
+- **Settings → History:** see and compare past versions of a section, and
+  restore one (saved as a new version).
+- **Settings → Rotate master key:** re-encrypts every stored key.
+  - Back up the new `master.key` afterwards; the old one no longer opens
+    anything.
+  - A crash in the middle is finished at the next start.
+  - A key set with `QD_MASTER_KEY` is changed on the server instead.
+
 ## 7. Kill switch
 
 - **Halt new entries** (Kill switch page) stops entries at once. Exits and
@@ -185,13 +220,31 @@ job failures (once a day each).
 ## 8. Backups and restore
 
 ```sh
-cd deploy && ./backup.sh backups      # pg_dump, custom format; keeps 30 days
-# restore into an empty database:
+cd deploy && ./backup.sh backups      # dump + master key; keeps 30 days locally
+./restore-test.sh backups             # restores the newest dump into a scratch database
+# restore for real into an empty database (decrypt a .enc first):
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -pass env:QD_BACKUP_PASSPHRASE -in <file>.dump.enc -out <file>.dump
 docker compose exec -T postgres pg_restore -U quantdesk -d quantdesk --clean --if-exists < backups/<file>.dump
 ```
 
-Schedule `backup.sh` daily (cron) and copy the files off the host. The
-history tables are append-only, so a dump is the complete record.
+**Off-site copies:**
+- Install `rclone` on the host and run `rclone config` once. Backblaze B2,
+  S3, Google Drive and many others work.
+- Then set these in `deploy/.env`:
+  - `QD_BACKUP_PASSPHRASE`: keep it apart from the server;
+  - `QD_BACKUP_REMOTE`, for example `b2:qd-backups`;
+  - optionally `QD_BACKUP_KEY_REMOTE`, on another provider, so no single
+    place holds both the data and its key.
+- Unencrypted backups are never copied off-site.
+
+**Cron (host):**
+```
+30 21 * * * cd /path/to/quantdesk/deploy && ./backup.sh backups >> backup.log 2>&1
+0 22 1 * *  cd /path/to/quantdesk/deploy && ./restore-test.sh backups >> restore-test.log 2>&1
+```
+The restore test exits non-zero if the dump does not restore, or if the
+key backup no longer matches the key in use. The history tables are
+append-only, so a dump is the complete record.
 
 ## 9. Monitoring
 
@@ -207,11 +260,21 @@ history tables are append-only, so a dump is the complete record.
   - the paper or live book is inconsistent;
   - there are unprotected positions (paper or live);
   - the live book is unreadable.
-- Alerts also go to Telegram when notifications are on (§6b). Live gauges:
+- Alerts, live fills and daily results also go to Telegram when
+  notifications are on (§6b).
+- The paper book counts as stale after two or more unprocessed trading
+  days (exchange holidays excluded). Live gauges:
   `qd_live_book_consistent`, `qd_live_open_positions` and
   `qd_live_unprotected_positions`.
   Warnings: other halts, a stale paper book (more than 4 days), paper not
   started.
+
+## 9a. From a phone
+
+The layout adapts to a phone:
+- a bottom bar keeps **Decisions**, **Portfolio** and a red **Kill switch**
+  one tap away;
+- halting new entries needs no password, so you can do it in seconds.
 
 ## 10. Upgrades
 
