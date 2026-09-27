@@ -1,0 +1,35 @@
+[package]
+name = "qd-api"
+version = "0.1.0"
+description = "QuantDesk HTTP API: auth, DTOs, routes, OpenAPI, SSE"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[dependencies]
+argon2.workspace = true
+axum.workspace = true
+chrono.workspace = true
+futures-util.workspace = true
+getrandom.workspace = true
+hex.workspace = true
+qd-app.workspace = true
+qd-domain.workspace = true
+rust_decimal.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+async-trait.workspace = true
+qd-store.workspace = true
+qd-strategy.workspace = true
+sqlx.workspace = true
+tower = { version = "0.5", default-features = false, features = ["util"] }
+
+[lints]
+workspace = true

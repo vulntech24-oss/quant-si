@@ -61,10 +61,50 @@ async fn run() -> Result<(), String> {
         "startup complete"
     );
 
-    let app = router(HealthState {
+    let clock: Arc<dyn qd_app::ports::Clock> = Arc::new(qd_server::SystemClock);
+    let backtests = qd_backtest::research::ResearchBacktester::new(
+        stores.market.clone(),
+        Arc::new(config.costs.clone()),
+        &config.risk,
+        clock.clone(),
+    )
+    .map_err(|e| e.to_string())?;
+    let api_state = qd_api::ApiState {
+        auth: stores.auth.clone(),
+        journal: stores.journal.clone(),
+        halts: stores.halts.clone(),
+        registry: qd_app::registry::StrategyRegistry::new(
+            stores.registry.clone(),
+            stores.audit.clone(),
+        ),
+        market: stores.market.clone(),
+        accounts: stores.accounts.clone(),
+        audit: stores.audit.clone(),
+        backtests: Arc::new(backtests),
+        clock,
+        settings: qd_api::ApiSettings {
+            account_id: config.file.account_id,
+            environment: config.file.environment,
+            live_trading_enabled: config.live.live_trading_enabled,
+            live_orders_compiled: qd_app::live::live_orders_compiled(),
+            secure_cookies: config.file.environment == qd_app::live::Environment::Production,
+            session_hours: config.file.session_hours,
+        },
+        limiter: Arc::new(qd_api::auth::LoginLimiter::default()),
+    };
+    let mut app = qd_api::router(api_state).merge(router(HealthState {
         pool,
         halts: Arc::clone(&stores.halts) as Arc<dyn qd_app::ports::HaltStore>,
-    });
+    }));
+    if let Some(dir) = &config.file.frontend_dir {
+        let dir = config.base_dir.join(dir);
+        tracing::info!(dir = %dir.display(), "serving frontend");
+        let index = dir.join("index.html");
+        app = app.fallback_service(
+            tower_http::services::ServeDir::new(dir)
+                .fallback(tower_http::services::ServeFile::new(index)),
+        );
+    }
     let listener = tokio::net::TcpListener::bind(&config.file.bind)
         .await
         .map_err(|e| e.to_string())?;

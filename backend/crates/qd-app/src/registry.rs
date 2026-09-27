@@ -119,6 +119,11 @@ impl StrategyRegistry {
         Ok((version, self.stage(id).await?))
     }
 
+    /// Every registered version.
+    pub async fn versions(&self) -> Result<Vec<StrategyVersionRecord>, RegistryError> {
+        Ok(self.store.versions().await?)
+    }
+
     /// Current stage: the replay of the stored events from `Draft`.
     pub async fn stage(&self, id: StrategyVersionId) -> Result<StrategyStage, RegistryError> {
         self.store

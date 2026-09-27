@@ -7,7 +7,9 @@
 //! - [`sim`]: `SimClock` and `SimBroker` (conservative daily-bar fill rules).
 //! - [`engine`]: the backtest loop, `run_backtest`.
 //! - [`metrics`]: trade records and summary statistics.
+//! - [`research`]: research backtests of stored data (the `BacktestRunner` port).
 
 pub mod engine;
 pub mod metrics;
+pub mod research;
 pub mod sim;

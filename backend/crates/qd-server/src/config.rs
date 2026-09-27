@@ -68,6 +68,16 @@ pub struct ConfigFile {
     pub risk_config: PathBuf,
     /// Paths to cost schedule files, relative to this file.
     pub cost_schedules: Vec<PathBuf>,
+    /// Built frontend directory to serve, relative to this file. Optional.
+    #[serde(default)]
+    pub frontend_dir: Option<PathBuf>,
+    /// Session lifetime in hours. Default: 12.
+    #[serde(default = "default_session_hours")]
+    pub session_hours: i64,
+}
+
+const fn default_session_hours() -> i64 {
+    12
 }
 
 /// Why the configuration was refused.
@@ -112,6 +122,8 @@ pub struct ServerConfig {
     pub costs: ScheduleCostModel,
     /// Live-trading policy.
     pub live: LivePolicy,
+    /// Directory the config file is in (relative paths resolve against it).
+    pub base_dir: PathBuf,
 }
 
 fn read(path: &Path) -> Result<String, ConfigError> {
@@ -158,6 +170,11 @@ impl ServerConfig {
             environment: file.environment,
             live_trading_enabled: file.live_trading_enabled,
         };
+        if !(1..=168).contains(&file.session_hours) {
+            return Err(ConfigError::Unsafe(
+                "session_hours must be between 1 and 168".to_owned(),
+            ));
+        }
         let config = Self {
             file,
             database_url,
@@ -165,6 +182,7 @@ impl ServerConfig {
             cost_schedules,
             costs,
             live,
+            base_dir: base.to_owned(),
         };
         config.validate()?;
         Ok(config)

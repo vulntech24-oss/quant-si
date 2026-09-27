@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: QuantDesk API
+  version: 0.1.0
+  description: |
+    Session cookie authentication (`qd_session`, HttpOnly, SameSite=Strict).
+    Every non-GET request must send `X-Requested-With: quantdesk`.
+    Decisions are always shown post-risk (INV-17). Only the owner may act;
+    re-arming halts, promotions, resuming strategies and arming live trading
+    also need a step-up (password re-entry in the last 5 minutes).
+paths:
+  /api/auth/login:
+    post: {summary: Log in with username and password; sets the session cookie}
+  /api/auth/logout:
+    post: {summary: End the session}
+  /api/auth/me:
+    get: {summary: The current user, role and step-up expiry}
+  /api/auth/step-up:
+    post: {summary: Re-enter the password to allow dangerous actions for 5 minutes}
+  /api/status:
+    get: {summary: Environment, account mode, live flags, halt state (unknown counts as halted)}
+  /api/decisions:
+    get: {summary: Latest decisions, post-risk headline and NO TRADE reason; query limit, before}
+  /api/decisions/{id}:
+    get: {summary: One decision with its full journaled record}
+  /api/journal:
+    get: {summary: Latest journal entries; query kind, limit, before}
+  /api/halts:
+    get: {summary: Every halt with its active flag}
+    post: {summary: Create a manual global halt (owner)}
+  /api/halts/{id}/rearm:
+    post: {summary: Re-arm a halt (owner, step-up)}
+  /api/strategies:
+    get: {summary: Registered strategy versions and their stages}
+  /api/strategies/{id}/events:
+    post: {summary: Apply a stage event (owner; promote and resume need step-up)}
+  /api/instruments:
+    get: {summary: Instrument specs effective today}
+  /api/instruments/{id}/bars:
+    get: {summary: Point-in-time daily bars; query from, to}
+  /api/backtests:
+    post: {summary: Run a research backtest (owner)}
+  /api/account/live-armed:
+    post: {summary: Arm (owner, step-up) or disarm (owner) live trading for the account}
+  /api/events:
+    get: {summary: Server-sent events for new journal entries}
+  /api/openapi.yaml:
+    get: {summary: This document}

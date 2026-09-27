@@ -156,3 +156,142 @@ pub trait AuditLog: Send + Sync {
         detail: serde_json::Value,
     ) -> Result<(), StoreError>;
 }
+
+/// A user's role. Only the owner changes anything (spec §2).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Role {
+    /// The one owner.
+    Owner,
+    /// Read-only user.
+    Viewer,
+}
+
+/// A stored user. The password is an argon2id PHC string, never the password.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserRecord {
+    /// Id.
+    pub id: qd_domain::ids::UserId,
+    /// Login name.
+    pub username: String,
+    /// Role.
+    pub role: Role,
+    /// Argon2id PHC hash.
+    pub password_hash: String,
+}
+
+/// A stored session. Only the SHA-256 of the token is stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SessionRecord {
+    /// SHA-256 of the session token, hex.
+    pub token_hash: String,
+    /// The user.
+    pub user: qd_domain::ids::UserId,
+    /// Expiry.
+    pub expires_at: DateTime<Utc>,
+    /// Until when a recent re-authentication (step-up) is valid.
+    pub stepped_up_until: Option<DateTime<Utc>>,
+}
+
+/// Users and sessions.
+#[async_trait]
+pub trait AuthStore: Send + Sync {
+    /// Creates a user.
+    async fn create_user(&self, user: &UserRecord) -> Result<(), StoreError>;
+    /// Finds a user by login name.
+    async fn user_by_name(&self, username: &str) -> Result<Option<UserRecord>, StoreError>;
+    /// Finds a user by id.
+    async fn user(&self, id: qd_domain::ids::UserId) -> Result<Option<UserRecord>, StoreError>;
+    /// Stores a session.
+    async fn create_session(&self, session: &SessionRecord) -> Result<(), StoreError>;
+    /// Finds a session by token hash.
+    async fn session(&self, token_hash: &str) -> Result<Option<SessionRecord>, StoreError>;
+    /// Records a step-up on a session.
+    async fn step_up(&self, token_hash: &str, until: DateTime<Utc>) -> Result<(), StoreError>;
+    /// Deletes a session (logout).
+    async fn delete_session(&self, token_hash: &str) -> Result<(), StoreError>;
+}
+
+/// A journal entry as stored.
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct StoredJournalEntry {
+    /// Sequence number.
+    pub seq: i64,
+    /// Entry kind.
+    pub kind: String,
+    /// The entry as JSON.
+    pub entry: serde_json::Value,
+    /// When it was written.
+    pub recorded_at: DateTime<Utc>,
+}
+
+/// Reads the journal.
+#[async_trait]
+pub trait JournalReader: Send + Sync {
+    /// Newest first, optionally of one kind, optionally before a sequence number.
+    async fn recent(
+        &self,
+        kind: Option<&str>,
+        before: Option<i64>,
+        limit: i64,
+    ) -> Result<Vec<StoredJournalEntry>, StoreError>;
+    /// Entries after a sequence number, oldest first (for streaming).
+    async fn after(&self, seq: i64, limit: i64) -> Result<Vec<StoredJournalEntry>, StoreError>;
+    /// The latest decision with this id, if any.
+    async fn decision(
+        &self,
+        id: qd_domain::ids::DecisionId,
+    ) -> Result<Option<StoredJournalEntry>, StoreError>;
+}
+
+/// One trading account.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct AccountRecord {
+    /// Id.
+    pub id: qd_domain::ids::AccountId,
+    /// Display name.
+    pub name: String,
+    /// Mode.
+    pub mode: qd_domain::proposal::AccountMode,
+    /// Currency code.
+    pub currency: String,
+    /// Live armed (INV-14); always false for non-live accounts.
+    pub live_armed: bool,
+}
+
+/// Accounts. Changes are audited by the implementation.
+#[async_trait]
+pub trait AccountStore: Send + Sync {
+    /// Loads an account.
+    async fn account(
+        &self,
+        id: qd_domain::ids::AccountId,
+    ) -> Result<Option<AccountRecord>, StoreError>;
+    /// Arms or disarms live trading. Callers must have verified a step-up.
+    async fn set_live_armed(
+        &self,
+        id: qd_domain::ids::AccountId,
+        armed: bool,
+        actor: &str,
+    ) -> Result<(), StoreError>;
+}
+
+/// A research backtest request.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, Serialize)]
+pub struct BacktestRequest {
+    /// Instrument.
+    pub instrument: InstrumentId,
+    /// First decision date.
+    pub from: chrono::NaiveDate,
+    /// Last date.
+    pub to: chrono::NaiveDate,
+    /// Starting equity in the instrument currency.
+    pub equity: Decimal,
+}
+
+/// Runs research backtests (implemented by `qd-backtest`, wired by the binaries).
+#[async_trait]
+pub trait BacktestRunner: Send + Sync {
+    /// Runs one backtest and returns its report as JSON.
+    async fn run(&self, request: &BacktestRequest) -> Result<serde_json::Value, StoreError>;
+}

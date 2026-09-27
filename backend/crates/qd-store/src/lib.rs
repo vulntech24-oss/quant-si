@@ -9,16 +9,18 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use qd_app::journal::JournalEntry;
-use qd_app::ports::{AuditLog, HaltStore, HistoricalMarketData, Journal, JournalError, StoreError};
+use qd_app::ports::{
+    AccountStore, AuditLog, AuthStore, HaltStore, HistoricalMarketData, Journal, JournalError,
+    JournalReader, Role, SessionRecord, StoreError, StoredJournalEntry, UserRecord,
+};
 use qd_app::registry::{StrategyRegistryStore, StrategyVersionRecord};
 use qd_domain::halt::Halt;
-use qd_domain::ids::{AccountId, InstrumentId, StrategyVersionId};
+use qd_domain::ids::{AccountId, DecisionId, InstrumentId, StrategyVersionId, UserId};
 use qd_domain::instrument::InstrumentSpec;
 use qd_domain::lifecycle::strategy::{StageEvent, StrategyStage};
 use qd_domain::market::{Bar, BarData};
 use qd_domain::proposal::AccountMode;
 use rust_decimal::Decimal;
-use serde::Serialize;
 use sqlx::postgres::{PgPool, PgPoolOptions};
 use sqlx::{Row, migrate::Migrator};
 
@@ -414,20 +416,7 @@ impl AuditLog for PgAuditLog {
     }
 }
 
-/// One account.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
-pub struct AccountRecord {
-    /// Id.
-    pub id: AccountId,
-    /// Display name.
-    pub name: String,
-    /// Mode.
-    pub mode: AccountMode,
-    /// Currency code.
-    pub currency: String,
-    /// Live armed (INV-14); always false for non-live accounts.
-    pub live_armed: bool,
-}
+pub use qd_app::ports::AccountRecord;
 
 fn mode_str(mode: AccountMode) -> &'static str {
     match mode {
@@ -534,6 +523,208 @@ impl PgAccounts {
     }
 }
 
+#[async_trait]
+impl AccountStore for PgAccounts {
+    async fn account(&self, id: AccountId) -> Result<Option<AccountRecord>, StoreError> {
+        self.get(id).await
+    }
+
+    async fn set_live_armed(
+        &self,
+        id: AccountId,
+        armed: bool,
+        actor: &str,
+    ) -> Result<(), StoreError> {
+        Self::set_live_armed(self, id, armed, actor).await
+    }
+}
+
+fn entry_from_row(r: &sqlx::postgres::PgRow) -> Result<StoredJournalEntry, StoreError> {
+    Ok(StoredJournalEntry {
+        seq: r.try_get("seq").map_err(store_error)?,
+        kind: r.try_get("kind").map_err(store_error)?,
+        entry: r.try_get("entry").map_err(store_error)?,
+        recorded_at: r.try_get("recorded_at").map_err(store_error)?,
+    })
+}
+
+#[async_trait]
+impl JournalReader for PgJournal {
+    async fn recent(
+        &self,
+        kind: Option<&str>,
+        before: Option<i64>,
+        limit: i64,
+    ) -> Result<Vec<StoredJournalEntry>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT seq, kind, entry, recorded_at FROM journal \
+             WHERE ($1::text IS NULL OR kind = $1) AND ($2::bigint IS NULL OR seq < $2) \
+             ORDER BY seq DESC LIMIT $3",
+        )
+        .bind(kind)
+        .bind(before)
+        .bind(limit.clamp(1, 500))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter().map(entry_from_row).collect()
+    }
+
+    async fn after(&self, seq: i64, limit: i64) -> Result<Vec<StoredJournalEntry>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT seq, kind, entry, recorded_at FROM journal WHERE seq > $1 ORDER BY seq LIMIT $2",
+        )
+        .bind(seq)
+        .bind(limit.clamp(1, 500))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter().map(entry_from_row).collect()
+    }
+
+    async fn decision(&self, id: DecisionId) -> Result<Option<StoredJournalEntry>, StoreError> {
+        let row = sqlx::query(
+            "SELECT seq, kind, entry, recorded_at FROM journal \
+             WHERE kind = 'decision' AND entry->>'id' = $1 ORDER BY seq DESC LIMIT 1",
+        )
+        .bind(id.to_string())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(store_error)?;
+        row.as_ref().map(entry_from_row).transpose()
+    }
+}
+
+/// Users and sessions in PostgreSQL.
+#[derive(Clone, Debug)]
+pub struct PgAuth {
+    pool: PgPool,
+}
+
+impl PgAuth {
+    /// Creates the store.
+    #[must_use]
+    pub const fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+const fn role_str(role: Role) -> &'static str {
+    match role {
+        Role::Owner => "owner",
+        Role::Viewer => "viewer",
+    }
+}
+
+fn user_from_row(r: &sqlx::postgres::PgRow) -> Result<UserRecord, StoreError> {
+    let role: String = r.try_get("role").map_err(store_error)?;
+    Ok(UserRecord {
+        id: UserId::from_uuid(r.try_get("user_id").map_err(store_error)?),
+        username: r.try_get("username").map_err(store_error)?,
+        role: match role.as_str() {
+            "owner" => Role::Owner,
+            "viewer" => Role::Viewer,
+            other => return Err(StoreError(format!("unknown role {other}"))),
+        },
+        password_hash: r.try_get("password_hash").map_err(store_error)?,
+    })
+}
+
+#[async_trait]
+impl AuthStore for PgAuth {
+    async fn create_user(&self, user: &UserRecord) -> Result<(), StoreError> {
+        let mut tx = self.pool.begin().await.map_err(store_error)?;
+        sqlx::query(
+            "INSERT INTO users (user_id, username, role, password_hash) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(user.id.as_uuid())
+        .bind(&user.username)
+        .bind(role_str(user.role))
+        .bind(&user.password_hash)
+        .execute(&mut *tx)
+        .await
+        .map_err(store_error)?;
+        sqlx::query("INSERT INTO audit_log (actor, action, detail) VALUES ('system', 'user.create', $1)")
+            .bind(serde_json::json!({ "user": user.id, "username": user.username, "role": role_str(user.role) }))
+            .execute(&mut *tx)
+            .await
+            .map_err(store_error)?;
+        tx.commit().await.map_err(store_error)
+    }
+
+    async fn user_by_name(&self, username: &str) -> Result<Option<UserRecord>, StoreError> {
+        let row = sqlx::query(
+            "SELECT user_id, username, role, password_hash FROM users WHERE username = $1",
+        )
+        .bind(username)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(store_error)?;
+        row.as_ref().map(user_from_row).transpose()
+    }
+
+    async fn user(&self, id: UserId) -> Result<Option<UserRecord>, StoreError> {
+        let row = sqlx::query(
+            "SELECT user_id, username, role, password_hash FROM users WHERE user_id = $1",
+        )
+        .bind(id.as_uuid())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(store_error)?;
+        row.as_ref().map(user_from_row).transpose()
+    }
+
+    async fn create_session(&self, session: &SessionRecord) -> Result<(), StoreError> {
+        sqlx::query("INSERT INTO sessions (token_hash, user_id, expires_at, stepped_up_until) VALUES ($1, $2, $3, $4)")
+            .bind(&session.token_hash)
+            .bind(session.user.as_uuid())
+            .bind(session.expires_at)
+            .bind(session.stepped_up_until)
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn session(&self, token_hash: &str) -> Result<Option<SessionRecord>, StoreError> {
+        let row = sqlx::query(
+            "SELECT token_hash, user_id, expires_at, stepped_up_until FROM sessions WHERE token_hash = $1",
+        )
+        .bind(token_hash)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(store_error)?;
+        row.map(|r| {
+            Ok(SessionRecord {
+                token_hash: r.try_get("token_hash").map_err(store_error)?,
+                user: UserId::from_uuid(r.try_get("user_id").map_err(store_error)?),
+                expires_at: r.try_get("expires_at").map_err(store_error)?,
+                stepped_up_until: r.try_get("stepped_up_until").map_err(store_error)?,
+            })
+        })
+        .transpose()
+    }
+
+    async fn step_up(&self, token_hash: &str, until: DateTime<Utc>) -> Result<(), StoreError> {
+        sqlx::query("UPDATE sessions SET stepped_up_until = $2 WHERE token_hash = $1")
+            .bind(token_hash)
+            .bind(until)
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn delete_session(&self, token_hash: &str) -> Result<(), StoreError> {
+        sqlx::query("DELETE FROM sessions WHERE token_hash = $1")
+            .bind(token_hash)
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?;
+        Ok(())
+    }
+}
+
 /// All PostgreSQL adapters over one pool.
 #[derive(Clone, Debug)]
 pub struct Stores {
@@ -549,6 +740,8 @@ pub struct Stores {
     pub audit: Arc<PgAuditLog>,
     /// Accounts.
     pub accounts: Arc<PgAccounts>,
+    /// Users and sessions.
+    pub auth: Arc<PgAuth>,
 }
 
 impl Stores {
@@ -562,6 +755,7 @@ impl Stores {
             registry: Arc::new(PgStrategyRegistry::new(pool.clone())),
             audit: Arc::new(PgAuditLog::new(pool.clone())),
             accounts: Arc::new(PgAccounts::new(pool.clone())),
+            auth: Arc::new(PgAuth::new(pool.clone())),
         }
     }
 }

@@ -4,19 +4,17 @@
 
 use std::path::PathBuf;
 
-use chrono::{NaiveDate, NaiveTime, Utc};
+use chrono::{NaiveDate, Utc};
 use clap::{Parser, Subcommand, ValueEnum};
-use qd_app::decision::{EvidencePolicy, StrategyVersionInfo};
-use qd_app::ports::{AuditLog, EvidenceSource, HaltStore, HistoricalMarketData};
+use qd_app::ports::{AuditLog, BacktestRequest, BacktestRunner, HaltStore};
 use qd_app::registry::{StrategyRegistry, StrategyVersionRecord};
-use qd_backtest::engine::{BacktestConfig, InstrumentData, research_risk_config, run_backtest};
-use qd_domain::economics::SlippageAssumption;
+use qd_backtest::research::ResearchBacktester;
 use qd_domain::halt::{ClearedBy, Halt, HaltKind, HaltScope};
 use qd_domain::ids::{AccountId, HaltId, InstrumentId, StrategyId, StrategyVersionId, UserId};
-use qd_domain::instrument::{InstrumentSpec, ProductType};
-use qd_domain::lifecycle::strategy::{StageEvent, StrategyStage};
+use qd_domain::instrument::InstrumentSpec;
+use qd_domain::lifecycle::strategy::StageEvent;
 use qd_domain::market::{Bar, BarData, BarSeries};
-use qd_domain::num::{Currency, Money};
+use qd_domain::num::Currency;
 use qd_domain::proposal::{AccountMode, StrategyRef};
 use qd_risk::config::{RiskConfig, RiskConfigData};
 use qd_store::{AccountRecord, Stores};
@@ -43,6 +41,9 @@ enum Command {
     /// Accounts.
     #[command(subcommand)]
     Account(AccountCommand),
+    /// API users.
+    #[command(subcommand)]
+    User(UserCommand),
     /// Instrument specs.
     #[command(subcommand)]
     Instrument(InstrumentCommand),
@@ -81,6 +82,24 @@ enum AccountCommand {
         mode: Mode,
         #[arg(long, default_value = "INR")]
         currency: String,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum UserRole {
+    Owner,
+    Viewer,
+}
+
+#[derive(Subcommand)]
+enum UserCommand {
+    /// Create a user. The password is read from standard input, never from
+    /// arguments (they are visible to other processes).
+    Create {
+        #[arg(long)]
+        username: String,
+        #[arg(long, value_enum)]
+        role: UserRole,
     },
 }
 
@@ -161,14 +180,6 @@ struct BacktestArgs {
     costs: PathBuf,
 }
 
-struct NoEvidence;
-
-impl EvidenceSource for NoEvidence {
-    fn evidence(&self, _: StrategyVersionId, _: &str) -> Option<qd_app::ports::Evidence> {
-        None
-    }
-}
-
 fn read_toml<T: serde::de::DeserializeOwned>(path: &PathBuf) -> Result<T, String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
@@ -233,6 +244,27 @@ async fn run(cli: Cli) -> Result<(), String> {
                 .await
                 .map_err(|e| e.to_string())?;
             print(&record)
+        }
+        Command::User(UserCommand::Create { username, role }) => {
+            let mut password = String::new();
+            std::io::stdin()
+                .read_line(&mut password)
+                .map_err(|e| e.to_string())?;
+            let password = password.trim_end_matches(['\n', '\r']);
+            let hash = qd_api::auth::hash_password(password).map_err(|e| e.to_string())?;
+            let user = qd_app::ports::UserRecord {
+                id: UserId::new_at(now),
+                username,
+                role: match role {
+                    UserRole::Owner => qd_app::ports::Role::Owner,
+                    UserRole::Viewer => qd_app::ports::Role::Viewer,
+                },
+                password_hash: hash,
+            };
+            qd_app::ports::AuthStore::create_user(stores.auth.as_ref(), &user)
+                .await
+                .map_err(|e| e.to_string())?;
+            print(&serde_json::json!({ "user": user.id, "username": user.username }))
         }
         Command::Instrument(InstrumentCommand::Add { file }) => {
             let data: qd_domain::instrument::InstrumentSpecData = read_toml(&file)?;
@@ -422,71 +454,25 @@ async fn halt(
 }
 
 async fn backtest(args: BacktestArgs, stores: &Stores) -> Result<(), String> {
-    let now = Utc::now();
-    let spec = stores
-        .market
-        .all_instruments()
-        .await
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .filter(|s| s.id == args.instrument)
-        .max_by_key(|s| s.version)
-        .ok_or("unknown instrument")?;
-    let warm_up = args.from - chrono::Duration::days(400);
-    let bars = stores
-        .market
-        .daily_bars(args.instrument, warm_up, args.to, now)
-        .await
-        .map_err(|e| e.to_string())?;
-    let last = bars.last().map(Bar::date).ok_or("no bars")?;
-    let series = BarSeries::new(spec.id, last, bars).map_err(|e| e.to_string())?;
     let risk_data: RiskConfigData = read_toml(&args.risk_config)?;
     let risk = RiskConfig::new(risk_data).map_err(|e| e.to_string())?;
-    let risk = research_risk_config(&risk).ok_or("invalid research risk config")?;
     let costs = qd_domain::costs::ScheduleCostModel::new(read_toml(&args.costs)?)
         .map_err(|e| e.to_string())?;
-    let strategy = TrendPullback::v1();
-    let product = if spec.kind == qd_domain::instrument::InstrumentKind::Future {
-        ProductType::Margin
-    } else {
-        ProductType::Delivery
-    };
-    let config = BacktestConfig {
-        initial_equity: Money::new(args.equity, spec.currency),
-        start: args.from,
-        end: args.to,
-        strategy: StrategyVersionInfo {
-            reference: StrategyRef {
-                strategy_id: StrategyId::new_at(now),
-                name: "Trend pullback".to_owned(),
-                version_id: StrategyVersionId::new_at(now),
-                version_number: 0,
-                logic_version: TrendPullback::LOGIC_VERSION.to_owned(),
-                git_sha: "research".to_owned(),
-            },
-            // Research runs simulate the version at Paper (ADR 0006).
-            stage: StrategyStage::Paper,
-            rr_floor: strategy.params().rr_floor,
-            slippage: SlippageAssumption::new("slip-v1", spec.tick_size)
-                .map_err(|e| e.to_string())?,
-        },
-        evidence: EvidencePolicy::ResearchPrior,
-        slippage_ticks: Decimal::ONE,
-        close_time_utc: NaiveTime::from_hms_opt(10, 0, 0).ok_or("bad time")?,
-        calendar_version: "unversioned".to_owned(),
-    };
-    let data = [InstrumentData {
-        spec,
-        product,
-        series,
-    }];
-    let report = run_backtest(&strategy, &data, &config, &risk, &costs, &NoEvidence)
+    let runner = ResearchBacktester::new(
+        stores.market.clone(),
+        std::sync::Arc::new(costs),
+        &risk,
+        std::sync::Arc::new(qd_server::SystemClock),
+    )
+    .map_err(|e| e.to_string())?;
+    let report = runner
+        .run(&BacktestRequest {
+            instrument: args.instrument,
+            from: args.from,
+            to: args.to,
+            equity: args.equity,
+        })
         .await
         .map_err(|e| e.to_string())?;
-    print(&serde_json::json!({
-        "metrics": report.metrics,
-        "decisions": report.decisions,
-        "trades": report.trades,
-        "open_positions": report.open_positions,
-    }))
+    print(&report)
 }
