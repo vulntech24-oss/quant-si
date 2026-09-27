@@ -89,6 +89,39 @@ export interface StrategyRow {
   stage: { stage: string; resume_to?: string };
 }
 
+export interface SettingsField {
+  key: string;
+  label: string;
+  help: string | null;
+  kind: "bool" | "integer" | "decimal" | "date" | "time" | "text";
+  value: string | number | boolean | null;
+}
+
+export interface SettingsSection {
+  name: string;
+  title: string;
+  help: string;
+  source: { kind: "file" | "saved"; version?: number; updated_by?: string; updated_at?: string };
+  fields: SettingsField[];
+  problem: string | null;
+}
+
+export interface SettingsView {
+  sections: SettingsSection[];
+  server: { environment: string; live_trading_enabled: boolean; live_orders_compiled: boolean; account_id: string; note: string };
+}
+
+export interface SecretRow {
+  name: string;
+  provider: string;
+  label: string;
+  help: string;
+  set: boolean;
+  readable: boolean;
+  updated_at: string | null;
+  updated_by: string | null;
+}
+
 export const api = {
   me: () => request<Me>("GET", "/auth/me"),
   login: (username: string, password: string) => request<Me>("POST", "/auth/login", { username, password }),
@@ -112,6 +145,12 @@ export const api = {
   aiScorecard: () => request<Array<Record<string, unknown>>>("GET", "/ai/scorecard"),
   review: () => request<Record<string, unknown>>("GET", "/review"),
   recordReview: (version: string) => request<Record<string, unknown>>("POST", `/review/${encodeURIComponent(version)}/record`),
+  settings: () => request<SettingsView>("GET", "/settings"),
+  updateSettings: (section: string, values: Record<string, string | boolean>) => request<SettingsSection>("PUT", `/settings/${encodeURIComponent(section)}`, { values }),
+  resetSettings: (section: string) => request<SettingsSection>("POST", `/settings/${encodeURIComponent(section)}/reset`),
+  secrets: () => request<{ available: boolean; secrets: SecretRow[] }>("GET", "/secrets"),
+  setSecret: (name: string, value: string) => request<{ name: string; set: boolean }>("PUT", `/secrets/${encodeURIComponent(name)}`, { value }),
+  clearSecret: (name: string) => request<{ name: string; set: boolean }>("DELETE", `/secrets/${encodeURIComponent(name)}`),
   paper: () => request<Record<string, unknown>>("GET", "/paper"),
   paperRun: (through: string) => request<Record<string, unknown>>("POST", "/paper/run", { through }),
   setLiveArmed: (armed: boolean) => request<{ armed: boolean }>("POST", "/account/live-armed", { armed }),

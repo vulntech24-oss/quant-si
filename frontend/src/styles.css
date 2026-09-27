@@ -85,3 +85,11 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
 /* Operational alerts under the top bar. */
 .alerts { display: flex; flex-direction: column; gap: 6px; padding: 8px 24px; }
 .alerts .chip { display: block; margin: 0; white-space: normal; }
+
+/* Settings */
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.setting { display: flex; flex-direction: column; gap: 4px; }
+.setting-label { font-weight: 500; }
+.setting input[type="checkbox"] { width: 20px; height: 20px; }
+.secret-row { display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(260px, 1.2fr); gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--border, #e5e7eb); }
+@media (max-width: 800px) { .secret-row { grid-template-columns: 1fr; } }

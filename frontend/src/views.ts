@@ -2,7 +2,7 @@
 // why, trade details, risk, deep analysis and raw data. Headlines are always
 // the post-risk verdict (INV-17).
 
-import { ApiError, api, type DecisionSummary, type HaltView, type Me, type Status, type StrategyRow } from "./api";
+import { ApiError, api, type DecisionSummary, type HaltView, type Me, type SecretRow, type SettingsField, type SettingsSection, type Status, type StrategyRow } from "./api";
 import { clear, h } from "./dom";
 import { formatIst, formatNumber, formatPercent } from "./format";
 import { actionLabel, reasonText } from "./labels";
@@ -340,6 +340,112 @@ export async function reviewView(ctx: Ctx, rerender: () => void): Promise<HTMLEl
     h("div", { class: "card metrics" }, metric("Paper days", str(report["days"]) ?? "0"), metric("Max drawdown", formatPercent(str(report["max_drawdown"]))), metric("Operational incidents", str(report["operational_incidents"]) ?? "0")),
     message,
     versions.length === 0 ? h("p", { class: "empty" }, "No paper entry decisions yet.") : h("div", { class: "stack" }, ...versions.map(card)));
+}
+
+// ---------- settings ----------
+
+/** The text a field shows; decimals stay strings (never JS numbers). */
+export function fieldText(value: SettingsField["value"]): string {
+  if (value === null || value === undefined) return "";
+  return typeof value === "string" ? value : String(value);
+}
+
+function fieldInput(f: SettingsField, disabled: boolean): HTMLInputElement {
+  const common = { "aria-label": f.label, name: f.key, ...(disabled ? { disabled: "" } : {}) };
+  switch (f.kind) {
+    case "bool": {
+      const box = h("input", { type: "checkbox", ...common });
+      box.checked = f.value === true;
+      return box;
+    }
+    case "integer":
+      return h("input", { type: "text", inputmode: "numeric", value: fieldText(f.value), ...common });
+    case "decimal":
+      return h("input", { type: "text", inputmode: "decimal", value: fieldText(f.value), ...common });
+    case "date":
+      return h("input", { type: "date", value: fieldText(f.value), ...common });
+    case "time":
+      return h("input", { type: "time", step: "1", value: fieldText(f.value), ...common });
+    default:
+      return h("input", { type: "text", value: fieldText(f.value), ...common });
+  }
+}
+
+function sectionCard(ctx: Ctx, sec: SettingsSection, rerender: () => void): HTMLElement {
+  const owner = isOwner(ctx);
+  const message = h("p", { class: "error", role: "alert" });
+  const inputs = sec.fields.map((f) => ({ f, input: fieldInput(f, !owner) }));
+  const save = async (e: Event) => {
+    e.preventDefault();
+    message.textContent = "";
+    const values: Record<string, string | boolean> = {};
+    for (const { f, input } of inputs) {
+      const now = f.kind === "bool" ? input.checked : input.value.trim();
+      const before = f.kind === "bool" ? f.value === true : fieldText(f.value);
+      if (now !== before) values[f.key] = now;
+    }
+    if (Object.keys(values).length === 0) { message.textContent = "Nothing changed."; return; }
+    try { await withStepUp(() => api.updateSettings(sec.name, values)); await ctx.refreshStatus(); rerender(); } catch (err) { message.textContent = errorText(err); }
+  };
+  const reset = async () => {
+    if (!window.confirm(`Return "${sec.title}" to the configuration-file defaults?`)) return;
+    try { await withStepUp(() => api.resetSettings(sec.name)); rerender(); } catch (err) { message.textContent = errorText(err); }
+  };
+  const source = sec.source.kind === "saved"
+    ? h("span", { class: "chip long" }, `Saved in UI · v${sec.source.version ?? "?"} · ${sec.source.updated_by ?? ""} · ${sec.source.updated_at ? formatIst(sec.source.updated_at) : ""}`)
+    : h("span", { class: "chip neutral" }, "File default");
+  return h("form", { class: "card stack", onsubmit: save },
+    h("div", { class: "row between" }, h("h2", {}, sec.title), source),
+    h("p", { class: "muted" }, sec.help),
+    sec.problem ? h("p", { class: "error" }, `Saved value no longer valid: ${sec.problem}`) : null,
+    h("div", { class: "settings-grid" }, ...inputs.map(({ f, input }) => h("label", { class: "setting" }, h("span", { class: "setting-label" }, f.label), input, f.help ? h("span", { class: "muted small" }, f.help) : null))),
+    message,
+    owner ? h("div", { class: "row" }, h("button", { class: "primary" }, "Save (asks for your password)"), sec.source.kind === "saved" ? h("button", { type: "button", class: "ghost", onclick: reset }, "Reset to file default") : null) : h("p", { class: "muted" }, "Only the owner can change settings."));
+}
+
+function secretsCard(ctx: Ctx, data: { available: boolean; secrets: SecretRow[] }, rerender: () => void): HTMLElement {
+  const owner = isOwner(ctx);
+  const message = h("p", { class: "error", role: "alert" });
+  const providers = [...new Set(data.secrets.map((s) => s.provider))];
+  const row = (s: SecretRow) => {
+    const input = h("input", { type: "password", autocomplete: "new-password", spellcheck: "false", placeholder: s.set ? "Enter a new value to replace" : "Paste the value", "aria-label": `${s.provider} ${s.label}`, ...(owner && data.available ? {} : { disabled: "" }) });
+    const status = s.set
+      ? h("span", { class: s.readable ? "chip long" : "chip short" }, s.readable ? `Set · ${s.updated_at ? formatIst(s.updated_at) : ""}` : "Set, but cannot be decrypted (master key changed?)")
+      : h("span", { class: "chip neutral" }, "Not set");
+    const saveIt = async (e: Event) => {
+      e.preventDefault();
+      message.textContent = "";
+      const value = input.value;
+      if (!value.trim()) { message.textContent = "Enter a value first."; return; }
+      try { await withStepUp(() => api.setSecret(s.name, value)); input.value = ""; rerender(); } catch (err) { message.textContent = errorText(err); }
+    };
+    const clearIt = async () => {
+      if (!window.confirm(`Delete the stored ${s.provider} ${s.label}?`)) return;
+      try { await withStepUp(() => api.clearSecret(s.name)); rerender(); } catch (err) { message.textContent = errorText(err); }
+    };
+    return h("form", { class: "secret-row", onsubmit: saveIt },
+      h("div", { class: "stack" }, h("strong", {}, s.label), h("span", { class: "muted small" }, s.help)),
+      status,
+      owner && data.available ? h("div", { class: "row" }, input, h("button", { class: "primary" }, "Save"), s.set ? h("button", { type: "button", class: "ghost danger-text", onclick: clearIt }, "Delete") : null) : null);
+  };
+  return h("section", { class: "card stack" },
+    h("h2", {}, "API keys and credentials"),
+    h("p", { class: "muted" }, "Stored encrypted on the server and never shown again, not even to you: this page only knows whether a key is set. Saving or deleting asks for your password. Keys are used by server-side adapters only; the Kite, crypto and AI provider adapters are not built yet."),
+    data.available ? null : h("p", { class: "error" }, "The server has no master key, so keys cannot be stored. In Docker this is automatic; otherwise set data_dir in the server configuration or QD_MASTER_KEY in the server environment."),
+    message,
+    ...providers.map((p) => h("div", { class: "stack" }, h("h3", {}, p), ...data.secrets.filter((s) => s.provider === p).map(row))));
+}
+
+export async function settingsView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const [view, secrets] = await Promise.all([api.settings(), api.secrets()]);
+  const server = view.server;
+  return h("section", {}, h("h1", {}, "Settings"),
+    h("p", { class: "muted" }, "Changes apply from the next run, without a restart. Every change is validated, needs your password, and is kept in an append-only history with who changed what."),
+    secretsCard(ctx, secrets, rerender),
+    ...view.sections.map((sec) => sectionCard(ctx, sec, rerender)),
+    h("section", { class: "card stack" }, h("h2", {}, "Server (read-only)"),
+      h("div", { class: "metrics" }, metric("Environment", server.environment), metric("Live trading", server.live_trading_enabled ? "ENABLED" : "off"), metric("Live orders compiled", server.live_orders_compiled ? "yes" : "no"), metric("Account", server.account_id)),
+      h("p", { class: "muted" }, server.note)));
 }
 
 // ---------- paper trading ----------
