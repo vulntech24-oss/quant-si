@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#d9dadb","inverse-on-surface":"#f0f1f2","on-secondary-fixed":"#002114","primary-container":"#131b2e","surface-tint":"#565e74","surface-container-high":"#e7e8e9","primary":"#000000","error-container":"#ffdad6","secondary-fixed-dim":"#68dba9","on-surface":"#191c1d","background":"#f8f9fa","surface-variant":"#e1e3e4","primary-fixed-dim":"#bec6e0","error":"#ba1a1a","tertiary-container":"#410002","on-secondary":"#ffffff","on-tertiary-fixed":"#410002","on-primary":"#ffffff","surface-container-low":"#f3f4f5","tertiary-fixed":"#ffdad6","tertiary-fixed-dim":"#ffb4ab","inverse-primary":"#bec6e0","on-tertiary-container":"#f63a35","on-primary-fixed-variant":"#3f465c","on-background":"#191c1d","outline-variant":"#c6c6cd","on-error-container":"#93000a","secondary-container":"#82f5c1","surface-container":"#edeeef","surface":"#f8f9fa","secondary":"#006c4a","inverse-surface":"#2e3132","surface-bright":"#f8f9fa","on-primary-container":"#7c839b","surface-container-lowest":"#ffffff","on-surface-variant":"#45464d","on-secondary-fixed-variant":"#005137","outline":"#76777d","secondary-fixed":"#85f8c4","surface-container-highest":"#e1e3e4","on-tertiary-fixed-variant":"#93000b","on-error":"#ffffff","on-secondary-container":"#00714e","on-tertiary":"#ffffff","primary-fixed":"#dae2fd","on-primary-fixed":"#131b2e","tertiary":"#000000"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-md":"1.5rem","gutter":"1rem","gutter-lg":"1.5rem","space-md":"0.75rem","margin-lg":"2rem","space-lg":"1rem","space-sm":"0.5rem","space-2xl":"2rem","space-xs":"0.25rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"label-sm":["Geist"],"mono-data-md":["JetBrains Mono"],"body-md":["Geist"],"display-lg-mobile":["Geist"],"label-md":["Geist"],"body-sm":["Geist"],"display-lg":["Geist"],"headline-md":["Geist"],"mono-data-lg":["JetBrains Mono"],"headline-sm":["Geist"],"body-lg":["Geist"],"headline-lg":["Geist"],"mono-data-sm":["JetBrains Mono"]},"fontSize":{"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"500"}],"mono-data-md":["13px",{"lineHeight":"18px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"display-lg-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"display-lg":["36px",{"lineHeight":"44px","letterSpacing":"-0.03em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"500"}],"mono-data-lg":["18px",{"lineHeight":"24px","letterSpacing":"-0.02em","fontWeight":"500"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"500"}],"body-lg":["15px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"mono-data-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet"/></head><body class="bg-background font-body-md text-on-surface min-h-screen relative [background-image:radial-gradient(#cbd5e1_0.75px,transparent_0.75px)] [background-size:16px_16px] selection:bg-primary selection:text-on-primary"><header class="fixed top-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="h-14 w-full flex items-center justify-between"><div class="pointer-events-auto flex items-center gap-space-md px-space-md py-space-xs bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1XwKGpz-dr2oLvzPrio2-tu6F6CyOlnDDp_wHBTznifkquMz0bLXqtz6e7i1Ao-__Njv2C5nhQMPh1YdKDxslOrUrPb1q_Uk4h-yY_m75YVMEuinmdZ-ZlcuYbv1CrooMsl0xsUPdQ20V6rGdmbHv3nSTunmIKfllBHQsZJ01K_2WZCiUUfg7f4gfTwtpJiZFrVKZYxGIQVVUOBMn3ElziyVEQyaoQe52PEYtZ0VlaCI3WYj7SaUHpFsFE"/><div class="flex items-center gap-space-sm pr-space-xs"><span class="font-headline-sm text-headline-sm tracking-tight text-on-surface">QuantDesk</span><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-secondary-container/30 border border-secondary-container text-on-secondary-container font-mono-data-sm text-mono-data-sm"><span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span><span>Intelligence Active</span></div></div></div><div class="pointer-events-auto flex items-center gap-space-sm"><div class="hidden md:flex items-center gap-space-xs px-space-md h-9 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl text-on-surface-variant font-mono-data-sm text-mono-data-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="text-on-surface-variant">Search assets, signals...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm">⌘K</kbd></div><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="home" href="#">Home</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="discover" href="#">Discover</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="opportunities" href="#">Opportunities</a></nav></div></div></header><main class="w-full pt-14 pb-24 bg-transparent"><div class="flex flex-col w-full px-margin-md lg:px-margin-lg py-space-xl max-w-7xl mx-auto space-y-space-xl">
+<!-- Sub-Header Status & Title Context -->
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-md">
+<div class="space-y-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant uppercase tracking-wider">Engine :: Core-Sim v4.8</span>
+<span class="inline-flex items-center px-1.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm">Verified Fill Model</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface tracking-tight">Strategy Backtesting</h1>
+</div>
+<!-- Telemetry Snapshot -->
+<div class="flex items-center gap-space-lg bg-surface-container-lowest shadow-sm rounded-xl px-space-lg py-space-sm">
+<div>
+<span class="block font-mono-data-sm text-mono-data-sm text-on-surface-variant">Exec Latency</span>
+<span class="font-mono-data-md text-mono-data-md text-on-surface font-medium">1.42 ms</span>
+</div>
+<div class="w-px h-6 bg-surface-container-high"></div>
+<div>
+<span class="block font-mono-data-sm text-mono-data-sm text-on-surface-variant">Slippage Model</span>
+<span class="font-mono-data-md text-mono-data-md text-on-surface font-medium">Adaptive Vol-Scaled</span>
+</div>
+<div class="w-px h-6 bg-surface-container-high"></div>
+<div>
+<span class="block font-mono-data-sm text-mono-data-sm text-on-surface-variant">Fee Tier</span>
+<span class="font-mono-data-md text-mono-data-md text-on-surface font-medium">Maker 2bps / Taker 4bps</span>
+</div>
+</div>
+</div>
+<!-- 1. Top Configuration Bar -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-md md:p-space-lg">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-space-md items-end">
+<!-- Asset Selector -->
+<div class="space-y-1.5">
+<label class="block font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Asset Instrument</label>
+<div class="relative">
+<select class="w-full h-[38px] pl-3 pr-8 bg-surface-container-low text-on-surface font-mono-data-md text-mono-data-md rounded-lg appearance-none focus:outline-none cursor-pointer">
+<option selected="">BTC/USD (Perpetual)</option>
+<option>ETH/USD (Spot & Perp)</option>
+<option>SOL/USD (Perpetual)</option>
+<option>NDX100 (E-mini Synthetic)</option>
+</select>
+<span class="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none text-base">expand_more</span>
+</div>
+</div>
+<!-- Strategy Method Selector -->
+<div class="space-y-1.5">
+<label class="block font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Alpha Model</label>
+<div class="relative">
+<select class="w-full h-[38px] pl-3 pr-8 bg-surface-container-low text-on-surface font-mono-data-md text-mono-data-md rounded-lg appearance-none focus:outline-none cursor-pointer truncate">
+<option selected="">Multi-Factor Trend & Mean Reversion</option>
+<option>Orderbook Imbalance Scalping</option>
+<option>Statistical Volatility Arbitrage</option>
+<option>Macro Regime Shift Allocation</option>
+</select>
+<span class="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none text-base">expand_more</span>
+</div>
+</div>
+<!-- Time Horizon Selector -->
+<div class="space-y-1.5">
+<label class="block font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Test Epoch</label>
+<div class="relative">
+<select class="w-full h-[38px] pl-3 pr-8 bg-surface-container-low text-on-surface font-mono-data-md text-mono-data-md rounded-lg appearance-none focus:outline-none cursor-pointer">
+<option selected="">3 Years (2021 – 2024)</option>
+<option>5 Years (2019 – 2024)</option>
+<option>Full Available History</option>
+<option>Bear Stress Epoch (2022)</option>
+</select>
+<span class="material-symbols-outlined absolute right-2.5 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none text-base">expand_more</span>
+</div>
+</div>
+<!-- Action Button -->
+<div>
+<button class="w-full h-[38px] bg-primary text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center gap-space-sm hover:bg-surface-tint active:scale-[0.99] transition-all shadow-sm" id="runBacktestBtn">
+<span class="material-symbols-outlined text-sm">play_arrow</span>
+<span>Execute Simulation</span>
+</button>
+</div>
+</div>
+</div>
+<!-- 2. Executive Performance Summary Cards -->
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-space-md">
+<!-- Total Return -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm space-y-space-sm group hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Total Return</span>
+<span class="material-symbols-outlined text-base">trending_up</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-surface tracking-tight">+184.2%</div>
+<div class="mt-1 flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span>vs Bench</span>
+<span class="px-1.5 py-0.2 rounded bg-surface-container-high text-on-surface font-medium">+54.1%</span>
+</div>
+</div>
+</div>
+<!-- CAGR -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm space-y-space-sm group hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Compounded Ann. Growth</span>
+<span class="material-symbols-outlined text-base">finance</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-surface tracking-tight">41.8%</div>
+<div class="mt-1 flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-secondary">
+<span class="material-symbols-outlined text-xs">north</span>
+<span>Annualized Realized</span>
+</div>
+</div>
+</div>
+<!-- Max Drawdown -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm space-y-space-sm group hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Max Peak-To-Trough</span>
+<span class="material-symbols-outlined text-base">shield_with_heart</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-error tracking-tight">-14.2%</div>
+<div class="mt-1 flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span>Bench Max DD:</span>
+<span class="text-error font-medium">-76.8%</span>
+</div>
+</div>
+</div>
+<!-- Sharpe Ratio -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm space-y-space-sm group hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Sharpe Ratio</span>
+<span class="material-symbols-outlined text-base">query_stats</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-surface tracking-tight">2.14</div>
+<div class="mt-1 flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span>Rf = 4.25% (Risk adjusted)</span>
+</div>
+</div>
+</div>
+<!-- Win Rate -->
+<div class="bg-surface-container-lowest p-space-lg rounded-xl shadow-sm space-y-space-sm group hover:shadow-md transition-shadow">
+<div class="flex items-center justify-between text-on-surface-variant">
+<span class="font-label-sm text-label-sm uppercase tracking-wider">Fill Efficiency</span>
+<span class="material-symbols-outlined text-base">pie_chart</span>
+</div>
+<div>
+<div class="font-display-lg text-display-lg text-on-surface tracking-tight">68.4%</div>
+<div class="mt-1 flex items-center gap-1 font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span class="font-medium text-on-surface">128</span>
+<span>Sampled Executions</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 3. Equity Curve Visualization -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg space-y-space-md">
+<!-- Chart Header & Legend -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between pb-space-sm gap-space-sm">
+<div class="space-y-0.5">
+<div class="font-headline-sm text-headline-sm text-on-surface">Cumulative Portfolio Alpha vs Market</div>
+<p class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Normal base normalized to 100.00 • Log scale adjusted</p>
+</div>
+<div class="flex items-center gap-space-lg">
+<div class="flex items-center gap-2">
+<span class="w-3.5 h-1 rounded-full bg-primary-container"></span>
+<span class="font-label-md text-label-md text-on-surface">QuantDesk Strategy</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-3.5 h-0.5 border-b-2 border-dashed border-outline"></span>
+<span class="font-label-md text-label-md text-on-surface-variant">Buy & Hold Benchmark</span>
+</div>
+</div>
+</div>
+<!-- Canvas Drafting Grid Container with Inline Vector Chart -->
+<div class="relative w-full h-80 bg-surface-container-low/40 rounded-xl overflow-hidden p-space-sm flex flex-col justify-between">
+<!-- Coordinate Ruler Guide Grid (CSS/SVG) -->
+<svg class="absolute inset-0 w-full h-full pointer-events-none" fill="none" preserveaspectratio="none" viewbox="0 0 1000 300">
+<defs>
+<lineargradient id="strategyGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#131b2e" stop-opacity="0.16"></stop>
+<stop offset="100%" stop-color="#131b2e" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<!-- Horizontal Reference Gridlines -->
+<line stroke="#e1e3e4" stroke-dasharray="3 3" stroke-width="1" x1="0" x2="1000" y1="50" y2="50"></line>
+<line stroke="#e1e3e4" stroke-dasharray="3 3" stroke-width="1" x1="0" x2="1000" y1="110" y2="110"></line>
+<line stroke="#e1e3e4" stroke-dasharray="3 3" stroke-width="1" x1="0" x2="1000" y1="170" y2="170"></line>
+<line stroke="#e1e3e4" stroke-dasharray="3 3" stroke-width="1" x1="0" x2="1000" y1="230" y2="230"></line>
+<!-- Benchmark Curve (Buy & Hold, Dotted / Dashed Neutral) -->
+<path d="M 0,240 Q 120,210 240,160 T 480,260 T 720,200 T 920,130 L 1000,140" fill="none" stroke="#76777d" stroke-dasharray="5 5" stroke-linecap="round" stroke-width="1.75"></path>
+<!-- QuantDesk Strategy Fill Area -->
+<path d="M 0,240 Q 120,200 240,150 T 480,110 T 720,70 T 920,40 L 1000,30 L 1000,290 L 0,290 Z" fill="url(#strategyGradient)"></path>
+<!-- QuantDesk Strategy Main Trace (Sharp, Navy Slate) -->
+<path d="M 0,240 Q 120,200 240,150 T 480,110 T 720,70 T 920,40 L 1000,30" fill="none" stroke="#131b2e" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+<!-- Interactive Hotspot Node -->
+<circle cx="720" cy="70" fill="#131b2e" r="4.5" stroke="#ffffff" stroke-width="2"></circle>
+<line stroke="#131b2e" stroke-dasharray="2 2" stroke-opacity="0.3" stroke-width="1" x1="720" x2="720" y1="70" y2="290"></line>
+</svg>
+<!-- Floating Technical Label / Pinpoint Data Tag -->
+<div class="absolute left-[70%] top-6 bg-surface-container-lowest/95 backdrop-blur shadow-md px-space-md py-space-xs rounded-lg pointer-events-none transform -translate-x-1/2">
+<span class="block font-mono-data-sm text-mono-data-sm text-on-surface-variant">Epoch Peak • Oct 2023</span>
+<div class="flex items-center gap-space-md">
+<span class="font-mono-data-md text-mono-data-md font-bold text-on-surface">$284,200</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary font-medium">+184.2%</span>
+</div>
+</div>
+<!-- Y Axis Values -->
+<div class="flex flex-col justify-between h-full pointer-events-none text-on-surface-variant font-mono-data-sm text-mono-data-sm pl-2 py-1">
+<span>$300k</span>
+<span>$220k</span>
+<span>$160k</span>
+<span>$100k</span>
+</div>
+<!-- X Axis Milestones -->
+<div class="flex items-center justify-between w-full pointer-events-none text-on-surface-variant font-mono-data-sm text-mono-data-sm px-2 pt-2">
+<span>Q1 2021</span>
+<span>Q3 2021</span>
+<span>Q1 2022</span>
+<span>Q3 2022</span>
+<span>Q1 2023</span>
+<span>Q3 2023</span>
+<span>Q1 2024</span>
+</div>
+</div>
+<!-- Quick Horizon Toggles -->
+<div class="flex items-center justify-between pt-space-xs">
+<div class="flex items-center gap-space-xs">
+<button class="px-space-md py-1 rounded bg-surface-container-high text-on-surface font-label-sm text-label-sm font-medium">Full Run</button>
+<button class="px-space-md py-1 rounded hover:bg-surface-container text-on-surface-variant font-label-sm text-label-sm transition-colors">Vol Regimes</button>
+<button class="px-space-md py-1 rounded hover:bg-surface-container text-on-surface-variant font-label-sm text-label-sm transition-colors">Drawdown View</button>
+</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Data Resolution: 15-Minute Rebalanced</span>
+</div>
+</div>
+<!-- 4. Progressive Disclosure Section -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden transition-all duration-300">
+<!-- Disclosure Trigger Accordion Header -->
+<button class="w-full px-space-lg py-space-md flex items-center justify-between hover:bg-surface-container-low transition-colors text-left" id="accordionToggle">
+<div class="flex items-center gap-space-sm">
+<span class="material-symbols-outlined text-on-surface-variant transition-transform duration-200" id="accordionArrow">expand_more</span>
+<span class="font-headline-sm text-headline-sm text-on-surface">Detailed Performance & Factor Breakdown</span>
+</div>
+<div class="flex items-center gap-space-sm">
+<span class="hidden sm:inline-block font-mono-data-sm text-mono-data-sm text-on-surface-variant">Sortino, Profit Factor, Exposure Matrix</span>
+<span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface font-label-sm text-label-sm">Inspect 4 Metrics</span>
+</div>
+</button>
+<!-- Disclosed Content Panel -->
+<div class="p-space-lg space-y-space-xl" id="accordionPanel">
+<!-- Primary Quantitative Secondary Metrics -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-space-md">
+<div class="bg-surface-container-low p-space-md rounded-lg space-y-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Profit Factor</span>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">2.41</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Gross Profit / Gross Loss Ratio</span>
+</div>
+<div class="bg-surface-container-low p-space-md rounded-lg space-y-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Sortino Ratio</span>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">3.12</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Downside Deviation Standardized</span>
+</div>
+<div class="bg-surface-container-low p-space-md rounded-lg space-y-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Avg Trade Duration</span>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-semibold">18.4 Days</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Position Turnover Half-Life</span>
+</div>
+</div>
+<!-- Monthly Returns Minimalist Heatmap Matrix -->
+<div class="space-y-space-md">
+<div class="flex items-center justify-between">
+<div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">Monthly Returns Matrix (%)</h2>
+<p class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Subtle color saturation mapped to monthly attribution returns</p>
+</div>
+<div class="flex items-center gap-space-sm font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span>Loss (-5%+)</span>
+<span class="w-3 h-3 rounded-sm bg-error-container/60"></span>
+<span class="w-3 h-3 rounded-sm bg-surface-container"></span>
+<span class="w-3 h-3 rounded-sm bg-secondary-container/50"></span>
+<span class="w-3 h-3 rounded-sm bg-secondary-container"></span>
+<span>Gain (+10%+)</span>
+</div>
+</div>
+<!-- Matrix Table Container -->
+<div class="overflow-x-auto">
+<table class="w-full text-right border-collapse min-w-[700px]">
+<thead>
+<tr class="text-on-surface-variant font-mono-data-sm text-mono-data-sm pb-2">
+<th class="text-left font-normal py-2 px-2">Year</th>
+<th class="font-normal py-2 px-2">Jan</th>
+<th class="font-normal py-2 px-2">Feb</th>
+<th class="font-normal py-2 px-2">Mar</th>
+<th class="font-normal py-2 px-2">Apr</th>
+<th class="font-normal py-2 px-2">May</th>
+<th class="font-normal py-2 px-2">Jun</th>
+<th class="font-normal py-2 px-2">Jul</th>
+<th class="font-normal py-2 px-2">Aug</th>
+<th class="font-normal py-2 px-2">Sep</th>
+<th class="font-normal py-2 px-2">Oct</th>
+<th class="font-normal py-2 px-2">Nov</th>
+<th class="font-normal py-2 px-2">Dec</th>
+<th class="font-medium py-2 px-2 text-on-surface bg-surface-container-low rounded-t">YTD</th>
+</tr>
+</thead>
+<tbody class="font-mono-data-sm text-mono-data-sm">
+<!-- 2024 Row -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="text-left py-2 px-2 font-medium text-on-surface">2024</td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/30 text-on-secondary-container">+3.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/70 text-on-secondary-container font-medium">+8.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/90 text-on-secondary-container font-semibold">+12.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/50 text-error">-2.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/40 text-on-secondary-container">+4.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/20 text-on-secondary-container">+1.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-surface-container text-on-surface-variant">0.0</div></td>
+<td class="py-2 px-2 font-bold text-on-surface bg-surface-container-low">+29.8%</td>
+</tr>
+<!-- 2023 Row -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="text-left py-2 px-2 font-medium text-on-surface">2023</td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/80 text-on-secondary-container font-semibold">+10.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/30 text-on-secondary-container">+2.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/50 text-on-secondary-container">+5.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/40 text-error">-1.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/20 text-on-secondary-container">+1.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/60 text-on-secondary-container font-medium">+6.9</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/50 text-error">-3.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/60 text-error">-4.5</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/40 text-on-secondary-container">+3.9</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/90 text-on-secondary-container font-semibold">+14.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/70 text-on-secondary-container font-medium">+7.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/50 text-on-secondary-container">+5.4</div></td>
+<td class="py-2 px-2 font-bold text-on-surface bg-surface-container-low">+58.2%</td>
+</tr>
+<!-- 2022 Row -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="text-left py-2 px-2 font-medium text-on-surface">2022</td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/60 text-error">-5.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/20 text-on-secondary-container">+0.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/40 text-on-secondary-container">+3.5</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/70 text-error font-medium">-7.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/50 text-on-secondary-container">+5.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/40 text-error">-2.3</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/60 text-on-secondary-container font-medium">+7.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/50 text-error">-3.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/30 text-on-secondary-container">+2.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/40 text-on-secondary-container">+4.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/60 text-error">-6.5</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/30 text-on-secondary-container">+2.2</div></td>
+<td class="py-2 px-2 font-bold text-on-surface bg-surface-container-low">+1.2%</td>
+</tr>
+<!-- 2021 Row -->
+<tr class="group hover:bg-surface-container-low transition-colors">
+<td class="text-left py-2 px-2 font-medium text-on-surface">2021</td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/90 text-on-secondary-container font-semibold">+18.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/70 text-on-secondary-container font-medium">+9.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/30 text-error">-0.9</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/60 text-on-secondary-container font-medium">+6.8</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/80 text-error font-medium">-9.4</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/30 text-error">-1.2</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/50 text-on-secondary-container">+4.9</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/80 text-on-secondary-container font-semibold">+11.3</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/50 text-error">-4.0</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/95 text-on-secondary-container font-bold">+16.1</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-error-container/50 text-error">-3.6</div></td>
+<td class="py-2 px-2"><div class="p-1.5 rounded bg-secondary-container/40 text-on-secondary-container">+3.1</div></td>
+<td class="py-2 px-2 font-bold text-on-surface bg-surface-container-low">+56.8%</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- Strategy Factor Exposure Attribution Breakdown -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg pt-space-xs">
+<div class="p-space-md rounded-lg bg-surface-container-low space-y-space-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Factor Alpha Correlation</span>
+<div class="space-y-space-xs">
+<div>
+<div class="flex justify-between font-mono-data-sm text-mono-data-sm text-on-surface mb-1">
+<span>Short-Term Mean Reversion (14D)</span>
+<span class="font-medium">+0.74</span>
+</div>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 74%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-mono-data-sm text-mono-data-sm text-on-surface mb-1">
+<span>Trend-Following / Time-Series Momentum</span>
+<span class="font-medium">+0.58</span>
+</div>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 58%"></div>
+</div>
+</div>
+<div>
+<div class="flex justify-between font-mono-data-sm text-mono-data-sm text-on-surface mb-1">
+<span>Implied Volatility Arbitrage</span>
+<span class="font-medium">+0.32</span>
+</div>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-primary h-full rounded-full" style="width: 32%"></div>
+</div>
+</div>
+</div>
+</div>
+<div class="p-space-md rounded-lg bg-surface-container-low space-y-space-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Trade Execution Distribution</span>
+<div class="flex items-center justify-between font-mono-data-sm text-mono-data-sm py-1 border-b border-surface-container-high">
+<span class="text-on-surface-variant">Long Trade Positions</span>
+<span class="font-medium text-on-surface">76 (59.3%)</span>
+</div>
+<div class="flex items-center justify-between font-mono-data-sm text-mono-data-sm py-1 border-b border-surface-container-high">
+<span class="text-on-surface-variant">Short Trade Positions</span>
+<span class="font-medium text-on-surface">52 (40.7%)</span>
+</div>
+<div class="flex items-center justify-between font-mono-data-sm text-mono-data-sm py-1">
+<span class="text-on-surface-variant">Max Consecutive Losses</span>
+<span class="font-medium text-error">3 trades</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Bottom Workspace Utility Row -->
+<div class="flex flex-col sm:flex-row items-center justify-between text-on-surface-variant font-mono-data-sm text-mono-data-sm pt-space-xs pb-4">
+<div class="flex items-center gap-space-md">
+<span>Backtest Hash: <span class="text-on-surface">#sim-9f82d-2024b</span></span>
+<span>•</span>
+<span>Engine: v4.81-WASM</span>
+</div>
+<div class="flex items-center gap-space-md mt-2 sm:mt-0">
+<button class="hover:text-on-surface transition-colors">Export CSV Data</button>
+<span>•</span>
+<button class="hover:text-on-surface transition-colors">Deploy to Live Sandbox</button>
+</div>
+</div>
+</div>
+<!-- Vanilla Micro-Interactions -->
+<script>
+  (function initBacktestView() {
+    const toggleBtn = document.getElementById('accordionToggle');
+    const panel = document.getElementById('accordionPanel');
+    const arrow = document.getElementById('accordionArrow');
+    const runBtn = document.getElementById('runBacktestBtn');
+
+    if (toggleBtn && panel && arrow) {
+      let isExpanded = true;
+
+      toggleBtn.addEventListener('click', () => {
+        isExpanded = !isExpanded;
+        if (isExpanded) {
+          panel.classList.remove('hidden');
+          arrow.style.transform = 'rotate(0deg)';
+        } else {
+          panel.classList.add('hidden');
+          arrow.style.transform = 'rotate(-90deg)';
+        }
+      });
+    }
+
+    if (runBtn) {
+      runBtn.addEventListener('click', () => {
+        const originalContent = runBtn.innerHTML;
+        runBtn.disabled = true;
+        runBtn.innerHTML = `
+          <span class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+          <span>Computing Alpha...</span>
+        `;
+        
+        setTimeout(() => {
+          runBtn.disabled = false;
+          runBtn.innerHTML = originalContent;
+        }, 800);
+      });
+    }
+  })();
+</script></main><footer class="fixed bottom-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="w-full flex items-center justify-between"><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="portfolio" href="#">Portfolio</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="watchlist" href="#">Watchlist</a></nav></div><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="research" href="#">Research</a><a aria-current="page" class="px-space-md py-1.5 transition-colors bg-primary-container text-on-primary font-bold rounded-lg" data-path="backtests" href="#">Backtests</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="settings" href="#">Settings</a></nav></div></div></footer></body></html>

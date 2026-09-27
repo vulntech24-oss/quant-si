@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#d9dadb","inverse-on-surface":"#f0f1f2","on-secondary-fixed":"#002114","primary-container":"#131b2e","surface-tint":"#565e74","surface-container-high":"#e7e8e9","primary":"#000000","error-container":"#ffdad6","secondary-fixed-dim":"#68dba9","on-surface":"#191c1d","background":"#f8f9fa","surface-variant":"#e1e3e4","primary-fixed-dim":"#bec6e0","error":"#ba1a1a","tertiary-container":"#410002","on-secondary":"#ffffff","on-tertiary-fixed":"#410002","on-primary":"#ffffff","surface-container-low":"#f3f4f5","tertiary-fixed":"#ffdad6","tertiary-fixed-dim":"#ffb4ab","inverse-primary":"#bec6e0","on-tertiary-container":"#f63a35","on-primary-fixed-variant":"#3f465c","on-background":"#191c1d","outline-variant":"#c6c6cd","on-error-container":"#93000a","secondary-container":"#82f5c1","surface-container":"#edeeef","surface":"#f8f9fa","secondary":"#006c4a","inverse-surface":"#2e3132","surface-bright":"#f8f9fa","on-primary-container":"#7c839b","surface-container-lowest":"#ffffff","on-surface-variant":"#45464d","on-secondary-fixed-variant":"#005137","outline":"#76777d","secondary-fixed":"#85f8c4","surface-container-highest":"#e1e3e4","on-tertiary-fixed-variant":"#93000b","on-error":"#ffffff","on-secondary-container":"#00714e","on-tertiary":"#ffffff","primary-fixed":"#dae2fd","on-primary-fixed":"#131b2e","tertiary":"#000000"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-md":"1.5rem","gutter":"1rem","gutter-lg":"1.5rem","space-md":"0.75rem","margin-lg":"2rem","space-lg":"1rem","space-sm":"0.5rem","space-2xl":"2rem","space-xs":"0.25rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"label-sm":["Geist"],"mono-data-md":["JetBrains Mono"],"body-md":["Geist"],"display-lg-mobile":["Geist"],"label-md":["Geist"],"body-sm":["Geist"],"display-lg":["Geist"],"headline-md":["Geist"],"mono-data-lg":["JetBrains Mono"],"headline-sm":["Geist"],"body-lg":["Geist"],"headline-lg":["Geist"],"mono-data-sm":["JetBrains Mono"]},"fontSize":{"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"500"}],"mono-data-md":["13px",{"lineHeight":"18px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"display-lg-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"display-lg":["36px",{"lineHeight":"44px","letterSpacing":"-0.03em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"500"}],"mono-data-lg":["18px",{"lineHeight":"24px","letterSpacing":"-0.02em","fontWeight":"500"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"500"}],"body-lg":["15px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"mono-data-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet"/></head><body class="bg-background font-body-md text-on-surface min-h-screen relative [background-image:radial-gradient(#cbd5e1_0.75px,transparent_0.75px)] [background-size:16px_16px] selection:bg-primary selection:text-on-primary"><header class="fixed top-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="h-14 w-full flex items-center justify-between"><div class="pointer-events-auto flex items-center gap-space-md px-space-md py-space-xs bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1XwKGpz-dr2oLvzPrio2-tu6F6CyOlnDDp_wHBTznifkquMz0bLXqtz6e7i1Ao-__Njv2C5nhQMPh1YdKDxslOrUrPb1q_Uk4h-yY_m75YVMEuinmdZ-ZlcuYbv1CrooMsl0xsUPdQ20V6rGdmbHv3nSTunmIKfllBHQsZJ01K_2WZCiUUfg7f4gfTwtpJiZFrVKZYxGIQVVUOBMn3ElziyVEQyaoQe52PEYtZ0VlaCI3WYj7SaUHpFsFE"/><div class="flex items-center gap-space-sm pr-space-xs"><span class="font-headline-sm text-headline-sm tracking-tight text-on-surface">QuantDesk</span><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-secondary-container/30 border border-secondary-container text-on-secondary-container font-mono-data-sm text-mono-data-sm"><span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span><span>Intelligence Active</span></div></div></div><div class="pointer-events-auto flex items-center gap-space-sm"><div class="hidden md:flex items-center gap-space-xs px-space-md h-9 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl text-on-surface-variant font-mono-data-sm text-mono-data-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="text-on-surface-variant">Search assets, signals...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm">⌘K</kbd></div><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="home" href="#">Home</a><a aria-current="page" class="px-space-md py-1.5 transition-colors bg-primary-container text-on-primary font-bold rounded-lg" data-path="discover" href="#">Discover</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="opportunities" href="#">Opportunities</a></nav></div></div></header><main class="w-full pt-14 pb-24 bg-transparent"><div class="flex flex-col w-full">
+<div class="w-full max-w-7xl mx-auto px-margin md:px-margin-md lg:px-margin-lg space-y-space-xl">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-space-lg">
+<div class="space-y-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-sm text-mono-data-sm text-secondary tracking-widest uppercase">Scanner Active</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Cross-Asset Screener v4.1</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface tracking-tight">Discover Opportunities</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl">
+          Screening 5 asset classes across quantitative, fundamental, and predictive dimensions.
+        </p>
+</div>
+<div class="flex items-center gap-space-md p-space-xs bg-surface-container-lowest rounded-xl shadow-sm">
+<div class="flex items-center gap-space-xs px-space-md py-1 bg-surface-container-low rounded-lg text-on-surface font-mono-data-sm text-mono-data-sm">
+<span class="material-symbols-outlined text-[16px] text-secondary">memory</span>
+<span>Inference Latency: 14ms</span>
+</div>
+<div class="flex items-center gap-space-xs px-space-md py-1 bg-surface-container-low rounded-lg text-on-surface font-mono-data-sm text-mono-data-sm">
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant">sync</span>
+<span>Regime: Low Vol Reflation</span>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<div class="relative overflow-hidden bg-surface-container-lowest p-space-lg rounded-xl shadow-sm group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">High Conviction Longs</span>
+<span class="px-space-xs py-0.5 rounded bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-medium">+14.2% Peak</span>
+</div>
+<div class="mt-space-sm flex items-baseline justify-between">
+<span class="font-headline-lg text-headline-lg text-on-surface tracking-tight">5 Tickers</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary flex items-center">
+<span class="material-symbols-outlined text-[14px]">arrow_outward</span> 83% Avg Score
+          </span>
+</div>
+<div class="mt-space-md w-full h-8 flex items-end gap-1">
+<div class="h-4/6 w-1/5 bg-secondary/20 rounded-sm"></div>
+<div class="h-5/6 w-1/5 bg-secondary/40 rounded-sm"></div>
+<div class="h-3/6 w-1/5 bg-secondary/30 rounded-sm"></div>
+<div class="h-full w-1/5 bg-secondary rounded-sm"></div>
+<div class="h-4/6 w-1/5 bg-secondary/50 rounded-sm"></div>
+</div>
+</div>
+<div class="relative overflow-hidden bg-surface-container-lowest p-space-lg rounded-xl shadow-sm group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Hedge & Asymmetric Setups</span>
+<span class="px-space-xs py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono-data-sm text-mono-data-sm">Energy Hedge</span>
+</div>
+<div class="mt-space-sm flex items-baseline justify-between">
+<span class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Crude (WTI)</span>
+<span class="font-mono-data-sm text-mono-data-sm text-error flex items-center">
+<span class="material-symbols-outlined text-[14px]">call_received</span> -4.6% Target
+          </span>
+</div>
+<div class="mt-space-md w-full h-8 flex items-center">
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden flex">
+<div class="bg-secondary h-full" style="width: 72%"></div>
+<div class="bg-surface-variant h-full" style="width: 16%"></div>
+<div class="bg-error h-full" style="width: 12%"></div>
+</div>
+</div>
+</div>
+<div class="relative overflow-hidden bg-surface-container-lowest p-space-lg rounded-xl shadow-sm group">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Systemic Risk Delta</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary">Balanced</span>
+</div>
+<div class="mt-space-sm flex items-baseline justify-between">
+<span class="font-headline-lg text-headline-lg text-on-surface tracking-tight">0.84 Sharpe</span>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Normalized</span>
+</div>
+<div class="mt-space-md flex items-center justify-between text-on-surface-variant font-mono-data-sm text-mono-data-sm">
+<span>Correlation: 0.18</span>
+<span>CVaR: 4.2%</span>
+<span>Turnover: 0.4x</span>
+</div>
+</div>
+</div>
+<div class="space-y-space-md">
+<div class="flex flex-col lg:flex-row lg:items-center justify-between gap-space-md bg-surface-container-lowest p-space-md rounded-xl shadow-sm">
+<div class="flex items-center gap-space-xs overflow-x-auto no-scrollbar py-0.5" id="asset-tabs">
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md bg-primary text-on-primary shadow-sm transition-all whitespace-nowrap" data-filter="all">
+            All Assets <span class="ml-1 opacity-70">24</span>
+</button>
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap" data-filter="Stocks">
+            Stocks <span class="ml-1 opacity-70">8</span>
+</button>
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap" data-filter="Gold">
+            Gold <span class="ml-1 opacity-70">1</span>
+</button>
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap" data-filter="Silver">
+            Silver <span class="ml-1 opacity-70">1</span>
+</button>
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap" data-filter="Energy">
+            Crude Oil <span class="ml-1 opacity-70">2</span>
+</button>
+<button class="filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap" data-filter="Crypto">
+            Crypto <span class="ml-1 opacity-70">12</span>
+</button>
+</div>
+<div class="flex flex-wrap items-center gap-space-sm pt-space-xs lg:pt-0">
+<button class="toggle-btn flex items-center gap-space-xs px-space-md py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md transition-colors" data-active="false" id="toggle-high-conf">
+<span class="toggle-indicator w-2 h-2 rounded-full bg-outline-variant"></span>
+<span>Confidence >70%</span>
+</button>
+<button class="toggle-btn flex items-center gap-space-xs px-space-md py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-on-surface font-label-md text-label-md transition-colors" data-active="false" id="toggle-positive">
+<span class="toggle-indicator w-2 h-2 rounded-full bg-outline-variant"></span>
+<span>Positive Returns Only</span>
+</button>
+<div class="h-4 w-px bg-surface-variant hidden sm:block"></div>
+<button class="flex items-center gap-space-xs px-space-md py-1.5 rounded-lg bg-surface-container-low text-on-surface font-mono-data-sm text-mono-data-sm hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-[16px]">tune</span>
+<span>Parameters</span>
+</button>
+</div>
+</div>
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden">
+<div class="overflow-x-auto">
+<table class="w-full text-left">
+<thead>
+<tr class="bg-surface-container-low/50 text-on-surface-variant font-label-sm text-label-sm uppercase tracking-wider">
+<th class="py-space-md px-space-lg" scope="col">Asset</th>
+<th class="py-space-md px-space-md" scope="col">Class</th>
+<th class="py-space-md px-space-md" scope="col">QuantDesk Signal</th>
+<th class="py-space-md px-space-md" scope="col">Model Confidence</th>
+<th class="py-space-md px-space-md text-right" scope="col">Expected Return</th>
+<th class="py-space-md px-space-md" scope="col">Risk Profile</th>
+<th class="py-space-md px-space-md" scope="col">Horizon</th>
+<th class="py-space-md px-space-lg text-right" scope="col">Action</th>
+</tr>
+</thead>
+<tbody class="divide-y-0" id="screener-table-body">
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Crypto" data-confidence="82" data-return="12.4">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      ₿
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">BTC / Bitcoin</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">L1 Network • Tier 1</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Crypto</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    BUY
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">82%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 82%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+12.4%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Medium</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">1–3 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Gold Metals" data-confidence="76" data-return="7.8">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      Au
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Gold (XAU)</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Spot Physical • Bullion</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Metals</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    BUY
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">76%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 76%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+7.8%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Low-Med</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">3–6 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Silver Metals" data-confidence="71" data-return="9.2">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      Ag
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Silver (XAG)</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Spot Physical • Industrial</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Metals</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    BUY
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">71%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 71%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+9.2%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Medium</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">1–3 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Energy Crude" data-confidence="68" data-return="-4.6">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      🛢
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Crude Oil (WTI)</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">NYMEX Front Month</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Energy</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-error-container/40 text-on-error-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-error"></span>
+                    SELL
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">68%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-error h-full rounded-full" style="width: 68%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-error">-4.6%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">High</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">2–4 Wks</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Stocks" data-confidence="61" data-return="3.1">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      RIL
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Reliance Ind.</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">NSE • Energy Conglomerate</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Stocks</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                    HOLD
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">61%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-outline h-full rounded-full" style="width: 61%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+3.1%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Low</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">1–2 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Stocks" data-confidence="79" data-return="14.2">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      NVDA
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">NVIDIA Corp</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">NASDAQ • Semiconductors</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Stocks</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    BUY
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">79%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 79%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+14.2%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Med-High</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">3–6 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Crypto" data-confidence="74" data-return="11.0">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      Ξ
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Ethereum</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Smart Contract Platform</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Crypto</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+                    BUY
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">74%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 74%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+11.0%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">Medium</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">1–3 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+<tr class="opportunity-row hover:bg-surface-container-low/40 transition-colors group" data-class="Crypto" data-confidence="59" data-return="5.4">
+<td class="py-space-lg px-space-lg">
+<div class="flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-sm text-mono-data-sm font-semibold text-on-surface">
+                      ◎
+                    </div>
+<div>
+<div class="font-headline-sm text-headline-sm text-on-surface">Sol (Solana)</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">High Throughput L1</div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md font-body-sm text-body-sm text-on-surface">Crypto</td>
+<td class="py-space-lg px-space-md">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+                    HOLD
+                  </span>
+</td>
+<td class="py-space-lg px-space-md">
+<div class="flex items-center gap-space-sm">
+<span class="font-mono-data-md text-mono-data-md font-medium text-on-surface">59%</span>
+<div class="w-16 h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="bg-outline h-full rounded-full" style="width: 59%"></div>
+</div>
+</div>
+</td>
+<td class="py-space-lg px-space-md text-right">
+<span class="font-mono-data-md text-mono-data-md font-semibold text-secondary">+5.4%</span>
+</td>
+<td class="py-space-lg px-space-md">
+<span class="px-2 py-0.5 rounded bg-surface-container font-body-sm text-body-sm text-on-surface">High</span>
+</td>
+<td class="py-space-lg px-space-md font-mono-data-sm text-mono-data-sm text-on-surface-variant">1 Mo</td>
+<td class="py-space-lg px-space-lg text-right">
+<button class="inline-flex items-center gap-1 px-space-md py-1.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary text-on-surface font-label-md text-label-md transition-all">
+<span>Analyze</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="p-space-md bg-surface-container-low/30 flex flex-col sm:flex-row items-center justify-between gap-space-md text-on-surface-variant font-mono-data-sm text-mono-data-sm">
+<div class="flex items-center gap-space-sm">
+<span>Showing <span class="text-on-surface font-semibold" id="visible-count">8</span> of 24 opportunities</span>
+<span class="w-1 h-1 rounded-full bg-outline"></span>
+<span>Screened against 48 factor alphas</span>
+</div>
+<div class="flex items-center gap-space-md">
+<span>Data synced: <time>14:02:18 UTC</time></span>
+<button class="text-on-surface hover:underline font-label-sm text-label-sm">Export View (CSV)</button>
+</div>
+</div>
+</div>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg">
+<div class="lg:col-span-8 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-space-sm">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">QuantDesk Macro Convergence Factor</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary">Synchronized</span>
+</div>
+<h2 class="font-headline-md text-headline-md text-on-surface">Cross-Asset Predictive Surface</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">Multi-asset vector regression identifying regime divergence across risk-premia clusters.</p>
+</div>
+<div class="my-space-lg h-36 w-full flex items-end gap-1.5 pt-4">
+<div class="flex-1 bg-surface-container h-1/4 rounded-sm hover:bg-secondary/40 transition-colors"></div>
+<div class="flex-1 bg-surface-container h-2/4 rounded-sm hover:bg-secondary/40 transition-colors"></div>
+<div class="flex-1 bg-secondary/30 h-3/5 rounded-sm hover:bg-secondary transition-colors"></div>
+<div class="flex-1 bg-secondary/40 h-4/5 rounded-sm hover:bg-secondary transition-colors"></div>
+<div class="flex-1 bg-secondary/80 h-3/4 rounded-sm hover:bg-secondary transition-colors"></div>
+<div class="flex-1 bg-secondary h-full rounded-sm"></div>
+<div class="flex-1 bg-secondary/70 h-5/6 rounded-sm hover:bg-secondary transition-colors"></div>
+<div class="flex-1 bg-surface-container h-2/5 rounded-sm hover:bg-secondary/40 transition-colors"></div>
+<div class="flex-1 bg-error/30 h-1/3 rounded-sm hover:bg-error transition-colors"></div>
+<div class="flex-1 bg-error/50 h-1/2 rounded-sm hover:bg-error transition-colors"></div>
+<div class="flex-1 bg-surface-container h-2/3 rounded-sm hover:bg-secondary/40 transition-colors"></div>
+<div class="flex-1 bg-secondary/50 h-4/5 rounded-sm hover:bg-secondary transition-colors"></div>
+</div>
+<div class="flex items-center justify-between pt-space-md border-t-0 text-on-surface-variant font-mono-data-sm text-mono-data-sm">
+<span>Decoupling Index: 0.12 (Extremely Low)</span>
+<span>Next Predictive Retrain: 03h 42m</span>
+</div>
+</div>
+<div class="lg:col-span-4 bg-surface-container-lowest p-space-lg rounded-xl shadow-sm flex flex-col justify-between">
+<div>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Methodology</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface mt-1">Multi-Modal Alpha Engine</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-2">
+            Each opportunity combines proprietary order flow tracking, on-chain dynamics, and non-linear risk surfaces. Signals trigger when model confidence exceeds empirical error bands.
+          </p>
+</div>
+<div class="space-y-space-sm my-space-md">
+<div class="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between font-mono-data-sm text-mono-data-sm">
+<span class="text-on-surface-variant">Statistical Edge</span>
+<span class="text-on-surface font-medium">+4.2% annualized</span>
+</div>
+<div class="p-space-sm bg-surface-container-low rounded-lg flex items-center justify-between font-mono-data-sm text-mono-data-sm">
+<span class="text-on-surface-variant">False Positive Rate</span>
+<span class="text-on-surface font-medium">11.4% (90D backtest)</span>
+</div>
+</div>
+<button class="w-full py-2 bg-surface-container text-on-surface hover:bg-surface-container-high rounded-lg font-label-md text-label-md transition-colors text-center">
+          Review Validation Methodology
+        </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  (function() {
+    let currentFilter = 'all';
+    let highConfOnly = false;
+    let positiveOnly = false;
+
+    const rows = document.querySelectorAll('.opportunity-row');
+    const tabs = document.querySelectorAll('.filter-tab');
+    const highConfBtn = document.getElementById('toggle-high-conf');
+    const posBtn = document.getElementById('toggle-positive');
+    const visibleCountEl = document.getElementById('visible-count');
+
+    function applyFilters() {
+      let visible = 0;
+      rows.forEach(row => {
+        const itemClass = row.getAttribute('data-class') || '';
+        const conf = parseFloat(row.getAttribute('data-confidence') || '0');
+        const ret = parseFloat(row.getAttribute('data-return') || '0');
+
+        let matchesTab = (currentFilter === 'all') || itemClass.toLowerCase().includes(currentFilter.toLowerCase());
+        let matchesConf = !highConfOnly || conf > 70;
+        let matchesPos = !positiveOnly || ret > 0;
+
+        if (matchesTab && matchesConf && matchesPos) {
+          row.style.display = '';
+          visible++;
+        } else {
+          row.style.display = 'none';
+        }
+      });
+      if (visibleCountEl) {
+        visibleCountEl.textContent = visible;
+      }
+    }
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => {
+          t.className = 'filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low transition-all whitespace-nowrap';
+        });
+        tab.className = 'filter-tab px-space-md py-1.5 rounded-lg font-label-md text-label-md bg-primary text-on-primary shadow-sm transition-all whitespace-nowrap';
+        currentFilter = tab.getAttribute('data-filter') || 'all';
+        applyFilters();
+      });
+    });
+
+    if (highConfBtn) {
+      highConfBtn.addEventListener('click', () => {
+        highConfOnly = !highConfOnly;
+        const ind = highConfBtn.querySelector('.toggle-indicator');
+        if (highConfOnly) {
+          highConfBtn.classList.add('bg-primary-container', 'text-on-primary');
+          highConfBtn.classList.remove('bg-surface-container-low', 'text-on-surface');
+          if (ind) ind.classList.replace('bg-outline-variant', 'bg-secondary');
+        } else {
+          highConfBtn.classList.remove('bg-primary-container', 'text-on-primary');
+          highConfBtn.classList.add('bg-surface-container-low', 'text-on-surface');
+          if (ind) ind.classList.replace('bg-secondary', 'bg-outline-variant');
+        }
+        applyFilters();
+      });
+    }
+
+    if (posBtn) {
+      posBtn.addEventListener('click', () => {
+        positiveOnly = !positiveOnly;
+        const ind = posBtn.querySelector('.toggle-indicator');
+        if (positiveOnly) {
+          posBtn.classList.add('bg-primary-container', 'text-on-primary');
+          posBtn.classList.remove('bg-surface-container-low', 'text-on-surface');
+          if (ind) ind.classList.replace('bg-outline-variant', 'bg-secondary');
+        } else {
+          posBtn.classList.remove('bg-primary-container', 'text-on-primary');
+          posBtn.classList.add('bg-surface-container-low', 'text-on-surface');
+          if (ind) ind.classList.replace('bg-secondary', 'bg-outline-variant');
+        }
+        applyFilters();
+      });
+    }
+  })();
+</script></main><footer class="fixed bottom-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="w-full flex items-center justify-between"><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="portfolio" href="#">Portfolio</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="watchlist" href="#">Watchlist</a></nav></div><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="research" href="#">Research</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="backtests" href="#">Backtests</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="settings" href="#">Settings</a></nav></div></div></footer></body></html>

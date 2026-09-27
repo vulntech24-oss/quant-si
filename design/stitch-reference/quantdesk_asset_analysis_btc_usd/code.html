@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#d9dadb","inverse-on-surface":"#f0f1f2","on-secondary-fixed":"#002114","primary-container":"#131b2e","surface-tint":"#565e74","surface-container-high":"#e7e8e9","primary":"#000000","error-container":"#ffdad6","secondary-fixed-dim":"#68dba9","on-surface":"#191c1d","background":"#f8f9fa","surface-variant":"#e1e3e4","primary-fixed-dim":"#bec6e0","error":"#ba1a1a","tertiary-container":"#410002","on-secondary":"#ffffff","on-tertiary-fixed":"#410002","on-primary":"#ffffff","surface-container-low":"#f3f4f5","tertiary-fixed":"#ffdad6","tertiary-fixed-dim":"#ffb4ab","inverse-primary":"#bec6e0","on-tertiary-container":"#f63a35","on-primary-fixed-variant":"#3f465c","on-background":"#191c1d","outline-variant":"#c6c6cd","on-error-container":"#93000a","secondary-container":"#82f5c1","surface-container":"#edeeef","surface":"#f8f9fa","secondary":"#006c4a","inverse-surface":"#2e3132","surface-bright":"#f8f9fa","on-primary-container":"#7c839b","surface-container-lowest":"#ffffff","on-surface-variant":"#45464d","on-secondary-fixed-variant":"#005137","outline":"#76777d","secondary-fixed":"#85f8c4","surface-container-highest":"#e1e3e4","on-tertiary-fixed-variant":"#93000b","on-error":"#ffffff","on-secondary-container":"#00714e","on-tertiary":"#ffffff","primary-fixed":"#dae2fd","on-primary-fixed":"#131b2e","tertiary":"#000000"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-md":"1.5rem","gutter":"1rem","gutter-lg":"1.5rem","space-md":"0.75rem","margin-lg":"2rem","space-lg":"1rem","space-sm":"0.5rem","space-2xl":"2rem","space-xs":"0.25rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"label-sm":["Geist"],"mono-data-md":["JetBrains Mono"],"body-md":["Geist"],"display-lg-mobile":["Geist"],"label-md":["Geist"],"body-sm":["Geist"],"display-lg":["Geist"],"headline-md":["Geist"],"mono-data-lg":["JetBrains Mono"],"headline-sm":["Geist"],"body-lg":["Geist"],"headline-lg":["Geist"],"mono-data-sm":["JetBrains Mono"]},"fontSize":{"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"500"}],"mono-data-md":["13px",{"lineHeight":"18px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"display-lg-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"display-lg":["36px",{"lineHeight":"44px","letterSpacing":"-0.03em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"500"}],"mono-data-lg":["18px",{"lineHeight":"24px","letterSpacing":"-0.02em","fontWeight":"500"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"500"}],"body-lg":["15px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"mono-data-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet"/></head><body class="bg-background font-body-md text-on-surface min-h-screen relative [background-image:radial-gradient(#cbd5e1_0.75px,transparent_0.75px)] [background-size:16px_16px] selection:bg-primary selection:text-on-primary"><header class="fixed top-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="h-14 w-full flex items-center justify-between"><div class="pointer-events-auto flex items-center gap-space-md px-space-md py-space-xs bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1XwKGpz-dr2oLvzPrio2-tu6F6CyOlnDDp_wHBTznifkquMz0bLXqtz6e7i1Ao-__Njv2C5nhQMPh1YdKDxslOrUrPb1q_Uk4h-yY_m75YVMEuinmdZ-ZlcuYbv1CrooMsl0xsUPdQ20V6rGdmbHv3nSTunmIKfllBHQsZJ01K_2WZCiUUfg7f4gfTwtpJiZFrVKZYxGIQVVUOBMn3ElziyVEQyaoQe52PEYtZ0VlaCI3WYj7SaUHpFsFE"/><div class="flex items-center gap-space-sm pr-space-xs"><span class="font-headline-sm text-headline-sm tracking-tight text-on-surface">QuantDesk</span><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-secondary-container/30 border border-secondary-container text-on-secondary-container font-mono-data-sm text-mono-data-sm"><span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span><span>Intelligence Active</span></div></div></div><div class="pointer-events-auto flex items-center gap-space-sm"><div class="hidden md:flex items-center gap-space-xs px-space-md h-9 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl text-on-surface-variant font-mono-data-sm text-mono-data-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="text-on-surface-variant">Search assets, signals...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm">⌘K</kbd></div><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="home" href="#">Home</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="discover" href="#">Discover</a><a aria-current="page" class="px-space-md py-1.5 transition-colors bg-primary-container text-on-primary font-bold rounded-lg" data-path="opportunities" href="#">Opportunities</a></nav></div></div></header><main class="w-full pt-14 pb-24 bg-transparent"><div class="flex flex-col w-full">
+<div class="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+<!-- Top Telemetry & Micro-Navigation -->
+<div class="flex flex-wrap items-center justify-between gap-4 bg-surface-container-lowest p-4 rounded-xl shadow-sm">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-md text-mono-data-md font-bold text-on-surface">
+          ₿
+        </div>
+<div>
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface font-semibold tracking-tight">BTC / USD</span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">Bitcoin Core</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-mono-data-sm text-mono-data-sm">Tier-1 Apex</span>
+</div>
+<p class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Monitored via Quantitative Multi-Factor Synthesis Engine v4.2</p>
+</div>
+</div>
+<div class="flex items-baseline gap-4 sm:gap-6">
+<div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant uppercase tracking-wider">Spot Execution</div>
+<div class="font-display-lg text-display-lg font-semibold text-on-surface tracking-tight" id="live-spot-price">$67,420.00</div>
+</div>
+<div class="flex flex-col items-end">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">24h Net Change</div>
+<div class="inline-flex items-center gap-1 font-mono-data-md text-mono-data-md font-semibold text-secondary">
+<span class="material-symbols-outlined text-[14px]">arrow_upward</span>
+            +$1,834.00 (+2.80%)
+          </div>
+</div>
+</div>
+</div>
+<!-- The QuantDesk View (Authority Hero Card) -->
+<div class="bg-surface-container-lowest rounded-xl p-6 sm:p-8 shadow-sm relative overflow-hidden">
+<div class="absolute top-0 right-0 w-96 h-96 bg-secondary-container/10 rounded-full blur-3xl pointer-events-none -mr-20 -mt-20"></div>
+<div class="relative z-10 flex flex-col lg:flex-row gap-8 items-start justify-between">
+<!-- Left: Core Thesis & Decision Stance -->
+<div class="space-y-5 max-w-2xl">
+<div class="flex items-center gap-3">
+<div class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-secondary-container text-on-secondary-container font-mono-data-sm text-mono-data-sm font-semibold tracking-wide uppercase">
+<span class="w-2 h-2 rounded-full bg-secondary animate-ping"></span>
+              High-Conviction Model
+            </div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Model Run #9420-α · Updated 4m ago</span>
+</div>
+<div class="space-y-2">
+<div class="flex items-center gap-3">
+<span class="px-3.5 py-1 rounded bg-secondary-container text-on-secondary-container font-mono-data-lg text-mono-data-lg font-bold">BUY</span>
+<h1 class="font-headline-lg text-headline-lg font-semibold text-on-surface tracking-tight">Systemic Liquidity Inflow & Asymmetric Convexity</h1>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant">
+              Systematic factor convergence signals early expansion cycle. Current local compression exhibits statistical resilience with strong directional tailwind.
+            </p>
+</div>
+<!-- Crisp Rationale -->
+<div class="space-y-2.5 pt-2">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface font-medium uppercase tracking-wider">Primary Signals ("Why this asset right now")</div>
+<ul class="space-y-2 font-body-sm text-body-sm text-on-surface">
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[16px] text-secondary mt-0.5">check_circle</span>
+<span><strong class="font-medium">Multi-Timeframe Momentum:</strong> Persistent spot CVD volume divergence validating institutional bid depth across order books.</span>
+</li>
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[16px] text-secondary mt-0.5">check_circle</span>
+<span><strong class="font-medium">Statistical Factor Reversion:</strong> 12 of 14 cross-sectional momentum and mean-reversion factors register positive Z-score shift.</span>
+</li>
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[16px] text-secondary mt-0.5">check_circle</span>
+<span><strong class="font-medium">On-Chain Supply Dry-Up:</strong> Hash Ribbon operational recovery combined with multi-quarter low exchange balance reserves.</span>
+</li>
+<li class="flex items-start gap-2.5">
+<span class="material-symbols-outlined text-[16px] text-secondary mt-0.5">check_circle</span>
+<span><strong class="font-medium">Asymmetric Payoff Profile:</strong> Calibrated risk/reward ratio stands at 3.8:1 with robust structural floor at $62,100.</span>
+</li>
+</ul>
+</div>
+<!-- CTAs -->
+<div class="flex flex-wrap items-center gap-3 pt-3">
+<button class="px-5 h-9 rounded-lg bg-primary text-on-primary font-label-md text-label-md font-semibold hover:bg-on-surface-variant transition-colors flex items-center gap-2 shadow-sm">
+<span class="material-symbols-outlined text-[16px]">add_task</span>
+              Add to Portfolio Allocator
+            </button>
+<a class="px-4 h-9 rounded-lg bg-surface-container-high text-on-surface font-label-md text-label-md hover:bg-surface-dim transition-colors flex items-center gap-1.5" href="#full-analysis">
+<span>View Factor Decomposition</span>
+<span class="material-symbols-outlined text-[16px]">arrow_downward</span>
+</a>
+</div>
+</div>
+<!-- Right: Quant Score Matrix Cards -->
+<div class="w-full lg:w-80 grid grid-cols-2 gap-3 shrink-0">
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Model Confidence</span>
+<div class="mt-2 flex items-baseline gap-1">
+<span class="font-headline-lg text-headline-lg font-bold text-on-surface">82%</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary">High</span>
+</div>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full mt-2 overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 82%"></div>
+</div>
+</div>
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Expected Target</span>
+<div class="mt-2">
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">+12.4%</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">$75,780 mean</span>
+</div>
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant mt-2">σ = ±4.2%</div>
+</div>
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Risk Class</span>
+<div class="mt-2 flex items-center gap-1.5">
+<span class="font-headline-md text-headline-md font-semibold text-on-surface">Medium</span>
+<span class="w-2.5 h-2.5 rounded-full bg-secondary-fixed-dim"></span>
+</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant mt-2">Cycle VaR: 8.6%</span>
+</div>
+<div class="p-3.5 rounded-xl bg-surface-container-low flex flex-col justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Optimal Horizon</span>
+<div class="mt-2 font-headline-md text-headline-md font-semibold text-on-surface">1–3 Mos</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant mt-2">Macro-rebalancing</span>
+</div>
+<!-- Mini Structural Anchor Card -->
+<div class="col-span-2 p-3.5 rounded-xl bg-surface-container-high/60 flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant">verified_user</span>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface">Asymmetric Stop Level</span>
+</div>
+<span class="font-mono-data-md text-mono-data-md font-semibold text-on-surface">$62,100 (-7.8%)</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Interactive Price & Projection Visualizer -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-4">
+<!-- Chart Controls Header -->
+<div class="flex flex-wrap items-center justify-between gap-3">
+<div class="flex items-center gap-3">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">Price Action & Model Cone Forecast</span>
+<div class="flex items-center gap-1.5 px-2 py-0.5 rounded bg-surface-container font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+            Simulation: 10,000 runs
+          </div>
+</div>
+<!-- Timeframe Selector -->
+<div class="flex items-center gap-1 bg-surface-container-low p-1 rounded-lg" id="timeframe-group">
+<button class="tf-btn px-2.5 py-1 text-label-sm font-label-sm rounded text-on-surface-variant hover:text-on-surface" data-tf="1D">1D</button>
+<button class="tf-btn px-2.5 py-1 text-label-sm font-label-sm rounded text-on-surface-variant hover:text-on-surface" data-tf="1W">1W</button>
+<button class="tf-btn px-2.5 py-1 text-label-sm font-label-sm rounded bg-primary-container text-on-primary font-bold" data-tf="1M">1M</button>
+<button class="tf-btn px-2.5 py-1 text-label-sm font-label-sm rounded text-on-surface-variant hover:text-on-surface" data-tf="3M">3M</button>
+<button class="tf-btn px-2.5 py-1 text-label-sm font-label-sm rounded text-on-surface-variant hover:text-on-surface" data-tf="1Y">1Y</button>
+</div>
+</div>
+<!-- Minimalist Precision Chart SVG Canvas -->
+<div class="relative w-full h-80 rounded-lg bg-surface-container-low/40 p-2 overflow-hidden flex flex-col justify-end">
+<!-- Legend Overlay -->
+<div class="absolute top-4 left-4 z-10 flex flex-wrap items-center gap-4 text-mono-data-sm font-mono-data-sm bg-surface-container-lowest/90 px-3 py-1.5 rounded-lg shadow-sm">
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-0.5 bg-primary rounded"></span>
+<span class="text-on-surface font-medium">Historical Spot</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-0.5 bg-secondary border-dashed rounded"></span>
+<span class="text-on-surface font-medium">Expected Drift (+12.4%)</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-3 h-3 bg-secondary-container/40 rounded"></span>
+<span class="text-on-surface-variant">P10 - P90 Corridor</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="w-2.5 h-2.5 bg-surface-dim rounded"></span>
+<span class="text-on-surface-variant">Volume Profile</span>
+</div>
+</div>
+<!-- SVG Technical & Projection Render -->
+<svg class="w-full h-full preserve-3d" preserveaspectratio="none" viewbox="0 0 1000 320">
+<defs>
+<lineargradient id="chartConeGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+<stop offset="0%" stop-color="#82f5c1" stop-opacity="0.15"></stop>
+<stop offset="100%" stop-color="#006c4a" stop-opacity="0.25"></stop>
+</lineargradient>
+<lineargradient id="spotAreaGradient" x1="0%" x2="0%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#131b2e" stop-opacity="0.08"></stop>
+<stop offset="100%" stop-color="#131b2e" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<!-- Horizontal Grid Lines -->
+<line stroke="#e1e3e4" stroke-dasharray="4 4" stroke-width="0.8" x1="0" x2="1000" y1="40" y2="40"></line>
+<line stroke="#e1e3e4" stroke-dasharray="4 4" stroke-width="0.8" x1="0" x2="1000" y1="120" y2="120"></line>
+<line stroke="#e1e3e4" stroke-dasharray="4 4" stroke-width="0.8" x1="0" x2="1000" y1="200" y2="200"></line>
+<line stroke="#e1e3e4" stroke-dasharray="4 4" stroke-width="0.8" x1="0" x2="1000" y1="280" y2="280"></line>
+<!-- Volume Profile (Subtle right-hand horizontal density bars) -->
+<g opacity="0.45">
+<rect fill="#d9dadb" height="12" rx="1" width="80" x="910" y="50"></rect>
+<rect fill="#d9dadb" height="12" rx="1" width="120" x="870" y="80"></rect>
+<rect fill="#68dba9" height="12" rx="1" width="160" x="830" y="110"></rect>
+<rect fill="#d9dadb" height="12" rx="1" width="140" x="850" y="140"></rect>
+<rect fill="#d9dadb" height="12" rx="1" width="100" x="890" y="170"></rect>
+<rect fill="#bec6e0" height="12" rx="1" width="150" x="840" y="200"></rect>
+<rect fill="#d9dadb" height="12" rx="1" width="110" x="880" y="230"></rect>
+<rect fill="#d9dadb" height="12" rx="1" width="60" x="930" y="260"></rect>
+</g>
+<!-- Volume Bars at Bottom -->
+<g opacity="0.3">
+<rect fill="#76777d" height="16" width="8" x="40" y="290"></rect>
+<rect fill="#76777d" height="26" width="8" x="80" y="280"></rect>
+<rect fill="#76777d" height="31" width="8" x="120" y="275"></rect>
+<rect fill="#76777d" height="41" width="8" x="160" y="265"></rect>
+<rect fill="#76777d" height="21" width="8" x="200" y="285"></rect>
+<rect fill="#76777d" height="46" width="8" x="240" y="260"></rect>
+<rect fill="#76777d" height="36" width="8" x="280" y="270"></rect>
+<rect fill="#76777d" height="51" width="8" x="320" y="255"></rect>
+<rect fill="#006c4a" height="61" width="8" x="360" y="245"></rect>
+<rect fill="#006c4a" height="71" width="8" x="400" y="235"></rect>
+<rect fill="#76777d" height="56" width="8" x="440" y="250"></rect>
+<rect fill="#006c4a" height="86" width="8" x="480" y="220"></rect>
+<rect fill="#006c4a" height="91" width="8" x="520" y="215"></rect>
+<rect fill="#006c4a" height="96" width="8" x="560" y="210"></rect>
+<rect fill="#006c4a" height="106" width="8" x="600" y="200"></rect>
+</g>
+<!-- Historical Spot Price Line Area -->
+<path d="M 40 240 Q 90 230 140 250 T 240 220 T 340 190 T 440 210 T 540 160 L 620 150 L 620 310 L 40 310 Z" fill="url(#spotAreaGradient)"></path>
+<!-- Historical Price Line -->
+<path d="M 40 240 Q 90 230 140 250 T 240 220 T 340 190 T 440 210 T 540 160 L 620 150" fill="none" stroke="#000000" stroke-linecap="round" stroke-width="2.5"></path>
+<!-- Current Spot Marker Node -->
+<circle cx="620" cy="150" fill="#000000" r="4.5"></circle>
+<circle cx="620" cy="150" fill="none" opacity="0.4" r="8" stroke="#000000" stroke-width="1.5"></circle>
+<!-- Vertical Split: Now Marker -->
+<line stroke="#c6c6cd" stroke-dasharray="2 3" stroke-width="1" x1="620" x2="620" y1="20" y2="300"></line>
+<text class="font-mono-data-sm text-[10px]" fill="#76777d" x="625" y="32">T_NOW ($67,420)</text>
+<!-- Model Projection Cone (Fan Area) -->
+<path d="M 620 150 L 960 70 L 960 170 Z" fill="url(#chartConeGradient)"></path>
+<!-- Upper Bound Path (P90) -->
+<path d="M 620 150 Q 780 100 960 70" fill="none" stroke="#68dba9" stroke-dasharray="3 3" stroke-width="1.5"></path>
+<!-- Expected Drift (Mean P50 Path) -->
+<path d="M 620 150 Q 780 120 960 115" fill="none" stroke="#006c4a" stroke-dasharray="4 2" stroke-width="2"></path>
+<!-- Lower Bound Path (P10) -->
+<path d="M 620 150 Q 780 155 960 170" fill="none" stroke="#85f8c4" stroke-dasharray="3 3" stroke-width="1.5"></path>
+<!-- Terminal Projected Target Marker -->
+<circle cx="960" cy="115" fill="#006c4a" r="4"></circle>
+<text class="font-mono-data-sm text-[10px] font-bold" fill="#006c4a" x="940" y="60">P90: $81,200</text>
+<text class="font-mono-data-sm text-[10px] font-bold" fill="#006c4a" x="965" y="118">E[R]: $75,780</text>
+<text class="font-mono-data-sm text-[10px]" fill="#76777d" x="940" y="185">P10: $64,800</text>
+</svg>
+<!-- Dynamic Axis Labels -->
+<div class="flex items-center justify-between text-mono-data-sm font-mono-data-sm text-on-surface-variant pt-2 border-t-0">
+<span>-30 Days</span>
+<span>-15 Days</span>
+<span class="text-on-surface font-semibold">Today (Oct 24)</span>
+<span>+15 Days (Projected)</span>
+<span>+30 Days Horizon</span>
+</div>
+</div>
+<!-- Quick Metrics Strip Under Chart -->
+<div class="grid grid-cols-2 md:grid-cols-4 gap-3 pt-1">
+<div class="p-2.5 rounded bg-surface-container-low flex flex-col">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Realized Vol (30D)</span>
+<span class="font-mono-data-md text-mono-data-md font-semibold text-on-surface">38.4% <span class="text-secondary font-normal text-mono-data-sm">(-4.1%)</span></span>
+</div>
+<div class="p-2.5 rounded bg-surface-container-low flex flex-col">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Implied Vol (IV DVOL)</span>
+<span class="font-mono-data-md text-mono-data-md font-semibold text-on-surface">47.2% <span class="text-on-surface-variant font-normal text-mono-data-sm">Neutral</span></span>
+</div>
+<div class="p-2.5 rounded bg-surface-container-low flex flex-col">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Spot Volume (24h)</span>
+<span class="font-mono-data-md text-mono-data-md font-semibold text-on-surface">$28.42B <span class="text-secondary font-normal text-mono-data-sm">+18.5%</span></span>
+</div>
+<div class="p-2.5 rounded bg-surface-container-low flex flex-col">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Perp Funding Rate</span>
+<span class="font-mono-data-md text-mono-data-md font-semibold text-on-surface">+0.0084% / 8h</span>
+</div>
+</div>
+</div>
+<!-- Full Analysis with Progressive Disclosure Tabs -->
+<div class="bg-surface-container-lowest rounded-xl p-6 shadow-sm space-y-6" id="full-analysis">
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+<div>
+<h2 class="font-headline-md text-headline-md font-semibold text-on-surface tracking-tight">Institutional Factor Decomposition</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Examine the foundational pillars supporting this quantitative thesis.</p>
+</div>
+<!-- Tab Selectors -->
+<div class="flex flex-wrap items-center gap-1.5 p-1 bg-surface-container-low rounded-lg" id="analysis-tabs">
+<button class="tab-button px-3 py-1.5 rounded font-label-md text-label-md bg-primary text-on-primary font-semibold transition-colors" data-tab="tab-quant">Quantitative</button>
+<button class="tab-button px-3 py-1.5 rounded font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-tab="tab-tech">Technical</button>
+<button class="tab-button px-3 py-1.5 rounded font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-tab="tab-fund">Fundamental</button>
+<button class="tab-button px-3 py-1.5 rounded font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-tab="tab-model">Monte Carlo Model</button>
+<button class="tab-button px-3 py-1.5 rounded font-label-md text-label-md text-on-surface-variant hover:text-on-surface transition-colors" data-tab="tab-risk">Risk & Drawdown</button>
+</div>
+</div>
+<!-- Tab Content Area -->
+<!-- TAB 1: QUANTITATIVE (Active by Default) -->
+<div class="tab-panel space-y-6 block" id="tab-quant">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="p-4 rounded-xl bg-surface-container-low space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Momentum Factor Z-Score</span>
+<span class="font-mono-data-sm text-mono-data-sm px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container font-semibold">+2.14 σ</span>
+</div>
+<div class="font-display-lg text-display-lg font-bold text-on-surface">+2.14</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Top decile momentum across 90-day time series; low mean-reversion drag.</p>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 88%"></div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Rolling S&P 500 Correlation (90D)</span>
+<span class="font-mono-data-sm text-mono-data-sm px-2 py-0.5 rounded bg-surface-container-highest text-on-surface font-semibold">Decoupling</span>
+</div>
+<div class="font-display-lg text-display-lg font-bold text-on-surface">0.28</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Macro decoupling active. Provides substantial idiosyncratic portfolio diversification value.</p>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-on-surface h-full rounded-full" style="width: 28%"></div>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-3">
+<div class="flex items-center justify-between">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Return Skew & Kurtosis</span>
+<span class="font-mono-data-sm text-mono-data-sm px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container font-semibold">Positive Convex</span>
+</div>
+<div class="font-display-lg text-display-lg font-bold text-on-surface">+0.42 <span class="font-headline-sm text-headline-sm text-on-surface-variant font-normal">/ 3.10</span></div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Right-tail asymmetry dominant. Fat-tail upside potential outstrips flash liquidation vulnerability.</p>
+<div class="w-full bg-surface-container-high h-1.5 rounded-full overflow-hidden">
+<div class="bg-secondary h-full rounded-full" style="width: 72%"></div>
+</div>
+</div>
+</div>
+<!-- Detailed Multi-Factor Scoreboard Matrix -->
+<div class="overflow-x-auto rounded-xl bg-surface-container-low p-4">
+<div class="font-headline-sm text-headline-sm font-semibold text-on-surface mb-3">14-Factor Reversion & Carry Matrix</div>
+<table class="w-full text-left font-mono-data-sm text-mono-data-sm">
+<thead>
+<tr class="text-on-surface-variant border-b-0 border-surface-dim">
+<th class="py-2 px-3">Factor Family</th>
+<th class="py-2 px-3">Metric Indicator</th>
+<th class="py-2 px-3 text-right">Raw Value</th>
+<th class="py-2 px-3 text-right">Z-Score</th>
+<th class="py-2 px-3 text-right">Signal Contribution</th>
+<th class="py-2 px-3 text-center">Status</th>
+</tr>
+</thead>
+<tbody class="divide-y-0 text-on-surface">
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-2.5 px-3 font-medium">Cross-Sectional Momentum</td>
+<td class="py-2.5 px-3">12W Relative Return vs Alt-Basket</td>
+<td class="py-2.5 px-3 text-right">+22.4%</td>
+<td class="py-2.5 px-3 text-right font-bold text-secondary">+2.18 σ</td>
+<td class="py-2.5 px-3 text-right">+24.2 bps</td>
+<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container">Overweight</span></td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-2.5 px-3 font-medium">Volatility Carry</td>
+<td class="py-2.5 px-3">IV vs Realized Vol Spread</td>
+<td class="py-2.5 px-3 text-right">+8.8 pts</td>
+<td class="py-2.5 px-3 text-right text-secondary">+1.45 σ</td>
+<td class="py-2.5 px-3 text-right">+18.0 bps</td>
+<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container">Bullish Harvester</span></td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-2.5 px-3 font-medium">Order Book Imbalance</td>
+<td class="py-2.5 px-3">Aggregate Top-5 Depth Skew</td>
+<td class="py-2.5 px-3 text-right">1.62 B/A</td>
+<td class="py-2.5 px-3 text-right text-secondary">+1.89 σ</td>
+<td class="py-2.5 px-3 text-right">+16.5 bps</td>
+<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container">Bid Wall Active</span></td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-2.5 px-3 font-medium">Liquidity Stress Factor</td>
+<td class="py-2.5 px-3">Cross-Exchange Slippage on $5M Bid</td>
+<td class="py-2.5 px-3 text-right">0.038%</td>
+<td class="py-2.5 px-3 text-right text-on-surface-variant">+0.32 σ</td>
+<td class="py-2.5 px-3 text-right">+4.1 bps</td>
+<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded bg-surface-container-high text-on-surface">Optimal</span></td>
+</tr>
+<tr class="hover:bg-surface-container transition-colors">
+<td class="py-2.5 px-3 font-medium">Tail-Risk Mean Reversion</td>
+<td class="py-2.5 px-3">20D Hurst Exponent (H)</td>
+<td class="py-2.5 px-3 text-right">0.68 (Persistent)</td>
+<td class="py-2.5 px-3 text-right text-secondary">+1.12 σ</td>
+<td class="py-2.5 px-3 text-right">+11.8 bps</td>
+<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded bg-secondary-container text-on-secondary-container">Trending</span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- TAB 2: TECHNICAL (Hidden by Default) -->
+<div class="tab-panel space-y-6 hidden" id="tab-tech">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Moving Average Stack</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">50 DMA > 200 DMA</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Golden Cross affirmed 42 days ago. Spot price is +5.4% above 50-DMA ($63,940).</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Relative Strength Index (14D)</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">58.4 <span class="text-body-sm text-secondary font-medium">Neutral-Bullish</span></div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Comfortable clearance before overbought barrier (>70). Room for sustained impulse.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">MACD Daily Signal</span>
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">Bullish Crossover</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Histogram expansion positive (+128.4), signal line confirmation unbroken for 6 sessions.</p>
+</div>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface font-semibold">Key Structural Support & Resistance Levels</div>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Major Resistance 2</div>
+<div class="font-mono-data-md text-mono-data-md font-bold text-on-surface">$73,800 (ATH Range)</div>
+</div>
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Immediate Resistance 1</div>
+<div class="font-mono-data-md text-mono-data-md font-bold text-on-surface">$69,500 (Local Liquidity)</div>
+</div>
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Model Pivot Floor</div>
+<div class="font-mono-data-md text-mono-data-md font-bold text-secondary">$65,200 (POC Value)</div>
+</div>
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<div class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Invalidation Threshold</div>
+<div class="font-mono-data-md text-mono-data-md font-bold text-error">$62,100 (HTF Support)</div>
+</div>
+</div>
+</div>
+</div>
+<!-- TAB 3: FUNDAMENTAL (Hidden by Default) -->
+<div class="tab-panel space-y-6 hidden" id="tab-fund">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Network Realized Value (NVT)</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">32.8</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Fair-to-discounted valuation relative to on-chain transfer velocity.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Active Entity Daily Volume</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">942,180</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">+6.2% week-on-week, broad institutional custodian clustering.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Miner Outflow Index</span>
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">Low (0.64)</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Post-halving operational capitulation concluded; treasury sales subdued.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Net ETF Daily Inflow</span>
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">+$318.5M</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Continuous positive sovereign and wealth management accumulation.</p>
+</div>
+</div>
+</div>
+<!-- TAB 4: MONTE CARLO MODEL (Hidden by Default) -->
+<div class="tab-panel space-y-6 hidden" id="tab-model">
+<div class="p-5 rounded-xl bg-surface-container-low space-y-4">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+<span class="font-headline-sm text-headline-sm font-semibold text-on-surface">Stochastic Simulation (10,000 Iterations · Geometric Brownian with Jump Diffusion)</span>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Horizon: 60 Trading Days</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Simulated Positive Outcome Probability</span>
+<div class="font-display-lg text-display-lg font-bold text-secondary">82.1%</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">8,210 paths concluded above $67,420</span>
+</div>
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Median Target Value (P50)</span>
+<div class="font-display-lg text-display-lg font-bold text-on-surface">$75,780</div>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary">+12.4% projected expectation</span>
+</div>
+<div class="p-3 bg-surface-container-lowest rounded-lg">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Tail VaR (95% Confidence)</span>
+<div class="font-display-lg text-display-lg font-bold text-error">$61,840</div>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">-8.28% downside envelope</span>
+</div>
+</div>
+</div>
+</div>
+<!-- TAB 5: RISK & DRAWDOWN (Hidden by Default) -->
+<div class="tab-panel space-y-6 hidden" id="tab-risk">
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Max Cycle Drawdown</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">-18.2%</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Extremely compressed drawdown profile compared to historical 35% median.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Liquidity Slippage Hazard</span>
+<div class="font-headline-lg text-headline-lg font-bold text-secondary">Minimal</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Combined 2% order book liquidity exceeds $480M across top institutional venues.</p>
+</div>
+<div class="p-4 rounded-xl bg-surface-container-low space-y-2">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Macro Sensitivity (DXY Beta)</span>
+<div class="font-headline-lg text-headline-lg font-bold text-on-surface">-0.44</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Standard inverse correlation to US Dollar strengthening.</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Supplementary Macro Intelligence Callout -->
+<div class="p-5 rounded-xl bg-surface-container flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-surface-container-highest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px] text-on-surface">shield</span>
+</div>
+<div>
+<div class="font-headline-sm text-headline-sm font-semibold text-on-surface">QuantDesk Risk Management Directive</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Recommended position size: 3.5% - 5.0% of standard Multi-Asset Quantitative Fund benchmark.</p>
+</div>
+</div>
+<div class="flex items-center gap-2 shrink-0">
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Protocol Integrity: 99.98%</span>
+<button class="px-3 py-1.5 rounded-lg bg-surface-container-lowest font-label-md text-label-md text-on-surface font-medium hover:bg-surface-container-high transition-colors">
+          Export Model Telemetry (.JSON)
+        </button>
+</div>
+</div>
+</div>
+</div>
+<script>
+  // Simple Tab Toggle System
+  document.querySelectorAll('.tab-button').forEach(button => {
+    button.addEventListener('click', () => {
+      // Reset active tabs
+      document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('bg-primary', 'text-on-primary', 'font-semibold');
+        btn.classList.add('text-on-surface-variant');
+      });
+      button.classList.add('bg-primary', 'text-on-primary', 'font-semibold');
+      button.classList.remove('text-on-surface-variant');
+
+      // Hide all panels
+      document.querySelectorAll('.tab-panel').forEach(panel => {
+        panel.classList.add('hidden');
+        panel.classList.remove('block');
+      });
+
+      // Show target panel
+      const targetId = button.getAttribute('data-tab');
+      const targetPanel = document.getElementById(targetId);
+      if (targetPanel) {
+        targetPanel.classList.remove('hidden');
+        targetPanel.classList.add('block');
+      }
+    });
+  });
+
+  // Timeframe Active Toggle Micro-interaction
+  document.querySelectorAll('.tf-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tf-btn').forEach(b => {
+        b.classList.remove('bg-primary-container', 'text-on-primary', 'font-bold');
+        b.classList.add('text-on-surface-variant');
+      });
+      btn.classList.add('bg-primary-container', 'text-on-primary', 'font-bold');
+      btn.classList.remove('text-on-surface-variant');
+    });
+  });
+</script></main><footer class="fixed bottom-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="w-full flex items-center justify-between"><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="portfolio" href="#">Portfolio</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="watchlist" href="#">Watchlist</a></nav></div><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="research" href="#">Research</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="backtests" href="#">Backtests</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="settings" href="#">Settings</a></nav></div></div></footer></body></html>

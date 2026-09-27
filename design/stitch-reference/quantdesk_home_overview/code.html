@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0" name="viewport"/><meta content="web_standard" name="shell-type"/><style>@layer base{html,body{margin:0;padding:0;}body{overscroll-behavior:none;}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config={"darkMode":"class","theme":{"extend":{"colors":{"surface-dim":"#d9dadb","inverse-on-surface":"#f0f1f2","on-secondary-fixed":"#002114","primary-container":"#131b2e","surface-tint":"#565e74","surface-container-high":"#e7e8e9","primary":"#000000","error-container":"#ffdad6","secondary-fixed-dim":"#68dba9","on-surface":"#191c1d","background":"#f8f9fa","surface-variant":"#e1e3e4","primary-fixed-dim":"#bec6e0","error":"#ba1a1a","tertiary-container":"#410002","on-secondary":"#ffffff","on-tertiary-fixed":"#410002","on-primary":"#ffffff","surface-container-low":"#f3f4f5","tertiary-fixed":"#ffdad6","tertiary-fixed-dim":"#ffb4ab","inverse-primary":"#bec6e0","on-tertiary-container":"#f63a35","on-primary-fixed-variant":"#3f465c","on-background":"#191c1d","outline-variant":"#c6c6cd","on-error-container":"#93000a","secondary-container":"#82f5c1","surface-container":"#edeeef","surface":"#f8f9fa","secondary":"#006c4a","inverse-surface":"#2e3132","surface-bright":"#f8f9fa","on-primary-container":"#7c839b","surface-container-lowest":"#ffffff","on-surface-variant":"#45464d","on-secondary-fixed-variant":"#005137","outline":"#76777d","secondary-fixed":"#85f8c4","surface-container-highest":"#e1e3e4","on-tertiary-fixed-variant":"#93000b","on-error":"#ffffff","on-secondary-container":"#00714e","on-tertiary":"#ffffff","primary-fixed":"#dae2fd","on-primary-fixed":"#131b2e","tertiary":"#000000"},"borderRadius":{"DEFAULT":"0.125rem","lg":"0.25rem","xl":"0.5rem","full":"0.75rem"},"spacing":{"margin-md":"1.5rem","gutter":"1rem","gutter-lg":"1.5rem","space-md":"0.75rem","margin-lg":"2rem","space-lg":"1rem","space-sm":"0.5rem","space-2xl":"2rem","space-xs":"0.25rem","margin":"1rem","space-xl":"1.5rem"},"fontFamily":{"label-sm":["Geist"],"mono-data-md":["JetBrains Mono"],"body-md":["Geist"],"display-lg-mobile":["Geist"],"label-md":["Geist"],"body-sm":["Geist"],"display-lg":["Geist"],"headline-md":["Geist"],"mono-data-lg":["JetBrains Mono"],"headline-sm":["Geist"],"body-lg":["Geist"],"headline-lg":["Geist"],"mono-data-sm":["JetBrains Mono"]},"fontSize":{"label-sm":["11px",{"lineHeight":"14px","letterSpacing":"0.04em","fontWeight":"500"}],"mono-data-md":["13px",{"lineHeight":"18px","letterSpacing":"-0.01em","fontWeight":"400"}],"body-md":["14px",{"lineHeight":"22px","letterSpacing":"0em","fontWeight":"400"}],"display-lg-mobile":["28px",{"lineHeight":"36px","letterSpacing":"-0.02em","fontWeight":"600"}],"label-md":["12px",{"lineHeight":"16px","letterSpacing":"0.02em","fontWeight":"500"}],"body-sm":["13px",{"lineHeight":"18px","letterSpacing":"0em","fontWeight":"400"}],"display-lg":["36px",{"lineHeight":"44px","letterSpacing":"-0.03em","fontWeight":"600"}],"headline-md":["20px",{"lineHeight":"28px","letterSpacing":"-0.015em","fontWeight":"500"}],"mono-data-lg":["18px",{"lineHeight":"24px","letterSpacing":"-0.02em","fontWeight":"500"}],"headline-sm":["16px",{"lineHeight":"24px","letterSpacing":"-0.01em","fontWeight":"500"}],"body-lg":["15px",{"lineHeight":"24px","letterSpacing":"-0.005em","fontWeight":"400"}],"headline-lg":["24px",{"lineHeight":"32px","letterSpacing":"-0.02em","fontWeight":"600"}],"mono-data-sm":["11px",{"lineHeight":"16px","letterSpacing":"0em","fontWeight":"400"}]}}}}</script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap" rel="stylesheet"/></head><body class="bg-background font-body-md text-on-surface min-h-screen relative [background-image:radial-gradient(#cbd5e1_0.75px,transparent_0.75px)] [background-size:16px_16px] selection:bg-primary selection:text-on-primary"><header class="fixed top-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="h-14 w-full flex items-center justify-between"><div class="pointer-events-auto flex items-center gap-space-md px-space-md py-space-xs bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1XwKGpz-dr2oLvzPrio2-tu6F6CyOlnDDp_wHBTznifkquMz0bLXqtz6e7i1Ao-__Njv2C5nhQMPh1YdKDxslOrUrPb1q_Uk4h-yY_m75YVMEuinmdZ-ZlcuYbv1CrooMsl0xsUPdQ20V6rGdmbHv3nSTunmIKfllBHQsZJ01K_2WZCiUUfg7f4gfTwtpJiZFrVKZYxGIQVVUOBMn3ElziyVEQyaoQe52PEYtZ0VlaCI3WYj7SaUHpFsFE"/><div class="flex items-center gap-space-sm pr-space-xs"><span class="font-headline-sm text-headline-sm tracking-tight text-on-surface">QuantDesk</span><div class="inline-flex items-center gap-space-xs px-space-sm py-0.5 rounded-full bg-secondary-container/30 border border-secondary-container text-on-secondary-container font-mono-data-sm text-mono-data-sm"><span class="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse"></span><span>Intelligence Active</span></div></div></div><div class="pointer-events-auto flex items-center gap-space-sm"><div class="hidden md:flex items-center gap-space-xs px-space-md h-9 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl text-on-surface-variant font-mono-data-sm text-mono-data-sm shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><span class="text-on-surface-variant">Search assets, signals...</span><kbd class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm">⌘K</kbd></div><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a aria-current="page" class="px-space-md py-1.5 transition-colors bg-primary-container text-on-primary font-bold rounded-lg" data-path="home" href="#">Home</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="discover" href="#">Discover</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="opportunities" href="#">Opportunities</a></nav></div></div></header><main class="w-full pt-14 pb-24 bg-transparent"><div class="flex flex-col w-full">
+<div class="max-w-[1440px] mx-auto w-full px-margin-md lg:px-margin-lg py-space-xl space-y-space-xl">
+<!-- Contextual Greeting Header -->
+<section class="flex flex-col md:flex-row md:items-end justify-between gap-space-md pt-space-sm pb-space-xs">
+<div class="space-y-space-xs">
+<div class="inline-flex items-center gap-space-xs text-on-surface-variant font-mono-data-sm text-mono-data-sm uppercase tracking-wider">
+<span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
+<span>Conviction Engine • Cycle 09:40 UTC</span>
+</div>
+<h1 class="font-display-lg text-display-lg text-on-surface tracking-tight">Good morning.</h1>
+<p class="font-headline-sm text-headline-sm text-on-surface-variant font-normal">
+<span class="text-on-surface font-medium">3 high-conviction opportunities</span> detected across your monitored universe.
+        </p>
+</div>
+<div class="flex items-center gap-space-sm self-start md:self-auto">
+<div class="bg-surface-container-lowest px-space-md py-space-xs rounded-xl shadow-sm flex items-center gap-space-sm">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Global Regime</span>
+<span class="font-mono-data-md text-mono-data-md text-secondary font-medium">Risk-On / Growth Accel</span>
+</div>
+</div>
+</section>
+<!-- Market Overview Strip -->
+<section class="w-full bg-surface-container-lowest rounded-xl shadow-sm p-space-sm overflow-x-auto">
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-space-xs min-w-[720px] lg:min-w-0">
+<!-- Stocks -->
+<div class="p-space-sm rounded-lg bg-surface-container-low/60 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Stocks • S&P 500</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface font-medium mt-0.5">5,088.20</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center font-mono-data-sm text-mono-data-sm text-on-surface-variant">
+              +0.18%
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono-data-sm text-mono-data-sm text-[10px]">
+              Neutral
+            </span>
+</div>
+</div>
+<!-- Gold -->
+<div class="p-space-sm rounded-lg bg-surface-container-low/60 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Gold • XAU/USD</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface font-medium mt-0.5">$2,342.60</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center font-mono-data-sm text-mono-data-sm text-secondary">
+<span class="material-symbols-outlined text-[13px] mr-0.5">arrow_upward</span>+1.14%
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm text-[10px]">
+              Bullish Acc.
+            </span>
+</div>
+</div>
+<!-- Silver -->
+<div class="p-space-sm rounded-lg bg-surface-container-low/60 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Silver • XAG/USD</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface font-medium mt-0.5">$28.45</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center font-mono-data-sm text-mono-data-sm text-secondary">
+<span class="material-symbols-outlined text-[13px] mr-0.5">arrow_upward</span>+0.82%
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-secondary-container/40 text-on-secondary-container font-mono-data-sm text-mono-data-sm text-[10px]">
+              Bullish
+            </span>
+</div>
+</div>
+<!-- Crude Oil -->
+<div class="p-space-sm rounded-lg bg-surface-container-low/60 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Crude • WTI</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface font-medium mt-0.5">$82.10</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center font-mono-data-sm text-mono-data-sm text-error">
+<span class="material-symbols-outlined text-[13px] mr-0.5">arrow_downward</span>-0.64%
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant font-mono-data-sm text-mono-data-sm text-[10px]">
+              Neutral
+            </span>
+</div>
+</div>
+<!-- Crypto -->
+<div class="p-space-sm rounded-lg bg-surface-container-low/60 flex items-center justify-between hover:bg-surface-container-low transition-colors">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Crypto • TOTAL MKT</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface font-medium mt-0.5">$2.48T</div>
+</div>
+<div class="flex flex-col items-end gap-1">
+<span class="inline-flex items-center font-mono-data-sm text-mono-data-sm text-secondary font-medium">
+<span class="material-symbols-outlined text-[13px] mr-0.5">arrow_upward</span>+3.40%
+            </span>
+<span class="px-1.5 py-0.5 rounded bg-secondary text-on-secondary font-mono-data-sm text-mono-data-sm text-[10px]">
+              Strong Buy
+            </span>
+</div>
+</div>
+</div>
+</section>
+<!-- Main Grid: Top Opportunities (Visual Centerpiece) & Portfolio Summary -->
+<div class="grid grid-cols-1 lg:grid-cols-12 gap-space-lg items-start">
+<!-- Opportunities Column (8 cols) -->
+<section class="lg:col-span-8 space-y-space-md">
+<div class="flex items-center justify-between px-space-xs">
+<div class="flex items-center gap-space-sm">
+<span class="font-headline-sm text-headline-sm text-on-surface">Top Opportunities</span>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full font-mono-data-sm text-mono-data-sm">3 Available</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Ranked by Quantitative Conviction</span>
+</div>
+<!-- Cards Deck -->
+<div class="space-y-space-md">
+<!-- Card 1: BTC -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-space-md pb-space-md">
+<div class="flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-md text-mono-data-md font-semibold text-on-surface">
+                  ₿
+                </div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">BTC • Bitcoin</h2>
+<span class="px-space-xs py-0.5 rounded bg-secondary text-on-secondary font-mono-data-sm text-mono-data-sm font-semibold">BUY</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Crypto • Layer 1 Benchmark</p>
+</div>
+</div>
+<!-- Metrics Matrix -->
+<div class="flex items-center gap-space-lg sm:text-right">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Confidence</div>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-medium">82%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Exp. Return</div>
+<div class="font-mono-data-lg text-mono-data-lg text-secondary font-medium">+12.4%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Horizon</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface">1–3 mo</div>
+</div>
+</div>
+</div>
+<!-- Signal Reason & Visual Sparkline Metric -->
+<div class="pt-space-md bg-surface-container-low/40 rounded-lg p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
+<div class="space-y-1 max-w-xl">
+<div class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">psychology</span>
+<span>Primary Rationale</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-relaxed">
+                  Breakout confirmed by on-chain accumulation & positive volume divergence.
+                </p>
+</div>
+<!-- Inline Trend / Confidence Ring SVG -->
+<div class="flex items-center gap-space-md shrink-0 w-full md:w-auto justify-between md:justify-end">
+<div class="flex items-center gap-2">
+<svg class="w-16 h-8 text-secondary overflow-visible" fill="none" viewbox="0 0 60 28">
+<path d="M2 24 L14 20 L28 22 L40 10 L58 4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<circle cx="58" cy="4" fill="currentColor" r="2.5"></circle>
+</svg>
+</div>
+<button class="px-space-md py-1.5 rounded-lg bg-primary-container text-on-primary font-label-md text-label-md hover:bg-on-surface transition-colors flex items-center gap-1 shadow-sm">
+<span>View Analysis</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Card 2: GOLD -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-space-md pb-space-md">
+<div class="flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-md text-mono-data-md font-semibold text-on-surface">
+                  Au
+                </div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">GOLD • XAU/USD</h2>
+<span class="px-space-xs py-0.5 rounded bg-secondary text-on-secondary font-mono-data-sm text-mono-data-sm font-semibold">BUY</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Commodities • Macro Hedge</p>
+</div>
+</div>
+<!-- Metrics Matrix -->
+<div class="flex items-center gap-space-lg sm:text-right">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Confidence</div>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-medium">76%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Exp. Return</div>
+<div class="font-mono-data-lg text-mono-data-lg text-secondary font-medium">+7.8%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Horizon</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface">3–6 mo</div>
+</div>
+</div>
+</div>
+<!-- Signal Reason & Action -->
+<div class="pt-space-md bg-surface-container-low/40 rounded-lg p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
+<div class="space-y-1 max-w-xl">
+<div class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">psychology</span>
+<span>Primary Rationale</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-relaxed">
+                  Real yield compression & structural central bank reserve rebalancing.
+                </p>
+</div>
+<!-- Sparkline & Button -->
+<div class="flex items-center gap-space-md shrink-0 w-full md:w-auto justify-between md:justify-end">
+<div class="flex items-center gap-2">
+<svg class="w-16 h-8 text-secondary overflow-visible" fill="none" viewbox="0 0 60 28">
+<path d="M2 22 L16 18 L30 14 L44 15 L58 6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<circle cx="58" cy="6" fill="currentColor" r="2.5"></circle>
+</svg>
+</div>
+<button class="px-space-md py-1.5 rounded-lg bg-surface-container-highest text-on-surface font-label-md text-label-md hover:bg-surface-variant transition-colors flex items-center gap-1">
+<span>View Analysis</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+<!-- Card 3: RELIANCE -->
+<article class="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg hover:shadow-md transition-shadow relative overflow-hidden group">
+<div class="flex flex-col sm:flex-row sm:items-start justify-between gap-space-md pb-space-md">
+<div class="flex items-start gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container flex items-center justify-center font-mono-data-md text-mono-data-md font-semibold text-on-surface">
+                  RE
+                </div>
+<div>
+<div class="flex items-center gap-space-sm">
+<h2 class="font-headline-sm text-headline-sm text-on-surface tracking-tight">RELIANCE • NSE</h2>
+<span class="px-space-xs py-0.5 rounded bg-surface-container-high text-on-surface font-mono-data-sm text-mono-data-sm font-semibold">HOLD</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5">Equities • Energy / Conglomerate</p>
+</div>
+</div>
+<!-- Metrics Matrix -->
+<div class="flex items-center gap-space-lg sm:text-right">
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Confidence</div>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface font-medium">61%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Exp. Return</div>
+<div class="font-mono-data-lg text-mono-data-lg text-on-surface-variant font-medium">+3.1%</div>
+</div>
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant">Horizon</div>
+<div class="font-mono-data-md text-mono-data-md text-on-surface">1–2 mo</div>
+</div>
+</div>
+</div>
+<!-- Signal Reason & Action -->
+<div class="pt-space-md bg-surface-container-low/40 rounded-lg p-space-md flex flex-col md:flex-row items-start md:items-center justify-between gap-space-md">
+<div class="space-y-1 max-w-xl">
+<div class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">psychology</span>
+<span>Primary Rationale</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface leading-relaxed">
+                  Consolidating near 200-day EMA with neutral quantitative momentum.
+                </p>
+</div>
+<!-- Flat line Sparkline & Button -->
+<div class="flex items-center gap-space-md shrink-0 w-full md:w-auto justify-between md:justify-end">
+<div class="flex items-center gap-2">
+<svg class="w-16 h-8 text-on-surface-variant overflow-visible" fill="none" viewbox="0 0 60 28">
+<path d="M2 14 L18 16 L34 12 L46 15 L58 14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<circle cx="58" cy="14" fill="currentColor" r="2.5"></circle>
+</svg>
+</div>
+<button class="px-space-md py-1.5 rounded-lg bg-surface-container-highest text-on-surface font-label-md text-label-md hover:bg-surface-variant transition-colors flex items-center gap-1">
+<span>View Analysis</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</article>
+</div>
+</section>
+<!-- Portfolio Summary Column (4 cols) -->
+<aside class="lg:col-span-4 space-y-space-md">
+<div class="flex items-center justify-between px-space-xs">
+<span class="font-headline-sm text-headline-sm text-on-surface">Portfolio Snapshot</span>
+<span class="font-mono-data-sm text-mono-data-sm text-secondary font-medium">Live Aggregated</span>
+</div>
+<div class="bg-surface-container-lowest rounded-xl shadow-sm p-space-lg space-y-space-lg">
+<!-- Total Value & Delta -->
+<div>
+<div class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Total Value</div>
+<div class="font-display-lg text-display-lg text-on-surface tracking-tight mt-0.5">₹12,48,200</div>
+<div class="flex items-center gap-space-md mt-space-sm pt-space-xs">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Today's Return</span>
+<span class="font-mono-data-md text-mono-data-md text-secondary font-medium">+₹17,450 (+1.42%)</span>
+</div>
+<div class="w-px h-8 bg-surface-container"></div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Overall Return</span>
+<span class="font-mono-data-md text-mono-data-md text-secondary font-medium">+24.8%</span>
+</div>
+</div>
+</div>
+<!-- Allocation Breakdown Bar -->
+<div class="space-y-space-sm pt-space-xs">
+<div class="flex justify-between items-center font-label-sm text-label-sm">
+<span class="text-on-surface-variant uppercase tracking-wider">Asset Allocation</span>
+<span class="font-mono-data-sm text-mono-data-sm text-on-surface-variant">Balanced Target</span>
+</div>
+<!-- Segmented Multi-Bar -->
+<div class="h-2.5 w-full bg-surface-container rounded-full overflow-hidden flex">
+<div class="h-full bg-primary-container" style="width: 45%;" title="Stocks 45%"></div>
+<div class="h-full bg-secondary" style="width: 25%;" title="Crypto 25%"></div>
+<div class="h-full bg-surface-tint" style="width: 20%;" title="Gold 20%"></div>
+<div class="h-full bg-surface-variant" style="width: 10%;" title="Cash 10%"></div>
+</div>
+<!-- Legend Pills -->
+<div class="grid grid-cols-2 gap-space-sm pt-space-xs font-mono-data-sm text-mono-data-sm">
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-sm bg-primary-container shrink-0"></span>
+<span class="text-on-surface-variant">Stocks:</span>
+<span class="text-on-surface font-medium ml-auto">45%</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-sm bg-secondary shrink-0"></span>
+<span class="text-on-surface-variant">Crypto:</span>
+<span class="text-on-surface font-medium ml-auto">25%</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-sm bg-surface-tint shrink-0"></span>
+<span class="text-on-surface-variant">Gold:</span>
+<span class="text-on-surface font-medium ml-auto">20%</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="w-2.5 h-2.5 rounded-sm bg-surface-variant shrink-0"></span>
+<span class="text-on-surface-variant">Cash:</span>
+<span class="text-on-surface font-medium ml-auto">10%</span>
+</div>
+</div>
+</div>
+<!-- Quick Action Footer for Portfolio -->
+<div class="pt-space-md flex items-center justify-between">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Drift check: Nominal (±0.8%)</span>
+<a class="font-label-md text-label-md text-on-surface hover:text-secondary font-medium transition-colors" href="#">
+              Rebalance →
+            </a>
+</div>
+</div>
+<!-- Ambient Strategy Context Tile -->
+<div class="bg-surface-container-low rounded-xl p-space-md flex items-center gap-space-md">
+<div class="w-8 h-8 rounded-lg bg-surface-container-lowest flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px] text-secondary">verified</span>
+</div>
+<div class="text-left">
+<div class="font-label-sm text-label-sm text-on-surface font-medium">Model Confidence High</div>
+<div class="font-body-sm text-body-sm text-on-surface-variant text-[12px] leading-tight">
+              Macro factors aligned across cross-asset momentum filters.
+            </div>
+</div>
+</div>
+</aside>
+</div>
+</div>
+</div></main><footer class="fixed bottom-0 inset-x-0 z-50 pointer-events-none p-margin-md lg:p-margin-lg"><div class="w-full flex items-center justify-between"><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="portfolio" href="#">Portfolio</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="watchlist" href="#">Watchlist</a></nav></div><div class="pointer-events-auto"><nav class="flex items-center gap-space-xs p-1 bg-surface-container-lowest/80 backdrop-blur-xl border border-outline-variant/60 rounded-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]" data-active-classes="bg-primary-container text-on-primary font-bold rounded-lg"><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="research" href="#">Research</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="backtests" href="#">Backtests</a><a class="px-space-md py-1.5 font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors" data-path="settings" href="#">Settings</a></nav></div></div></footer></body></html>
