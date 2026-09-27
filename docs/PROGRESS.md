@@ -15,7 +15,7 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 6 | Paper trading, restore from the journal (provider adapters blocked) | **Done** (2026-09-27) |
 | 7 | Validation, evidence, Monte Carlo, review and calibration | **Done** (2026-09-27) |
 | 8 | Advisory AI in shadow mode (provider adapters blocked) | **Done** (2026-09-27) |
-| 9 | Live trading path (`live-orders`), deployment, monitoring | Next (Kite docs blocked) |
+| 9 | Deployment, monitoring, alerts, operator docs (live broker blocked) | **Done** (2026-09-27) |
 
 ## Phase 0: audit (2026-09-27)
 
@@ -376,6 +376,45 @@ New invariant tests: `invariant_04_the_ai_crate_cannot_reach_orders_limits_halts
 `invariant_04_the_orchestrator_only_appends_advice_once_per_advisor`
 (and the AI part of `invariant_11_validation_evidence_promotes_and_feeds_paper_decisions`).
 
+## Phase 9: deployment, monitoring, alerts, operator docs (2026-09-27)
+
+Built:
+
+- `Dockerfile`:
+  - multi-stage;
+  - the runtime has no package-manager step;
+  - runs as a non-root UID;
+  - built-in healthcheck;
+  - supports a TLS-intercepting proxy at build time via a BuildKit secret.
+- `deploy/`:
+  - compose stack: PostgreSQL, a read-only qd-server, and Caddy (TLS, HSTS,
+    `/metrics` not served publicly);
+  - container configuration, `.env.example` (names only), `backup.sh`.
+- `qd-app::monitor`: health, alerts (critical and warning) and Prometheus
+  text. `/metrics`, alerts in `/api/status` (a UI banner), and alert-change
+  JSON logs.
+- Startup reconciliation fails closed unless the configured account exists
+  and is a paper account. `qd account create --id`.
+- CI: a container build job with a non-root and no-credential check.
+- `README.md`, `docs/OPERATIONS.md` (operator guide).
+
+Decisions and assumptions: ADR 0012.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, tests, build.
+- `cargo test --workspace`: 186 tests; the `live-orders` run passes.
+- Docker image built (146 MB, UID 10001). Compose stack up with TLS:
+  - healthy; startup refused while the account was missing;
+  - passed after `qd account create --id` and `qd user create`;
+  - HTTPS login with a `Secure; HttpOnly; SameSite=Strict` cookie; HSTS and
+    CSP present; `/metrics` 404 through the proxy;
+  - no password in logs.
+  The stack was removed afterwards.
+
+New invariant tests: `invariant_06_an_unreadable_kill_switch_is_a_critical_alert_and_halts`
+(and the account checks in `paper_runs_refuse_live_accounts_and_concurrent_runs`).
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -413,14 +452,17 @@ New invariant tests: `invariant_04_the_ai_crate_cannot_reach_orders_limits_halts
 - A startup halt from a failed boot stays active until the owner re-arms it
   (ADR 0008).
 
-## Next steps (Phase 9)
+## What remains (blocked or owner decisions)
 
-1. Live trading path, still off by default and behind every INV-14 condition:
-   the Kite order executor and account reader need the Kite docs (blocked).
-   Until then, complete what does not need them: automatic demotion on live
-   breach (INV-11) and live-arming checks end to end.
-2. Deployment: Dockerfile (multi-stage, non-root), docker-compose with
-   PostgreSQL, a reverse proxy with TLS, backups, and a runbook.
-3. Monitoring: structured health, metrics endpoint, alerts on halts, restore
-   failures, unprotected positions and stale data.
-4. Final documentation: operator guide, security notes, the full phase report.
+1. **Zerodha Kite adapter** (market data, live order executor, account
+   reader): blocked until the build environment can read kite.trade (or the
+   owner supplies the docs). Owner decisions are also needed: the Kite plan,
+   a static IP, DDPI.
+2. **Crypto venue** and **AI provider adapters**: blocked by the same egress
+   policy, and the venue and providers are open owner decisions.
+3. **Automatic demotion on live breach** (INV-11): with the live runner.
+4. **Cost schedules**: the owner must verify the rates and mark the
+   schedules verified.
+5. **Notifications** beyond logs (email or chat): need a provider choice.
+6. **Missing spec sections §7–§20**: every assumption is recorded in the
+   ADRs; the owner should confirm them.

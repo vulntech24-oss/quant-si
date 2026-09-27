@@ -10,7 +10,8 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 8 (advisory AI, shadow mode) done; Phase 9 next**.
+- Current phase: **Phase 9 (deployment, monitoring) done. Remaining work is blocked on
+  provider docs or owner decisions** (`docs/PROGRESS.md`, "What remains").
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -88,6 +89,7 @@ backend/                     Cargo workspace (ADR 0002)
     src/positions.rs         Position Manager: OCO protection, exits, reconciliation
     src/live.rs              live gate (INV-14); `live-orders` feature, off by default
     src/memory.rs            in-memory journal and halt store (backtests, tests)
+    src/monitor.rs           health, alerts, Prometheus text (ADR 0012)
     src/registry.rs          Strategy Registry (stage = replay of stored events)
     src/session.rs           daily trading cycle shared by backtest and paper (INV-08)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
@@ -121,8 +123,11 @@ frontend/                    Vite + strict TypeScript, no framework (ADR 0008)
   src/api.ts, dom.ts         API client (CSRF header), textContent-only DOM builder
   src/views.ts, main.ts      screens, top bar (PAPER/LIVE, halted), hash router
   tests/                     vitest
+deploy/                      compose stack (postgres, qd-server, Caddy TLS), container config,
+                             .env.example (names only), backup.sh (ADR 0012)
+Dockerfile                   multi-stage image, non-root, built-in healthcheck
 design/stitch-reference/     Stitch export: visual reference only, not requirements
-docs/                        spec, ADRs, progress log, integrations/ (provider notes)
+docs/                        spec, ADRs, progress log, OPERATIONS.md, integrations/ (provider notes)
 .github/workflows/ci.yml     runs the commands above
 ```
 

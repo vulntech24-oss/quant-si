@@ -1,0 +1,63 @@
+# QuantDesk
+
+A quantitative trading-intelligence platform for one owner: analyze → find
+opportunity → predict → decide → validate → manage risk → execute → monitor →
+learn. It makes defined-risk trades lasting days to weeks on completed daily
+bars. **Paper trading is the default everywhere, and NO TRADE is a normal,
+frequent outcome.**
+
+Rust modular monolith (Tokio, Axum, SQLx, PostgreSQL) with a small strict
+TypeScript frontend.
+
+## What it does today
+
+| Area | State |
+|---|---|
+| Domain core, Risk Gate, kill switch, Order Gateway, Position Manager | Built, tested (17 invariants) |
+| Strategy `trend-pullback-1.0.0`, registry with immutable versions | Built |
+| Backtesting, walk-forward / out-of-sample / holdout validation, Monte Carlo | Built |
+| Paper trading (daily cycle shared with backtests, restore from the journal) | Built |
+| Evidence-gated promotions; review and calibration | Built |
+| Advisory AI (shadow mode) with a deterministic checklist advisor | Built |
+| HTTP API, owner authentication, frontend | Built |
+| Docker image, compose stack with TLS, backups, metrics, alerts | Built |
+| Zerodha Kite adapter (market data, live orders) | **Not built**: provider docs unreachable from the build environment |
+| Crypto venue, AI provider adapters (OpenAI, Gemini, xAI) | **Not built**: same reason; venue and providers are open owner decisions |
+
+Real money is disabled by default and cannot be enabled by configuration
+alone. Live orders need all of these (INV-14):
+- a build with the `live-orders` feature;
+- `environment = "production"`;
+- `live_trading_enabled = true`;
+- verified cost schedules;
+- an armed live account (password step-up);
+- a strategy version at a live stage, which needs a passed paper review.
+
+No live broker executor exists yet.
+
+## Quick start (development)
+
+```sh
+# PostgreSQL 16 reachable, then:
+cd backend
+export QD_DATABASE_URL=postgres://USER@localhost:5432/quantdesk
+cargo run -p qd-cli -- migrate
+cargo run -p qd-cli -- account create --name paper --mode paper --id 00000000-0000-7000-8000-000000000001
+echo 'a long owner password' | cargo run -p qd-cli -- user create --username owner --role owner
+cp config/quantdesk.example.toml config/quantdesk.toml
+QD_CONFIG=config/quantdesk.toml cargo run -p qd-server
+
+cd ../frontend && npm ci && npm run dev   # http://localhost:5173, proxies /api
+```
+
+Deployment with Docker and TLS, the daily routine, and the path from
+validation to promotion are in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+## Documentation
+
+- [docs/QUANTDESK_BUILD_SPEC.md](docs/QUANTDESK_BUILD_SPEC.md): the specification (source of truth; §7–§20 missing).
+- [docs/adr/](docs/adr/): every decision and assumption, with defaults and how to change them.
+- [docs/PROGRESS.md](docs/PROGRESS.md): phase log, verification and open issues.
+- [docs/OPERATIONS.md](docs/OPERATIONS.md): operator guide.
+- [docs/integrations/](docs/integrations/): provider status.
+- [CLAUDE.md](CLAUDE.md): code map, commands, rules and invariants.
