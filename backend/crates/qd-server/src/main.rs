@@ -81,19 +81,42 @@ async fn run() -> Result<(), String> {
         clock.clone(),
     )
     .map_err(|e| e.to_string())?;
+    let registry = qd_app::registry::StrategyRegistry::new(
+        stores.registry.clone(),
+        stores.audit.clone(),
+        stores.evidence.clone(),
+    );
+    let validator = qd_backtest::validator::StoreValidator::new(
+        stores.market.clone(),
+        registry.clone(),
+        stores.evidence.clone(),
+        stores.audit.clone(),
+        Arc::new(config.costs.clone()),
+        config.risk.clone(),
+        config.validation.clone(),
+        clock.clone(),
+    )
+    .map_err(|e| e.to_string())?;
     let api_state = qd_api::ApiState {
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),
-        registry: qd_app::registry::StrategyRegistry::new(
-            stores.registry.clone(),
-            stores.audit.clone(),
-        ),
+        registry,
         market: stores.market.clone(),
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
         backtests: Arc::new(backtests),
         paper: paper.map(|r| r as Arc<dyn qd_app::ports::PaperTrading>),
+        validator: Arc::new(validator),
+        reviewer: Arc::new(qd_app::review::JournalReviewer {
+            reader: stores.journal.clone(),
+            evidence: stores.evidence.clone(),
+            audit: stores.audit.clone(),
+            clock: clock.clone(),
+            account: config.file.account_id,
+            criteria: config.review.clone(),
+        }),
+        evidence: stores.evidence.clone(),
         clock,
         settings: qd_api::ApiSettings {
             account_id: config.file.account_id,

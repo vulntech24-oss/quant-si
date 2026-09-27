@@ -10,10 +10,13 @@
 //! - [`live`]: the live-trading gate (INV-14).
 //! - [`registry`]: the Strategy Registry (immutable versions, stage history).
 //! - [`memory`]: in-memory journal and halt store for backtests and tests.
+//! - [`evidence`]: recorded evidence (INV-11) and evidence tables.
+//! - [`review`]: predicted-vs-realized review, calibration and paper-review evidence.
 //! - [`session`]: the daily trading cycle shared by backtest and paper (INV-08).
 //! - [`restore`]: rebuilding trading state from the journal after a restart.
 
 pub mod decision;
+pub mod evidence;
 pub mod gateway;
 pub mod journal;
 pub mod live;
@@ -23,4 +26,5 @@ pub mod ports;
 pub mod positions;
 pub mod registry;
 pub mod restore;
+pub mod review;
 pub mod session;

@@ -49,6 +49,11 @@ pub fn router(state: ApiState) -> Router {
         .route("/instruments", get(instruments))
         .route("/instruments/{id}/bars", get(bars))
         .route("/backtests", post(backtest))
+        .route("/validations", post(run_validation))
+        .route("/evidence", get(evidence_list))
+        .route("/evidence/{id}", get(evidence_one))
+        .route("/review", get(review))
+        .route("/review/{version}/record", post(record_review))
         .route("/paper", get(paper_state))
         .route("/paper/run", post(paper_run))
         .route("/account/live-armed", post(live_armed))
@@ -438,6 +443,7 @@ fn registry_error(e: RegistryError) -> ApiError {
     match e {
         RegistryError::UnknownVersion => ApiError::NotFound,
         RegistryError::IllegalTransition(m) => ApiError::Conflict(m),
+        RegistryError::Evidence(m) => ApiError::Conflict(format!("evidence: {m}")),
         other => ApiError::Internal(other.to_string()),
     }
 }
@@ -540,6 +546,88 @@ async fn bars(
         .await
         .map_err(internal)?;
     Ok(Json(serde_json::to_value(bars).map_err(internal)?))
+}
+
+// ---------- validation and evidence ----------
+
+async fn run_validation(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(request): Json<qd_app::ports::ValidationRequest>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    state
+        .validator
+        .validate(&request, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::BadRequest(e.0))
+}
+
+#[derive(Deserialize)]
+struct EvidenceQuery {
+    version: Option<StrategyVersionId>,
+}
+
+/// A record without its per-trade detail, for lists.
+fn evidence_summary(r: &qd_app::evidence::EvidenceRecord) -> Value {
+    let pick = |key: &str| r.report.get(key).cloned().unwrap_or(Value::Null);
+    json!({
+        "id": r.id,
+        "version": r.version,
+        "kind": r.kind,
+        "passed": r.passed,
+        "created_at": r.created_at,
+        "from": pick("from"),
+        "to": pick("to"),
+        "instruments": pick("instruments"),
+        "checks": pick("checks"),
+        "oos": pick("oos"),
+        "holdout": pick("holdout"),
+        "monte_carlo": pick("monte_carlo"),
+        "evidence": pick("evidence"),
+    })
+}
+
+async fn evidence_list(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Query(q): Query<EvidenceQuery>,
+) -> Result<Json<Vec<Value>>, ApiError> {
+    let records = state.evidence.list(q.version).await.map_err(internal)?;
+    Ok(Json(records.iter().map(evidence_summary).collect()))
+}
+
+async fn evidence_one(
+    State(state): State<ApiState>,
+    _caller: Caller,
+    Path(id): Path<EvidenceId>,
+) -> Result<Json<qd_app::evidence::EvidenceRecord>, ApiError> {
+    state
+        .evidence
+        .get(id)
+        .await
+        .map_err(internal)?
+        .map(Json)
+        .ok_or(ApiError::NotFound)
+}
+
+async fn review(State(state): State<ApiState>, _caller: Caller) -> Result<Json<Value>, ApiError> {
+    state.reviewer.review().await.map(Json).map_err(internal)
+}
+
+async fn record_review(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(version): Path<StrategyVersionId>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_owner()?;
+    state
+        .reviewer
+        .record(version, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::BadRequest(e.0))
 }
 
 // ---------- paper trading ----------

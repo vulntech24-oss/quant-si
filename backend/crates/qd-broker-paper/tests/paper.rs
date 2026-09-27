@@ -10,6 +10,7 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Days, NaiveDate, NaiveTime, TimeZone, Utc};
+use qd_app::evidence::{EvidenceKind, EvidenceRecord, EvidenceStore};
 use qd_app::ports::{
     Clock, Evidence, EvidenceSource, HaltStore, PaperTrading, Reconciler, RunLock,
 };
@@ -182,6 +183,18 @@ async fn register(stores: &Stores, parameters: Value) -> StrategyVersionId {
     registry.register(&record, "test").await.unwrap();
     let id = record.reference.version_id;
     let evidence = EvidenceId::new_at(now);
+    stores
+        .evidence
+        .record(&EvidenceRecord {
+            id: evidence,
+            version: id,
+            kind: EvidenceKind::Validation,
+            passed: true,
+            report: serde_json::json!({"evidence": []}),
+            created_at: now,
+        })
+        .await
+        .unwrap();
     for event in [
         StageEvent::StartResearch,
         StageEvent::PassResearch { evidence },
@@ -200,7 +213,11 @@ async fn register(stores: &Stores, parameters: Value) -> StrategyVersionId {
 }
 
 fn registry(stores: &Stores) -> StrategyRegistry {
-    StrategyRegistry::new(stores.registry.clone(), stores.audit.clone())
+    StrategyRegistry::new(
+        stores.registry.clone(),
+        stores.audit.clone(),
+        stores.evidence.clone(),
+    )
 }
 
 async fn account(stores: &Stores, mode: AccountMode) -> AccountId {
@@ -223,6 +240,7 @@ async fn account(stores: &Stores, mode: AccountMode) -> AccountId {
 }
 
 fn runner(w: &World, account: AccountId, evidence: Arc<dyn EvidenceSource>) -> PaperRunner {
+    let evidence = Arc::new(qd_app::evidence::FixedEvidence(evidence));
     let risk = RiskConfig::new(toml::from_str::<RiskConfigData>(RISK).unwrap()).unwrap();
     let costs = ScheduleCostModel::new(toml::from_str::<CostScheduleSet>(COSTS).unwrap()).unwrap();
     PaperRunner::new(
@@ -269,7 +287,9 @@ async fn days(pool: &PgPool, account: AccountId) -> Vec<(String, String, Vec<Val
                 .iter()
                 .map(|t| {
                     let mut t = t.clone();
-                    t.as_object_mut().unwrap().remove("position");
+                    let t_obj = t.as_object_mut().unwrap();
+                    t_obj.remove("position");
+                    t_obj.remove("decision");
                     t
                 })
                 .collect();

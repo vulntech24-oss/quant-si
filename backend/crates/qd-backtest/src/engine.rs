@@ -55,6 +55,9 @@ pub struct BacktestConfig {
     pub close_time_utc: NaiveTime,
     /// Trading-calendar version recorded with each decision.
     pub calendar_version: String,
+    /// When set, each plan's stop slippage is this many ticks of its
+    /// instrument instead of `strategy.slippage` (multi-instrument runs).
+    pub plan_slippage_ticks: Option<Decimal>,
 }
 
 /// Why a backtest could not run.
@@ -69,6 +72,9 @@ pub enum BacktestError {
     /// The date range is empty.
     #[error("empty date range")]
     EmptyRange,
+    /// Invalid settings or data.
+    #[error("invalid: {0}")]
+    Invalid(String),
 }
 
 /// One point of the equity curve.
@@ -164,7 +170,7 @@ pub async fn run_backtest(
     let slots = [StrategySlot {
         strategy,
         info: config.strategy.clone(),
-        slippage_ticks: None,
+        slippage_ticks: config.plan_slippage_ticks,
     }];
     let initial = config.initial_equity.amount;
     let mut report = BacktestReport {

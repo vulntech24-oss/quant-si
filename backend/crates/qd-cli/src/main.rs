@@ -164,6 +164,39 @@ enum StrategyCommand {
         #[arg(long)]
         event: String,
     },
+    /// Validate a version (walk-forward, out-of-sample, holdout, Monte Carlo)
+    /// and record the evidence. Criteria come from the server configuration.
+    Validate {
+        /// Server configuration file (for risk, costs and criteria).
+        #[arg(long, env = "QD_CONFIG")]
+        config: PathBuf,
+        #[arg(long)]
+        version: StrategyVersionId,
+        /// Instruments (repeat); none means every instrument with bars.
+        #[arg(long)]
+        instrument: Vec<InstrumentId>,
+        #[arg(long)]
+        from: NaiveDate,
+        #[arg(long)]
+        to: NaiveDate,
+        /// Starting equity of each run.
+        #[arg(long, default_value = "1000000")]
+        equity: Decimal,
+    },
+    /// Predicted-vs-realized review of the configured paper account.
+    /// With `--record`, records a paper review of that version as evidence.
+    Review {
+        /// Server configuration file (account and review criteria).
+        #[arg(long, env = "QD_CONFIG")]
+        config: PathBuf,
+        #[arg(long)]
+        record: Option<StrategyVersionId>,
+    },
+    /// Recorded evidence, newest first (summaries).
+    Evidence {
+        #[arg(long)]
+        version: Option<StrategyVersionId>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -399,7 +432,11 @@ async fn strategy(
     actor: &str,
     now: chrono::DateTime<Utc>,
 ) -> Result<(), String> {
-    let registry = StrategyRegistry::new(stores.registry.clone(), stores.audit.clone());
+    let registry = StrategyRegistry::new(
+        stores.registry.clone(),
+        stores.audit.clone(),
+        stores.evidence.clone(),
+    );
     match cmd {
         StrategyCommand::RegisterTrendPullback {
             version_number,
@@ -424,6 +461,90 @@ async fn strategy(
                 .await
                 .map_err(|e| e.to_string())?;
             print(&record)
+        }
+        StrategyCommand::Validate {
+            config,
+            version,
+            instrument,
+            from,
+            to,
+            equity,
+        } => {
+            use qd_app::ports::Validator;
+            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
+                .map_err(|e| e.to_string())?;
+            let validator = qd_backtest::validator::StoreValidator::new(
+                stores.market.clone(),
+                registry,
+                stores.evidence.clone(),
+                stores.audit.clone(),
+                std::sync::Arc::new(config.costs.clone()),
+                config.risk.clone(),
+                config.validation.clone(),
+                std::sync::Arc::new(qd_server::SystemClock),
+            )
+            .map_err(|e| e.to_string())?;
+            let record = validator
+                .validate(
+                    &qd_app::ports::ValidationRequest {
+                        version,
+                        instruments: instrument,
+                        from,
+                        to,
+                        equity,
+                    },
+                    actor,
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            // The full report includes every trade; print the verdict and checks.
+            print(&serde_json::json!({
+                "evidence_id": record["id"],
+                "passed": record["passed"],
+                "checks": record["report"]["checks"],
+                "evidence": record["report"]["evidence"],
+                "oos": record["report"]["oos"],
+                "holdout": record["report"]["holdout"],
+                "monte_carlo": record["report"]["monte_carlo"],
+            }))
+        }
+        StrategyCommand::Review { config, record } => {
+            use qd_app::review::Reviewer;
+            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
+                .map_err(|e| e.to_string())?;
+            let reviewer = qd_app::review::JournalReviewer {
+                reader: stores.journal.clone(),
+                evidence: stores.evidence.clone(),
+                audit: stores.audit.clone(),
+                clock: std::sync::Arc::new(qd_server::SystemClock),
+                account: config.file.account_id,
+                criteria: config.review.clone(),
+            };
+            let out = match record {
+                Some(version) => reviewer.record(version, actor).await,
+                None => reviewer.review().await,
+            }
+            .map_err(|e| e.to_string())?;
+            print(&out)
+        }
+        StrategyCommand::Evidence { version } => {
+            use qd_app::evidence::EvidenceStore;
+            let records = stores
+                .evidence
+                .list(version)
+                .await
+                .map_err(|e| e.to_string())?;
+            let out: Vec<serde_json::Value> = records
+                .iter()
+                .map(|r| {
+                    serde_json::json!({
+                        "id": r.id, "version": r.version, "kind": r.kind,
+                        "passed": r.passed, "created_at": r.created_at,
+                        "checks": r.report.get("checks"),
+                    })
+                })
+                .collect();
+            print(&out)
         }
         StrategyCommand::List => {
             let mut out = Vec::new();

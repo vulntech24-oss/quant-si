@@ -5,6 +5,7 @@
 //! the same code runs in backtest, paper and live (INV-08). A strategy
 //! proposes a plan; it never sizes a position and never sees AI output.
 //!
+//! - [`catalog`]: every implementation in the build, for registry matching.
 //! - [`features`]: versioned feature set computed from completed daily bars.
 //! - [`regime`]: deterministic regime classifier.
 //! - [`strategy`]: the `Strategy` trait, its output and [`strategy::run_strategy`].
@@ -17,6 +18,7 @@
     clippy::print_stderr
 )]
 
+pub mod catalog;
 pub mod features;
 pub mod regime;
 pub mod strategy;

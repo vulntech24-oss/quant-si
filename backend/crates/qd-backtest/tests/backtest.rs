@@ -131,6 +131,7 @@ fn config() -> BacktestConfig {
         slippage_ticks: dec!(1),
         close_time_utc: NaiveTime::from_hms_opt(10, 0, 0).unwrap(),
         calendar_version: "test".to_owned(),
+        plan_slippage_ticks: None,
     }
 }
 
@@ -248,6 +249,7 @@ async fn backtests_are_deterministic() {
             .map(|t| {
                 let mut t = t.clone();
                 t.position = qd_domain::ids::PositionId::from_uuid(uuid::Uuid::nil());
+                t.decision = None;
                 t
             })
             .collect::<Vec<_>>()

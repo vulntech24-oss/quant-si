@@ -66,6 +66,12 @@ pub struct ApiState {
     pub backtests: Arc<dyn BacktestRunner>,
     /// Paper trading, when configured.
     pub paper: Option<Arc<dyn PaperTrading>>,
+    /// Strategy validation.
+    pub validator: Arc<dyn qd_app::ports::Validator>,
+    /// Recorded evidence.
+    pub evidence: Arc<dyn qd_app::evidence::EvidenceStore>,
+    /// Paper review and calibration.
+    pub reviewer: Arc<dyn qd_app::review::Reviewer>,
     /// Clock.
     pub clock: Arc<dyn Clock>,
     /// Settings.

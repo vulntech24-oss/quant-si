@@ -142,6 +142,12 @@ impl std::fmt::Debug for StrategySlot<'_> {
 pub struct TradeRecord {
     /// Position.
     pub position: PositionId,
+    /// The decision that opened it (absent in entries written before Phase 7).
+    #[serde(default)]
+    pub decision: Option<DecisionId>,
+    /// Setup type.
+    #[serde(default)]
+    pub setup_type: String,
     /// Symbol.
     pub instrument: String,
     /// Side.
@@ -727,6 +733,8 @@ fn close_trade(
     };
     TradeRecord {
         position: p.id,
+        decision: Some(p.decision),
+        setup_type: p.setup_type.clone(),
         instrument: data.spec.symbol.clone(),
         side: p.side,
         opened_on: p.opened_on.unwrap_or(date),

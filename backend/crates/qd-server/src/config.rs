@@ -68,6 +68,12 @@ pub struct ConfigFile {
     pub risk_config: PathBuf,
     /// Paths to cost schedule files, relative to this file.
     pub cost_schedules: Vec<PathBuf>,
+    /// Validation criteria, relative to this file. Default `validation.toml`.
+    #[serde(default = "default_validation_criteria")]
+    pub validation_criteria: PathBuf,
+    /// Paper-review criteria, relative to this file. Default `review.toml`.
+    #[serde(default = "default_review_criteria")]
+    pub review_criteria: PathBuf,
     /// Built frontend directory to serve, relative to this file. Optional.
     #[serde(default)]
     pub frontend_dir: Option<PathBuf>,
@@ -116,6 +122,14 @@ pub struct PaperConfig {
     pub daily_run_utc: Option<chrono::NaiveTime>,
 }
 
+fn default_validation_criteria() -> PathBuf {
+    PathBuf::from("validation.toml")
+}
+
+fn default_review_criteria() -> PathBuf {
+    PathBuf::from("review.toml")
+}
+
 const fn default_session_hours() -> i64 {
     12
 }
@@ -162,6 +176,10 @@ pub struct ServerConfig {
     pub costs: ScheduleCostModel,
     /// Live-trading policy.
     pub live: LivePolicy,
+    /// Validation criteria (ADR 0010).
+    pub validation: qd_backtest::validation::ValidationCriteria,
+    /// Paper-review criteria (ADR 0010).
+    pub review: qd_app::review::ReviewCriteria,
     /// Directory the config file is in (relative paths resolve against it).
     pub base_dir: PathBuf,
 }
@@ -202,6 +220,13 @@ impl ServerConfig {
             path: base.to_owned(),
             detail: e.to_string(),
         })?;
+        let validation: qd_backtest::validation::ValidationCriteria =
+            parse(&base.join(&file.validation_criteria))?;
+        validation.validate().map_err(|detail| ConfigError::Parse {
+            path: file.validation_criteria.clone(),
+            detail,
+        })?;
+        let review: qd_app::review::ReviewCriteria = parse(&base.join(&file.review_criteria))?;
         let database_url = env("QD_DATABASE_URL")
             .filter(|v| !v.trim().is_empty())
             .map(Secret::new)
@@ -234,6 +259,8 @@ impl ServerConfig {
             cost_schedules,
             costs,
             live,
+            validation,
+            review,
             base_dir: base.to_owned(),
         };
         config.validate()?;

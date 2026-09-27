@@ -334,3 +334,31 @@ pub trait PaperTrading: Send + Sync {
     /// The current book: positions, working orders and account state, as JSON.
     async fn state(&self) -> Result<serde_json::Value, StoreError>;
 }
+
+/// A validation request (ADR 0010).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, Serialize)]
+pub struct ValidationRequest {
+    /// Strategy version.
+    pub version: StrategyVersionId,
+    /// Instruments; empty means every instrument with bars.
+    #[serde(default)]
+    pub instruments: Vec<InstrumentId>,
+    /// First date.
+    pub from: chrono::NaiveDate,
+    /// Last date (the holdout ends here).
+    pub to: chrono::NaiveDate,
+    /// Starting equity of each run, in the instruments' currency.
+    pub equity: Decimal,
+}
+
+/// Validates strategy versions and records the evidence.
+#[async_trait]
+pub trait Validator: Send + Sync {
+    /// Runs the validation protocol, records the evidence, and returns the
+    /// record (id, verdict, report) as JSON.
+    async fn validate(
+        &self,
+        request: &ValidationRequest,
+        actor: &str,
+    ) -> Result<serde_json::Value, StoreError>;
+}

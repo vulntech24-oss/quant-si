@@ -40,6 +40,16 @@ paths:
     get: {summary: Point-in-time daily bars; query from, to}
   /api/backtests:
     post: {summary: Run a research backtest (owner)}
+  /api/validations:
+    post: {summary: "Validate a strategy version (walk-forward, out-of-sample, holdout, Monte Carlo) and record the evidence (owner). Body {version, instruments[], from, to, equity}"}
+  /api/evidence:
+    get: {summary: "Recorded evidence, newest first, optionally ?version=<id> (summaries without per-trade detail)"}
+  /api/evidence/{id}:
+    get: {summary: One evidence record with its full report}
+  /api/review:
+    get: {summary: "Predicted vs realized review of the account's paper results: calibration bins, Brier score, EV vs realized R, and the paper-review checks per version"}
+  /api/review/{version}/record:
+    post: {summary: "Record a paper review of a version as evidence, pass or fail (owner). Only a passed paper review can back a promotion to a live stage"}
   /api/paper:
     get: {summary: "The paper book restored from the journal: last day, positions, working orders (409 if paper trading is not configured)"}
   /api/paper/run:

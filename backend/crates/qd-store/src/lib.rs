@@ -418,6 +418,87 @@ impl AuditLog for PgAuditLog {
 
 pub use qd_app::ports::AccountRecord;
 
+/// Evidence records in PostgreSQL (append-only).
+#[derive(Clone, Debug)]
+pub struct PgEvidence {
+    pool: PgPool,
+}
+
+impl PgEvidence {
+    /// Creates the store.
+    #[must_use]
+    pub const fn new(pool: PgPool) -> Self {
+        Self { pool }
+    }
+}
+
+fn evidence_from_row(
+    row: &sqlx::postgres::PgRow,
+) -> Result<qd_app::evidence::EvidenceRecord, StoreError> {
+    use qd_app::evidence::{EvidenceKind, EvidenceRecord};
+    let kind: String = row.try_get("kind").map_err(store_error)?;
+    let kind = match kind.as_str() {
+        "validation" => EvidenceKind::Validation,
+        "paper_review" => EvidenceKind::PaperReview,
+        other => return Err(StoreError(format!("unknown evidence kind {other}"))),
+    };
+    Ok(EvidenceRecord {
+        id: qd_domain::ids::EvidenceId::from_uuid(row.try_get("evidence_id").map_err(store_error)?),
+        version: StrategyVersionId::from_uuid(row.try_get("version_id").map_err(store_error)?),
+        kind,
+        passed: row.try_get("passed").map_err(store_error)?,
+        report: row.try_get("report").map_err(store_error)?,
+        created_at: row.try_get("created_at").map_err(store_error)?,
+    })
+}
+
+#[async_trait]
+impl qd_app::evidence::EvidenceStore for PgEvidence {
+    async fn record(&self, r: &qd_app::evidence::EvidenceRecord) -> Result<(), StoreError> {
+        sqlx::query(
+            "INSERT INTO evidence_records (evidence_id, version_id, kind, passed, report, created_at) \
+             VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(r.id.as_uuid())
+        .bind(r.version.as_uuid())
+        .bind(r.kind.code())
+        .bind(r.passed)
+        .bind(&r.report)
+        .bind(r.created_at)
+        .execute(&self.pool)
+        .await
+        .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn get(
+        &self,
+        id: qd_domain::ids::EvidenceId,
+    ) -> Result<Option<qd_app::evidence::EvidenceRecord>, StoreError> {
+        let row = sqlx::query("SELECT * FROM evidence_records WHERE evidence_id = $1")
+            .bind(id.as_uuid())
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(store_error)?;
+        row.as_ref().map(evidence_from_row).transpose()
+    }
+
+    async fn list(
+        &self,
+        version: Option<StrategyVersionId>,
+    ) -> Result<Vec<qd_app::evidence::EvidenceRecord>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT * FROM evidence_records WHERE ($1::uuid IS NULL OR version_id = $1) \
+             ORDER BY created_at DESC",
+        )
+        .bind(version.map(|v| *v.as_uuid()))
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter().map(evidence_from_row).collect()
+    }
+}
+
 fn mode_str(mode: AccountMode) -> &'static str {
     match mode {
         AccountMode::Backtest => "backtest",
@@ -812,6 +893,8 @@ pub struct Stores {
     pub auth: Arc<PgAuth>,
     /// Run locks.
     pub locks: Arc<PgRunLock>,
+    /// Evidence records.
+    pub evidence: Arc<PgEvidence>,
 }
 
 impl Stores {
@@ -827,6 +910,7 @@ impl Stores {
             accounts: Arc::new(PgAccounts::new(pool.clone())),
             auth: Arc::new(PgAuth::new(pool.clone())),
             locks: Arc::new(PgRunLock::new(pool.clone())),
+            evidence: Arc::new(PgEvidence::new(pool.clone())),
         }
     }
 }

@@ -134,6 +134,7 @@ impl BacktestRunner for ResearchBacktester {
             slippage_ticks: Decimal::ONE,
             close_time_utc: NaiveTime::from_hms_opt(10, 0, 0).ok_or_else(|| error("bad time"))?,
             calendar_version: "unversioned".to_owned(),
+            plan_slippage_ticks: None,
         };
         let data = [InstrumentData {
             spec,

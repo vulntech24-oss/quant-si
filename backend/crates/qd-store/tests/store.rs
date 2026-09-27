@@ -9,9 +9,10 @@
 use std::sync::Arc;
 
 use chrono::{Duration, NaiveDate, TimeZone, Utc};
+use qd_app::evidence::{EvidenceKind, EvidenceRecord, EvidenceStore};
 use qd_app::journal::JournalEntry;
 use qd_app::ports::{HaltStore, HistoricalMarketData, Journal};
-use qd_app::registry::{StrategyRegistry, StrategyVersionRecord};
+use qd_app::registry::{RegistryError, StrategyRegistry, StrategyVersionRecord};
 use qd_domain::halt::{ClearedBy, Halt, HaltKind, HaltScope};
 use qd_domain::ids::{
     AccountId, EvidenceId, HaltId, InstrumentId, StrategyId, StrategyVersionId, UserId,
@@ -20,7 +21,8 @@ use qd_domain::lifecycle::strategy::{OwnerApproval, StageEvent, StrategyStage, T
 use qd_domain::market::{Bar, BarData};
 use qd_domain::proposal::{AccountMode, StrategyRef};
 use qd_store::{
-    AccountRecord, PgAccounts, PgAuditLog, PgHaltStore, PgJournal, PgMarketData, PgStrategyRegistry,
+    AccountRecord, PgAccounts, PgAuditLog, PgEvidence, PgHaltStore, PgJournal, PgMarketData,
+    PgStrategyRegistry,
 };
 use rust_decimal_macros::dec;
 use sqlx::PgPool;
@@ -165,13 +167,11 @@ fn version() -> StrategyVersionRecord {
 
 #[sqlx::test(migrator = "qd_store::MIGRATOR")]
 async fn invariant_10_versions_are_immutable_and_stages_replay(pool: PgPool) {
-    let registry = StrategyRegistry::new(
-        Arc::new(PgStrategyRegistry::new(pool.clone())),
-        Arc::new(PgAuditLog::new(pool.clone())),
-    );
+    let registry = registry(&pool);
     let v = version();
     let id = v.reference.version_id;
     registry.register(&v, "owner").await.unwrap();
+    let evidence = record_evidence(&pool, id, EvidenceKind::Validation, true).await;
     assert!(
         registry.register(&v, "owner").await.is_err(),
         "duplicate id"
@@ -184,20 +184,14 @@ async fn invariant_10_versions_are_immutable_and_stages_replay(pool: PgPool) {
         .await
         .unwrap();
     registry
-        .transition(
-            id,
-            &StageEvent::PassResearch {
-                evidence: EvidenceId::new_at(at(1)),
-            },
-            "system",
-        )
+        .transition(id, &StageEvent::PassResearch { evidence }, "system")
         .await
         .unwrap();
     // Skipping Paper is illegal and nothing is stored.
     let approval = OwnerApproval {
         approved_by: UserId::new_at(at(1)),
         approved_at: at(2),
-        evidence: EvidenceId::new_at(at(1)),
+        evidence,
     };
     assert!(
         registry
@@ -232,6 +226,110 @@ async fn invariant_10_versions_are_immutable_and_stages_replay(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(audits, 4);
+}
+
+fn registry(pool: &PgPool) -> StrategyRegistry {
+    StrategyRegistry::new(
+        Arc::new(PgStrategyRegistry::new(pool.clone())),
+        Arc::new(PgAuditLog::new(pool.clone())),
+        Arc::new(PgEvidence::new(pool.clone())),
+    )
+}
+
+async fn record_evidence(
+    pool: &PgPool,
+    version: StrategyVersionId,
+    kind: EvidenceKind,
+    passed: bool,
+) -> EvidenceId {
+    let record = EvidenceRecord {
+        id: EvidenceId::new_at(at(1)),
+        version,
+        kind,
+        passed,
+        report: serde_json::json!({"evidence": []}),
+        created_at: at(1),
+    };
+    PgEvidence::new(pool.clone()).record(&record).await.unwrap();
+    record.id
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn invariant_11_stage_events_need_recorded_passing_evidence_of_the_right_kind(pool: PgPool) {
+    let registry = registry(&pool);
+    let v = version();
+    let id = v.reference.version_id;
+    registry.register(&v, "owner").await.unwrap();
+    registry
+        .transition(id, &StageEvent::StartResearch, "system")
+        .await
+        .unwrap();
+    let pass = |evidence| StageEvent::PassResearch { evidence };
+    // Unrecorded, failed, or the wrong kind: refused, and nothing is stored.
+    let unrecorded = EvidenceId::new_at(at(1));
+    let failed = record_evidence(&pool, id, EvidenceKind::Validation, false).await;
+    let review = record_evidence(&pool, id, EvidenceKind::PaperReview, true).await;
+    for evidence in [unrecorded, failed, review] {
+        let err = registry.transition(id, &pass(evidence), "owner").await;
+        assert!(matches!(err, Err(RegistryError::Evidence(_))), "{err:?}");
+    }
+    // Another version's evidence is refused too.
+    let mut other = version();
+    other.reference.version_id = StrategyVersionId::new_at(at(3));
+    other.reference.version_number = 2;
+    registry.register(&other, "owner").await.unwrap();
+    let foreign = record_evidence(
+        &pool,
+        other.reference.version_id,
+        EvidenceKind::Validation,
+        true,
+    )
+    .await;
+    assert!(
+        registry
+            .transition(id, &pass(foreign), "owner")
+            .await
+            .is_err()
+    );
+    assert_eq!(registry.stage(id).await.unwrap(), StrategyStage::Research);
+
+    let validation = record_evidence(&pool, id, EvidenceKind::Validation, true).await;
+    registry
+        .transition(id, &pass(validation), "owner")
+        .await
+        .unwrap();
+    let promote = |to, evidence| StageEvent::Promote {
+        to,
+        approval: OwnerApproval {
+            approved_by: UserId::new_at(at(1)),
+            approved_at: at(2),
+            evidence,
+        },
+    };
+    registry
+        .transition(id, &promote(TradingStage::Paper, validation), "owner")
+        .await
+        .unwrap();
+    // A live stage needs a passed paper review; a validation is not enough.
+    assert!(
+        registry
+            .transition(
+                id,
+                &promote(TradingStage::SmallCapital, validation),
+                "owner"
+            )
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        registry
+            .transition(id, &promote(TradingStage::SmallCapital, review), "owner")
+            .await
+            .unwrap(),
+        StrategyStage::SmallCapital
+    );
+    // Evidence is append-only.
+    mutation_fails(&pool, "UPDATE evidence_records SET passed = true").await;
 }
 
 #[sqlx::test(migrator = "qd_store::MIGRATOR")]

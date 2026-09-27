@@ -51,6 +51,9 @@ pub struct Position {
     pub stage: Option<StrategyStage>,
     /// Decision that opened it.
     pub decision: DecisionId,
+    /// Setup type of the opening proposal (evidence is kept per setup type).
+    #[serde(default)]
+    pub setup_type: String,
     /// Long or short.
     pub side: Side,
     /// Lifecycle state.
@@ -270,6 +273,7 @@ impl PositionManager {
             strategy_version: authorization.strategy_version(),
             stage: Some(stage),
             decision: authorization.decision(),
+            setup_type: proposal.setup_type().to_owned(),
             side: authorization.action().side(),
             state: PositionState::Opening,
             quantity: Quantity::ZERO,

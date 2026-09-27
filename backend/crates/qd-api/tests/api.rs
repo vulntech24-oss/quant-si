@@ -43,6 +43,20 @@ impl BacktestRunner for FakeBacktests {
     }
 }
 
+/// Validation runs are tested end to end in qd-server; the API only routes them.
+struct FakeValidator;
+
+#[async_trait::async_trait]
+impl qd_app::ports::Validator for FakeValidator {
+    async fn validate(
+        &self,
+        _: &qd_app::ports::ValidationRequest,
+        _: &str,
+    ) -> Result<serde_json::Value, StoreError> {
+        Err(StoreError("no data".to_owned()))
+    }
+}
+
 const OWNER_PASSWORD: &str = "correct horse battery staple";
 const VIEWER_PASSWORD: &str = "viewer password 123";
 
@@ -89,12 +103,26 @@ async fn app(pool: PgPool) -> App {
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
         halts: stores.halts.clone(),
-        registry: StrategyRegistry::new(stores.registry.clone(), stores.audit.clone()),
+        registry: StrategyRegistry::new(
+            stores.registry.clone(),
+            stores.audit.clone(),
+            stores.evidence.clone(),
+        ),
         market: stores.market.clone(),
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
         backtests: Arc::new(FakeBacktests),
         paper: None,
+        validator: Arc::new(FakeValidator),
+        reviewer: Arc::new(qd_app::review::JournalReviewer {
+            reader: stores.journal.clone(),
+            evidence: stores.evidence.clone(),
+            audit: stores.audit.clone(),
+            clock: Arc::new(FixedClock),
+            account: qd_domain::ids::AccountId::new_at(FixedClock.now()),
+            criteria: toml::from_str(include_str!("../../../config/review.toml")).unwrap(),
+        }),
+        evidence: stores.evidence.clone(),
         clock: Arc::new(FixedClock),
         settings: ApiSettings {
             account_id: account,
@@ -419,12 +447,29 @@ async fn strategy_promotion_needs_step_up_and_uses_the_authenticated_owner(pool:
         parameters: serde_json::json!({}),
         rr_floor: rust_decimal::Decimal::new(15, 1),
     };
-    let registry = StrategyRegistry::new(app.stores.registry.clone(), app.stores.audit.clone());
+    let registry = StrategyRegistry::new(
+        app.stores.registry.clone(),
+        app.stores.audit.clone(),
+        app.stores.evidence.clone(),
+    );
     registry.register(&version, "test").await.unwrap();
     let id = version.reference.version_id;
     let owner = login(&app, "owner", OWNER_PASSWORD).await;
     let events = format!("/api/strategies/{id}/events");
     let evidence = qd_domain::ids::EvidenceId::new_at(now);
+    qd_app::evidence::EvidenceStore::record(
+        app.stores.evidence.as_ref(),
+        &qd_app::evidence::EvidenceRecord {
+            id: evidence,
+            version: id,
+            kind: qd_app::evidence::EvidenceKind::Validation,
+            passed: true,
+            report: serde_json::json!({"evidence": []}),
+            created_at: now,
+        },
+    )
+    .await
+    .unwrap();
     for e in [
         serde_json::json!({"event": "start_research"}),
         serde_json::json!({"event": "pass_research", "evidence": evidence}),

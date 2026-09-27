@@ -11,8 +11,9 @@
 //!    gateway, and resolve intents whose outcome was unknown.
 //! 5. Evaluate every registered version at the Paper stage whose logic
 //!    version and parameters match the code in this binary (INV-10).
-//!    Paper decisions need validated evidence (INV-06); until Phase 7
-//!    produces evidence tables, they are NO TRADE with `insufficient_evidence`.
+//!    Paper decisions need validated evidence (INV-06): the evidence tables
+//!    of each version's latest passed validation (ADR 0010). Without them,
+//!    decisions are NO TRADE with `insufficient_evidence`.
 //! 6. Process each date with bars and journal a `day_closed` entry.
 //!
 //! Halts and decisions use the wall clock, so a halt set today also blocks a
@@ -48,8 +49,6 @@ use qd_domain::market::{Bar, BarSeries};
 use qd_domain::num::{Currency, Money};
 use qd_domain::proposal::AccountMode;
 use qd_risk::config::RiskConfig;
-use qd_strategy::strategy::Strategy;
-use qd_strategy::trend_pullback::TrendPullback;
 use rust_decimal::Decimal;
 use serde::Serialize;
 use serde_json::{Value, json};
@@ -57,8 +56,7 @@ use thiserror::Error;
 
 use crate::venue::PaperBroker;
 
-/// Evidence tables do not exist yet (they come from validation, Phase 7).
-/// A real source that has none: every paper decision fails the evidence gate.
+/// A source with no evidence: every decision fails the evidence gate.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoEvidenceTables;
 
@@ -106,8 +104,8 @@ pub struct PaperDeps {
     pub costs: Arc<dyn CostModel>,
     /// Risk configuration.
     pub risk: RiskConfig,
-    /// Evidence tables.
-    pub evidence: Arc<dyn EvidenceSource>,
+    /// Evidence tables, loaded at the start of each run.
+    pub evidence: Arc<dyn qd_app::evidence::EvidenceLoader>,
     /// Run lock.
     pub lock: Arc<dyn RunLock>,
     /// Wall clock.
@@ -188,31 +186,11 @@ pub struct PaperRunReport {
     pub active_positions: usize,
 }
 
-/// A strategy implementation this binary contains.
-pub struct CatalogEntry {
-    /// The logic.
-    pub strategy: Box<dyn Strategy>,
-    /// Its parameters, as the registry stores them.
-    pub parameters: Value,
-}
-
-impl std::fmt::Debug for CatalogEntry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CatalogEntry")
-            .field("logic_version", &self.strategy.logic_version())
-            .finish_non_exhaustive()
-    }
-}
+pub use qd_strategy::catalog::CatalogEntry;
 
 /// Every strategy implementation in this build.
 pub fn catalog() -> Result<Vec<CatalogEntry>, PaperError> {
-    let trend = TrendPullback::v1();
-    let parameters =
-        serde_json::to_value(trend.params()).map_err(|e| PaperError::Invalid(e.to_string()))?;
-    Ok(vec![CatalogEntry {
-        strategy: Box::new(trend),
-        parameters,
-    }])
+    qd_strategy::catalog::catalog().map_err(|e| PaperError::Invalid(e.to_string()))
 }
 
 /// The paper-trading runner.
@@ -482,10 +460,11 @@ impl PaperRunner {
         );
         let reconciliation_notes = session.reconcile_unknown_with_venue().await;
         let (slots, skipped_versions) = self.slots().await?;
+        let evidence = self.deps.evidence.load().await?;
         let engine = DecisionEngine::new(
             &self.deps.risk,
             self.deps.costs.as_ref(),
-            self.deps.evidence.as_ref(),
+            evidence.as_ref(),
             EvidencePolicy::Required {
                 min_evidence: self.deps.risk.min_evidence,
             },

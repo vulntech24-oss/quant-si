@@ -1,0 +1,16 @@
+# Validation criteria (ADR 0010). Thresholds are data, not code.
+# A strategy version passes only if every check passes; the report records
+# each check with its value, so a failed validation says exactly why.
+
+window_days = 91                   # walk-forward out-of-sample window length
+holdout_fraction = "0.2"           # last 20% of the date range, run once, at the end
+min_oos_trades = 30                # also the Decision Engine's min_evidence
+min_oos_expectancy_r = "0.10"      # mean net R over all out-of-sample trades
+min_positive_window_share = "0.5"  # windows with trades whose expectancy is > 0
+max_window_drawdown = "0.15"       # worst drawdown inside any window
+min_holdout_trades = 5
+min_holdout_expectancy_r = "0"     # the holdout must not lose money on average
+max_mc_drawdown_p95 = "0.20"       # Monte Carlo 95th-percentile max drawdown
+max_mc_prob_over_halt = "0.05"     # share of paths reaching the hard-halt drawdown
+monte_carlo_paths = 5000
+monte_carlo_seed = 20260927

@@ -5,17 +5,26 @@
 //! through the domain state machine, so an illegal transition can never be
 //! stored. Promotions need an owner approval backed by recorded evidence;
 //! automatic demotion needs none.
+//!
+//! Evidence is checked, not just cited (INV-11, ADR 0010):
+//!
+//! - `PassResearch` and the promotion to Paper need a **passed validation**
+//!   of this version.
+//! - Promotions to SmallCapital and Full need a **passed paper review** of
+//!   this version. Until one exists, no version can reach a live stage.
 
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use qd_domain::ids::EvidenceId;
 use qd_domain::ids::StrategyVersionId;
-use qd_domain::lifecycle::strategy::{StageEvent, StrategyStage};
+use qd_domain::lifecycle::strategy::{StageEvent, StrategyStage, TradingStage};
 use qd_domain::proposal::StrategyRef;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::evidence::{EvidenceKind, EvidenceStore};
 use crate::ports::{AuditLog, StoreError};
 
 /// A registered, immutable strategy version.
@@ -67,6 +76,9 @@ pub enum RegistryError {
     /// Stored events do not replay (the history is inconsistent).
     #[error("stored stage history does not replay: {0}")]
     CorruptHistory(String),
+    /// The cited evidence does not back the event.
+    #[error("evidence does not back this event: {0}")]
+    Evidence(String),
 }
 
 /// The Strategy Registry.
@@ -74,6 +86,7 @@ pub enum RegistryError {
 pub struct StrategyRegistry {
     store: Arc<dyn StrategyRegistryStore>,
     audit: Arc<dyn AuditLog>,
+    evidence: Arc<dyn EvidenceStore>,
 }
 
 impl std::fmt::Debug for StrategyRegistry {
@@ -85,8 +98,46 @@ impl std::fmt::Debug for StrategyRegistry {
 impl StrategyRegistry {
     /// Creates the registry.
     #[must_use]
-    pub fn new(store: Arc<dyn StrategyRegistryStore>, audit: Arc<dyn AuditLog>) -> Self {
-        Self { store, audit }
+    pub fn new(
+        store: Arc<dyn StrategyRegistryStore>,
+        audit: Arc<dyn AuditLog>,
+        evidence: Arc<dyn EvidenceStore>,
+    ) -> Self {
+        Self {
+            store,
+            audit,
+            evidence,
+        }
+    }
+
+    async fn check_evidence(
+        &self,
+        version: StrategyVersionId,
+        cited: EvidenceId,
+        kind: EvidenceKind,
+    ) -> Result<(), RegistryError> {
+        let record =
+            self.evidence.get(cited).await?.ok_or_else(|| {
+                RegistryError::Evidence(format!("evidence {cited} is not recorded"))
+            })?;
+        if record.version != version {
+            return Err(RegistryError::Evidence(format!(
+                "evidence {cited} is about another version"
+            )));
+        }
+        if record.kind != kind {
+            return Err(RegistryError::Evidence(format!(
+                "evidence {cited} is a {}, this needs a {}",
+                record.kind.code(),
+                kind.code()
+            )));
+        }
+        if !record.passed {
+            return Err(RegistryError::Evidence(format!(
+                "evidence {cited} did not pass"
+            )));
+        }
+        Ok(())
     }
 
     /// Registers a new version in `Draft`.
@@ -148,6 +199,20 @@ impl StrategyRegistry {
         let next = current
             .apply(event)
             .map_err(|e| RegistryError::IllegalTransition(e.to_string()))?;
+        match event {
+            StageEvent::PassResearch { evidence } => {
+                self.check_evidence(id, *evidence, EvidenceKind::Validation)
+                    .await?;
+            }
+            StageEvent::Promote { to, approval } => {
+                let kind = match to {
+                    TradingStage::Paper => EvidenceKind::Validation,
+                    TradingStage::SmallCapital | TradingStage::Full => EvidenceKind::PaperReview,
+                };
+                self.check_evidence(id, approval.evidence, kind).await?;
+            }
+            _ => {}
+        }
         self.store.append_stage_event(id, event, next).await?;
         self.audit
             .record(

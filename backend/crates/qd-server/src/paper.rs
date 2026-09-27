@@ -6,7 +6,7 @@ use std::sync::Arc;
 use chrono::{NaiveDate, NaiveTime};
 use qd_app::ports::{Clock, PaperTrading};
 use qd_app::registry::StrategyRegistry;
-use qd_broker_paper::{NoEvidenceTables, PaperDeps, PaperRunner, PaperSettings};
+use qd_broker_paper::{PaperDeps, PaperRunner, PaperSettings};
 use qd_store::Stores;
 
 use crate::config::ServerConfig;
@@ -25,11 +25,17 @@ pub fn paper_runner(
         reader: stores.journal.clone(),
         halts: stores.halts.clone(),
         market: stores.market.clone(),
-        registry: StrategyRegistry::new(stores.registry.clone(), stores.audit.clone()),
+        registry: StrategyRegistry::new(
+            stores.registry.clone(),
+            stores.audit.clone(),
+            stores.evidence.clone(),
+        ),
         accounts: stores.accounts.clone(),
         costs: Arc::new(config.costs.clone()),
         risk: config.risk.clone(),
-        evidence: Arc::new(NoEvidenceTables),
+        evidence: Arc::new(qd_app::evidence::StoreEvidenceLoader(
+            stores.evidence.clone(),
+        )),
         lock: stores.locks.clone(),
         clock,
     };

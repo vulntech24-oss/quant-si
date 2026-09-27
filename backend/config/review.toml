@@ -1,0 +1,10 @@
+# Paper-review criteria (ADR 0010). A passed review is the only evidence that
+# can back a promotion to a live stage; the owner still approves with step-up,
+# and every live-trading condition (INV-14) still applies.
+
+min_trades = 30                      # closed paper trades of the version
+min_days = 60                        # paper trading days processed
+min_expectancy_r = "0.05"            # realized mean net R
+max_expectancy_shortfall_r = "0.30"  # realized may trail predicted EV by at most this
+max_drawdown = "0.10"                # paper account drawdown
+max_brier = "0.25"                   # target-probability calibration (0.25 = coin flip at 0.5)
