@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 5 (HTTP API, auth, frontend) done; Phase 6 next**.
+- Current phase: **Phase 6 (paper trading, restore from the journal) done; Phase 7 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -30,7 +30,9 @@ runtime-checked, so `cargo sqlx prepare` does not apply (ADR 0007).
 
 Run: `qd migrate`, `qd user create --username NAME --role owner` (password on stdin),
 then `qd-server` with `QD_CONFIG` (see `config/quantdesk.example.toml`; set `frontend_dir`
-to serve the UI) and `QD_DATABASE_URL`. `qd --help` lists admin commands.
+to serve the UI) and `QD_DATABASE_URL`. Paper trading: import bars (`qd bars import`),
+then `qd paper run --config <file>` (or `[paper] daily_run_utc`). `qd --help` lists
+admin commands.
 
 Frontend, from `frontend/` (all must pass too):
 
@@ -86,7 +88,10 @@ backend/                     Cargo workspace (ADR 0002)
     src/live.rs              live gate (INV-14); `live-orders` feature, off by default
     src/memory.rs            in-memory journal and halt store (backtests, tests)
     src/registry.rs          Strategy Registry (stage = replay of stored events)
-  crates/qd-backtest/        SimClock, SimBroker (simulate_fill), run_backtest, metrics
+    src/session.rs           daily trading cycle shared by backtest and paper (INV-08)
+    src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
+  crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
+  crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics
   crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
   crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
@@ -109,11 +114,12 @@ frontend/                    Vite + strict TypeScript, no framework (ADR 0008)
   src/views.ts, main.ts      screens, top bar (PAPER/LIVE, halted), hash router
   tests/                     vitest
 design/stitch-reference/     Stitch export: visual reference only, not requirements
-docs/                        spec, ADRs, progress log
+docs/                        spec, ADRs, progress log, integrations/ (provider notes)
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-broker-paper, qd-marketdata.
+Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-marketdata (provider docs
+unreachable so far: `docs/integrations/`).
 Create a crate only when it has real code.
 
 ## Rules of thumb
@@ -124,6 +130,8 @@ Create a crate only when it has real code.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
+- The journal is the source of truth for trading state; never add mutable position or
+  order tables. Every Position Manager change journals a snapshot (ADR 0009).
 - Only the Decision Engine can create an `EntryAuthorization`; only the Order Gateway
   can create a `BrokerOrderRequest`. Keep those constructors `pub(crate)`.
 - Frontend: never `innerHTML`; never parse decimals into JS numbers; dangerous actions

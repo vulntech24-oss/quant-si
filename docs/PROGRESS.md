@@ -12,8 +12,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 3 | `qd-app` ports and use cases, `qd-backtest` | **Done** (2026-09-27) |
 | 4 | `qd-store`, `qd-server`, `qd-cli` | **Done** (2026-09-27) |
 | 5 | `qd-api` and frontend integration | **Done** (2026-09-27) |
-| 6 | Market data adapters, paper broker | Next (needs §4 items 1, 5, 11) |
-| 7 | Validation pipeline and review reports | Not started |
+| 6 | Paper trading, restore from the journal (provider adapters blocked) | **Done** (2026-09-27) |
+| 7 | Validation pipeline and review reports | Next |
 | 8 | AI orchestrator (advisory) | Not started (needs §4 item 8) |
 | 9 | Kite live order executor (`live-orders`) | Not started (needs §4 items 5–7) |
 
@@ -235,6 +235,60 @@ New invariant tests: `invariant_07_rearming_a_halt_needs_a_step_up`,
 `invariant_14_arming_needs_step_up_and_a_live_account`,
 `invariant_17_a_risk_blocked_decision_is_shown_as_no_trade_with_its_reason`.
 
+## Phase 6: paper trading and restore from the journal (2026-09-27)
+
+Built:
+
+- `qd-app/session.rs`: the daily trading cycle, shared by backtest and paper
+  (INV-08). It covers bars and fills, exits, booking closed trades, marking to
+  market, halt triggers, reconciliation and decisions for every strategy
+  slot, and ends with a `day_closed` journal entry. It uses two clocks: the
+  market clock for order placement, and the wall clock for halts and decisions.
+- `qd-app/restore.rs`: rebuilds the gateway, positions and account book from
+  the journal and refuses inconsistent books. The Position Manager now
+  journals full snapshots, the gateway and manager can be restored, and
+  held-bar counting is idempotent.
+- `qd-broker-paper`: the paper venue (moved from `qd-backtest::sim`,
+  restorable) and the paper runner (run lock, account check, restore,
+  registry and parameter check, catch-up over missing days).
+- `qd-store`: `JournalReader::replay` and `PgRunLock` (advisory locks).
+- `qd-server`: `[paper]` configuration, paper reconciliation at startup,
+  optional daily schedule. `qd paper run|state`; `GET /api/paper`,
+  `POST /api/paper/run`; a Paper screen in the frontend.
+- `docs/integrations/`: Kite and crypto recorded as blocked (docs
+  unreachable); the CSV bar import documented.
+
+Decisions and assumptions: ADR 0009.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, tests, build.
+- `cargo test --workspace`: 166 tests; the `live-orders` run passes.
+- The backtest's results are unchanged by the refactor (the determinism
+  test compares everything except random ids).
+- Key new test: a paper account run straight through and one run in three
+  separate runs with restores in between produce identical `day_closed`
+  records (dates, equities, trades), with zero reconciliation mismatches.
+  Re-running processes nothing.
+- Mutation checks:
+  - Restoring filled intents as still working (a bug found by a new test and
+    fixed) is caught.
+  - Using the market clock for decisions is caught by the catch-up halt test.
+- Smoke run on local PostgreSQL:
+  - `qd paper run` twice: the second run resumed after the first. Every
+    decision was NO TRADE with `insufficient_evidence`, as intended.
+  - `qd paper state`.
+  - `qd-server` reconciled against the paper venue and cleared its startup
+    halt. `/api/paper` and `/api/paper/run` worked, and a future date was refused.
+
+New invariant tests: `invariant_08_a_restarted_paper_run_matches_an_uninterrupted_one`,
+`invariant_06_a_book_the_orders_contradict_is_refused_and_halts`,
+`invariant_02_a_halt_set_now_blocks_entries_in_a_catch_up_run`,
+`invariant_06_paper_decisions_without_evidence_are_no_trade`,
+`invariant_10_a_version_whose_parameters_differ_from_the_code_is_not_run`,
+`invariant_05_the_journal_alone_rebuilds_the_book_and_the_order_ledger`,
+`invariant_06_restore_keeps_unanswered_orders_unknown_and_refuses_lost_snapshots`.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -256,8 +310,13 @@ New invariant tests: `invariant_07_rearming_a_halt_needs_a_step_up`,
 - The gateway's journal-failure latch clears only on restart (ADR 0006).
 - Tests need a PostgreSQL reachable through `DATABASE_URL` (ADR 0007).
 - Redis is deferred until a concrete need (ADR 0007).
-- Positions are not yet persisted: the server's book starts empty, so any
-  broker position at startup is a reconciliation mismatch (Phase 6).
+- **Provider adapters are blocked:** the build environment cannot reach
+  kite.trade, Binance or NSE (see `docs/integrations/`). Bars come in through
+  CSV import until the owner allows those hosts.
+- Paper decisions are all NO TRADE until Phase 7 produces evidence tables.
+- Costs the cost model cannot quote are booked as zero in backtest and paper
+  (ADR 0009); revisit with verified schedules.
+- Manual entries (through the Decision Engine and Risk Gate) are not built yet.
 - `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
   from validation (Phase 7); until then it cannot pass the evidence gate.
 
@@ -265,15 +324,13 @@ New invariant tests: `invariant_07_rearming_a_halt_needs_a_step_up`,
 - A startup halt from a failed boot stays active until the owner re-arms it
   (ADR 0008).
 
-## Next steps (Phase 6)
+## Next steps (Phase 7)
 
-1. Persist positions and orders so reconciliation compares the stored book
-   with the broker.
-2. `qd-broker-paper`: a paper broker for live market data, using the same
-   fill rules as the backtest (INV-08).
-3. `qd-marketdata`: daily-bar ingestion adapters (read provider docs first;
-   record them in `docs/integrations/`).
-4. The scanner and daily run loop: after each close, run the Decision Engine
-   over the universe, then the Gateway and Position Manager in paper mode.
-5. Manual entries through the Decision Engine and Risk Gate (INV-03), and
-   positions and orders views in the frontend.
+1. Walk-forward, out-of-sample and holdout validation of a strategy version
+   over stored bars, producing recorded evidence (the evidence id a
+   promotion needs, INV-11).
+2. Evidence tables per version and setup type (probabilities, time-exit R,
+   counts), stored and served through `EvidenceSource`, so paper decisions
+   can pass the evidence gate.
+3. Monte Carlo on trade sequences (drawdown and ruin distributions).
+4. Review and calibration: predicted vs realized outcomes from the journal.
