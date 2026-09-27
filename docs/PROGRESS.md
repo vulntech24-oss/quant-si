@@ -76,7 +76,7 @@ Built:
   20-day high/low, 20-day rate of change), regime classifier `regime-v1`, the
   `Strategy` trait with `run_strategy`, and `trend-pullback-1.0.0`.
 - CI workflow `.github/workflows/ci.yml` running the §1.4 commands (not yet
-  run on GitHub: the repository has not received a push).
+  seen running on GitHub).
 
 Decisions and assumptions: ADR 0005.
 
@@ -118,8 +118,8 @@ New invariant tests: `invariant_02_active_halts_reject_entries`,
   equity 20%, precious metals 10%, energy 20%, crypto 30%.
 - Owner decisions still open (ADR 0004): crypto venue, stock universe, Kite
   plan, VPS/static IP, DDPI, AI providers and budgets, frontend approach, FX source.
-- GitHub push is blocked (Claude has no access to the repository); CI has
-  never run.
+- The branch is pushed (2026-09-27). No CI run had appeared on GitHub right
+  after the push; check that Actions is enabled for the repository.
 - `trend-pullback-1.0.0` has no evidence yet. Its probabilities will come
   from validation (Phase 7); until then it cannot pass the evidence gate.
 
