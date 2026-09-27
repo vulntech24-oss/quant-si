@@ -57,11 +57,21 @@ async function render(ctx: Ctx): Promise<void> {
     "header",
     { class: "topbar" },
     h("div", { class: "brand" }, h("img", { src: "/mark.svg", alt: "", width: "28", height: "28" }), h("span", {}, "QuantDesk"), modeBadge(ctx.status), haltBadge(ctx.status)),
-    h("nav", {}, ...NAV.map(([href, label]) => h("a", { href, class: route.startsWith(href) ? "active" : "" }, label))),
+    h("button", { class: "ghost menu-toggle", "aria-label": "Menu", "aria-expanded": "false", onclick: (e: Event) => {
+      const nav = document.querySelector(".topbar nav");
+      const open = nav?.classList.toggle("open") ?? false;
+      (e.currentTarget as HTMLElement).setAttribute("aria-expanded", String(open));
+    } }, "Menu"),
+    h("nav", {}, ...NAV.map(([href, label]) => h("a", { href, class: route.startsWith(href) ? "active" : "", onclick: () => document.querySelector(".topbar nav")?.classList.remove("open") }, label))),
     h("div", { class: "user" }, h("span", { class: "muted" }, `${ctx.me.username} (${ctx.me.role})`), liveArmToggle(ctx), h("button", { class: "ghost", onclick: async () => { await api.logout(); location.reload(); } }, "Log out")),
   );
   clear(root);
-  root.append(header, ...(banner ? [banner] : []), main, h("footer", { class: "muted small" }, ctx.status ? `Environment: ${ctx.status.environment} · times in IST · updated ${formatIst(ctx.status.now)}` : ""));
+  // On a phone: the three things to reach at once, always at hand.
+  const quick = h("nav", { class: "quickbar", "aria-label": "Quick actions" },
+    h("a", { href: "#/decisions" }, "Decisions"),
+    h("a", { href: "#/portfolio" }, "Portfolio"),
+    h("a", { href: "#/halts", class: "danger" }, "Kill switch"));
+  root.append(header, ...(banner ? [banner] : []), main, quick, h("footer", { class: "muted small" }, ctx.status ? `Environment: ${ctx.status.environment} · times in IST · updated ${formatIst(ctx.status.now)}` : ""));
   const rerender = () => void render(ctx);
   try {
     let view: HTMLElement;

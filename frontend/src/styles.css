@@ -108,3 +108,27 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
 .price-chart .drawdown { fill: var(--short, #cf222e); opacity: 0.35; }
 .secret-key { font-size: 1.1rem; letter-spacing: 0.08em; user-select: all; }
 .wrap-anywhere { overflow-wrap: anywhere; }
+
+/* ---------- phones (ADR 0015): decisions and the kill switch within one tap ---------- */
+.menu-toggle, .quickbar { display: none; }
+@media (max-width: 800px) {
+  .topbar { padding: 8px 12px; }
+  .topbar { gap: 8px; }
+  .topbar .brand { width: 100%; flex-wrap: wrap; }
+  .menu-toggle { display: inline-block; order: 2; }
+  .topbar .user { order: 3; margin-left: auto; gap: 8px; }
+  .topbar nav { order: 4; display: none; width: 100%; flex-direction: column; }
+  .topbar nav.open { display: flex; }
+  .topbar nav a { padding: 10px 12px; }
+  main { padding: 12px 12px 88px; }
+  .table { display: block; overflow-x: auto; white-space: nowrap; }
+  .row { flex-wrap: wrap; }
+  .card { padding: 12px; }
+  input, select, textarea, button { min-height: 40px; }
+  form.row > input, form.row > select { flex: 1 1 100%; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .quickbar { display: flex; position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; gap: 8px; padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--card, #fff); border-top: 1px solid var(--border); }
+  .quickbar a { flex: 1; text-align: center; padding: 12px 8px; border-radius: var(--radius); text-decoration: none; color: var(--ink); border: 1px solid var(--border); font-weight: 500; }
+  .quickbar a.danger { background: var(--short, #cf222e); border-color: var(--short, #cf222e); color: #fff; }
+  footer { padding-bottom: 72px; }
+}
