@@ -170,6 +170,21 @@ enum BarsCommand {
 #[derive(Subcommand)]
 enum StrategyCommand {
     /// Register trend-pullback-1.0.0 as a new version (Draft).
+    /// Register a version of any strategy in this build's catalog, e.g.
+    /// `--logic-version breakout-1.0.0` (`strategy catalog` lists them).
+    Register {
+        #[arg(long)]
+        logic_version: String,
+        #[arg(long)]
+        version_number: u32,
+        #[arg(long)]
+        git_sha: String,
+        /// Existing strategy family id, if this is a later version.
+        #[arg(long)]
+        strategy_id: Option<StrategyId>,
+    },
+    /// Logic versions in this build, with their parameters.
+    Catalog,
     RegisterTrendPullback {
         #[arg(long)]
         version_number: u32,
@@ -491,6 +506,52 @@ async fn strategy(
         stores.evidence.clone(),
     );
     match cmd {
+        StrategyCommand::Register {
+            logic_version,
+            version_number,
+            git_sha,
+            strategy_id,
+        } => {
+            let entries = qd_strategy::catalog::catalog().map_err(|e| e.to_string())?;
+            let entry = entries
+                .iter()
+                .find(|c| c.strategy.logic_version() == logic_version)
+                .ok_or_else(|| {
+                    format!("{logic_version} is not in this build; see `qd strategy catalog`")
+                })?;
+            let record = StrategyVersionRecord {
+                reference: StrategyRef {
+                    strategy_id: strategy_id.unwrap_or_else(|| StrategyId::new_at(now)),
+                    name: entry.strategy.name().to_owned(),
+                    version_id: StrategyVersionId::new_at(now),
+                    version_number,
+                    logic_version: logic_version.clone(),
+                    git_sha,
+                },
+                parameters: entry.parameters.clone(),
+                rr_floor: entry.rr_floor,
+            };
+            registry
+                .register(&record, actor)
+                .await
+                .map_err(|e| e.to_string())?;
+            print(&record)
+        }
+        StrategyCommand::Catalog => {
+            let entries = qd_strategy::catalog::catalog().map_err(|e| e.to_string())?;
+            print(
+                &entries
+                    .iter()
+                    .map(|c| {
+                        serde_json::json!({
+                            "logic_version": c.strategy.logic_version(),
+                            "name": c.strategy.name(),
+                            "parameters": c.parameters,
+                        })
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        }
         StrategyCommand::RegisterTrendPullback {
             version_number,
             git_sha,
@@ -686,6 +747,7 @@ async fn backtest(args: BacktestArgs, stores: &Stores) -> Result<(), String> {
             from: args.from,
             to: args.to,
             equity: args.equity,
+            logic_version: None,
         })
         .await
         .map_err(|e| e.to_string())?;

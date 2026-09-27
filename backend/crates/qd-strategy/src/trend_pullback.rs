@@ -75,6 +75,13 @@ impl TrendPullback {
         }
     }
 
+    /// The same logic with other parameters, for research only (a
+    /// parameter search). Only [`Self::v1`] is in the catalog (INV-10).
+    #[must_use]
+    pub const fn with_params(params: TrendPullbackParams) -> Self {
+        Self { params }
+    }
+
     /// Parameters.
     #[must_use]
     pub const fn params(&self) -> &TrendPullbackParams {

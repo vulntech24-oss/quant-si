@@ -203,6 +203,8 @@ export async function strategiesView(ctx: Ctx, rerender: () => void): Promise<HT
 
 export async function backtestView(ctx: Ctx): Promise<HTMLElement> {
   const instruments = await api.instruments();
+  const strategies = await api.strategyCatalog();
+  const strategy = h("select", { "aria-label": "Strategy" }, ...strategies.map((s) => h("option", { value: s.logic_version }, `${s.name} (${s.logic_version})`)));
   const result = h("div", { class: "stack" });
   const select = h("select", { "aria-label": "Instrument" }, ...instruments.map((i) => h("option", { value: i.id }, `${i.symbol} (v${i.version})`)));
   const from = h("input", { type: "date", "aria-label": "From" });
@@ -213,7 +215,7 @@ export async function backtestView(ctx: Ctx): Promise<HTMLElement> {
     clear(result);
     result.append(h("p", { class: "muted" }, "Running…"));
     try {
-      const report = await api.backtest({ instrument: select.value, from: from.value, to: to.value, equity: equity.value });
+      const report = await api.backtest({ instrument: select.value, from: from.value, to: to.value, equity: equity.value, logic_version: strategy.value });
       clear(result);
       result.append(backtestReport(report));
     } catch (err) {
@@ -221,7 +223,7 @@ export async function backtestView(ctx: Ctx): Promise<HTMLElement> {
       result.append(h("p", { class: "error" }, errorText(err)));
     }
   };
-  return h("section", {}, h("h1", {}, "Research backtest"), h("p", { class: "muted" }, "Trend pullback, simulated at the Paper stage with a neutral evidence prior. Research only: results are not evidence until validated out of sample."), isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, select, from, to, equity, h("button", { class: "primary" }, "Run")) : h("p", { class: "muted" }, "Only the owner can run backtests."), result);
+  return h("section", {}, h("h1", {}, "Research backtest"), h("p", { class: "muted" }, "Any strategy in this build, simulated at the Paper stage with a neutral evidence prior. Research only: results are not evidence until validated out of sample."), isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, strategy, select, from, to, equity, h("button", { class: "primary" }, "Run")) : h("p", { class: "muted" }, "Only the owner can run backtests."), result);
 }
 
 function backtestReport(report: Json): HTMLElement {

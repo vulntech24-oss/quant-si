@@ -9,7 +9,10 @@
 //! - [`features`]: versioned feature set computed from completed daily bars.
 //! - [`regime`]: deterministic regime classifier.
 //! - [`strategy`]: the `Strategy` trait, its output and [`strategy::run_strategy`].
-//! - [`trend_pullback`]: the first strategy, a long pullback in an uptrend.
+//! - [`trend_pullback`]: a long pullback in an uptrend.
+//! - [`trend_pullback_short`]: its mirror image, a short rally in a downtrend.
+//! - [`breakout`]: a long 20-day-high breakout.
+//! - [`mean_reversion`]: a long bounce from a stretched low inside a range.
 
 #![deny(
     clippy::float_arithmetic,
@@ -18,8 +21,12 @@
     clippy::print_stderr
 )]
 
+pub mod breakout;
 pub mod catalog;
 pub mod features;
+pub mod mean_reversion;
 pub mod regime;
+mod rules;
 pub mod strategy;
 pub mod trend_pullback;
+pub mod trend_pullback_short;

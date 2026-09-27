@@ -46,6 +46,7 @@ pub fn router(state: ApiState) -> Router {
         .route("/halts/{id}/rearm", post(rearm_halt))
         .route("/strategies", get(strategies))
         .route("/strategies/{id}/events", post(strategy_event))
+        .route("/strategy-catalog", get(strategy_catalog))
         .route("/instruments", get(instruments).post(add_instrument))
         .route("/instruments/{id}/bars", get(bars).post(import_bars))
         .route("/instruments/{id}/quality", get(bar_quality))
@@ -640,6 +641,23 @@ async fn bar_quality(
         .await
         .map(Json)
         .map_err(|e| ApiError::BadRequest(e.0))
+}
+
+/// The strategy implementations in this build (logic version, name, parameters).
+async fn strategy_catalog(_caller: Caller) -> Result<Json<Value>, ApiError> {
+    let entries = qd_strategy::catalog::catalog().map_err(internal)?;
+    Ok(Json(Value::Array(
+        entries
+            .iter()
+            .map(|c| {
+                json!({
+                    "logic_version": c.strategy.logic_version(),
+                    "name": c.strategy.name(),
+                    "parameters": c.parameters,
+                })
+            })
+            .collect(),
+    )))
 }
 
 // ---------- validation and evidence ----------

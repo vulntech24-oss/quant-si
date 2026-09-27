@@ -4,8 +4,11 @@
 
 use serde_json::Value;
 
+use crate::breakout::Breakout;
+use crate::mean_reversion::MeanReversion;
 use crate::strategy::Strategy;
 use crate::trend_pullback::TrendPullback;
+use crate::trend_pullback_short::TrendPullbackShort;
 
 /// One implementation.
 pub struct CatalogEntry {
@@ -13,6 +16,8 @@ pub struct CatalogEntry {
     pub strategy: Box<dyn Strategy>,
     /// Its parameters, serialized as the registry stores them.
     pub parameters: Value,
+    /// Its net reward-to-risk floor (part of the parameters).
+    pub rr_floor: rust_decimal::Decimal,
 }
 
 impl std::fmt::Debug for CatalogEntry {
@@ -26,11 +31,31 @@ impl std::fmt::Debug for CatalogEntry {
 /// The catalog. Fails only if parameters cannot be serialized.
 pub fn catalog() -> Result<Vec<CatalogEntry>, serde_json::Error> {
     let trend = TrendPullback::v1();
-    let parameters = serde_json::to_value(trend.params())?;
-    Ok(vec![CatalogEntry {
-        strategy: Box::new(trend),
-        parameters,
-    }])
+    let short = TrendPullbackShort::v1();
+    let breakout = Breakout::v1();
+    let reversion = MeanReversion::v1();
+    Ok(vec![
+        CatalogEntry {
+            parameters: serde_json::to_value(trend.params())?,
+            rr_floor: trend.params().rr_floor,
+            strategy: Box::new(trend),
+        },
+        CatalogEntry {
+            parameters: serde_json::to_value(short.params())?,
+            rr_floor: short.params().rr_floor,
+            strategy: Box::new(short),
+        },
+        CatalogEntry {
+            parameters: serde_json::to_value(breakout.params())?,
+            rr_floor: breakout.params().rr_floor,
+            strategy: Box::new(breakout),
+        },
+        CatalogEntry {
+            parameters: serde_json::to_value(reversion.params())?,
+            rr_floor: reversion.params().rr_floor,
+            strategy: Box::new(reversion),
+        },
+    ])
 }
 
 /// The implementation for a registered version, if the build has it with

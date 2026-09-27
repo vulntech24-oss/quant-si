@@ -308,6 +308,9 @@ pub struct BacktestRequest {
     pub to: chrono::NaiveDate,
     /// Starting equity in the instrument currency.
     pub equity: Decimal,
+    /// Logic version from the build's catalog; `trend-pullback-1.0.0` when absent.
+    #[serde(default)]
+    pub logic_version: Option<String>,
 }
 
 /// Runs research backtests (implemented by `qd-backtest`, wired by the binaries).

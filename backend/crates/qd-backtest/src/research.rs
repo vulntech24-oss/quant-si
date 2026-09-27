@@ -1,7 +1,7 @@
 //! Research backtests of stored data, behind the `BacktestRunner` port.
 //!
 //! Loads the latest instrument spec and point-in-time bars (known now), runs
-//! `trend-pullback-1.0.0` simulated at the Paper stage with the neutral
+//! the requested catalog strategy (default `trend-pullback-1.0.0`) simulated at the Paper stage with the neutral
 //! evidence prior and the research risk configuration (ADR 0006), and returns
 //! the report as JSON. The API and the CLI both use this.
 
@@ -106,7 +106,15 @@ impl BacktestRunner for ResearchBacktester {
             .map(Bar::date)
             .ok_or_else(|| StoreError("no bars".to_owned()))?;
         let series = BarSeries::new(spec.id, last, bars).map_err(error)?;
-        let strategy = TrendPullback::v1();
+        let catalog = qd_strategy::catalog::catalog().map_err(error)?;
+        let wanted = request
+            .logic_version
+            .as_deref()
+            .unwrap_or(TrendPullback::LOGIC_VERSION);
+        let entry = catalog
+            .iter()
+            .find(|c| c.strategy.logic_version() == wanted)
+            .ok_or_else(|| StoreError(format!("{wanted} is not in this build")))?;
         let product = if spec.kind == InstrumentKind::Future {
             ProductType::Margin
         } else {
@@ -119,15 +127,15 @@ impl BacktestRunner for ResearchBacktester {
             strategy: StrategyVersionInfo {
                 reference: StrategyRef {
                     strategy_id: StrategyId::new_at(now),
-                    name: "Trend pullback".to_owned(),
+                    name: entry.strategy.name().to_owned(),
                     version_id: StrategyVersionId::new_at(now),
                     version_number: 0,
-                    logic_version: TrendPullback::LOGIC_VERSION.to_owned(),
+                    logic_version: wanted.to_owned(),
                     git_sha: "research".to_owned(),
                 },
                 // Research runs simulate the version at Paper (ADR 0006).
                 stage: StrategyStage::Paper,
-                rr_floor: strategy.params().rr_floor,
+                rr_floor: entry.rr_floor,
                 slippage: SlippageAssumption::new("slip-v1", spec.tick_size).map_err(error)?,
             },
             evidence: EvidencePolicy::ResearchPrior,
@@ -142,7 +150,7 @@ impl BacktestRunner for ResearchBacktester {
             series,
         }];
         let report = run_backtest(
-            &strategy,
+            entry.strategy.as_ref(),
             &data,
             &config,
             &self.risk,

@@ -34,6 +34,8 @@ paths:
     get: {summary: Registered strategy versions and their stages}
   /api/strategies/{id}/events:
     post: {summary: Apply a stage event (owner; promote and resume need step-up)}
+  /api/strategy-catalog:
+    get: {summary: Strategy logic versions in this build with their parameters}
   /api/instruments:
     get: {summary: Instrument specs effective today}
     post: {summary: "Add an instrument spec version from TOML, body {toml} (owner; specs are immutable)"}

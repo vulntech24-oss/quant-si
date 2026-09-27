@@ -15,6 +15,8 @@ getrandom.workspace = true
 hex.workspace = true
 qd-app.workspace = true
 qd-domain.workspace = true
+# The catalog of strategy logic versions (pure, no I/O).
+qd-strategy.workspace = true
 rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -28,7 +30,6 @@ tracing.workspace = true
 toml.workspace = true
 async-trait.workspace = true
 qd-store.workspace = true
-qd-strategy.workspace = true
 sqlx.workspace = true
 tower = { version = "0.5", default-features = false, features = ["util"] }
 
