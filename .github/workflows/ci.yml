@@ -72,3 +72,15 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+
+  docker:
+    name: Container image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (not pushed)
+        run: docker build -t quantdesk:ci .
+      - name: Image runs as a non-root user and has no shell-level secrets
+        run: |
+          test "$(docker image inspect quantdesk:ci --format '{{.Config.User}}')" = "10001:10001"
+          ! docker image inspect quantdesk:ci --format '{{json .Config.Env}}' | grep -iE 'password|secret|token|database_url'

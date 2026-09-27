@@ -1,0 +1,10 @@
+# TLS termination for QuantDesk. With a real domain in QD_DOMAIN, Caddy gets
+# a certificate automatically; with "localhost" it uses its internal CA.
+{$QD_DOMAIN} {
+	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
+	# Operational endpoints stay inside the compose network.
+	@internal path /metrics
+	respond @internal 404
+	reverse_proxy qd-server:8080
+}

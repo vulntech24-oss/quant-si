@@ -1,0 +1,61 @@
+# QuantDesk on one host: PostgreSQL, qd-server and a TLS reverse proxy.
+# Secrets come from deploy/.env (never committed; see .env.example).
+name: quantdesk
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quantdesk
+      POSTGRES_DB: quantdesk
+      POSTGRES_PASSWORD: ${QD_POSTGRES_PASSWORD:?set QD_POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantdesk"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  qd-server:
+    image: quantdesk:latest
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      QD_DATABASE_URL: postgres://quantdesk:${QD_POSTGRES_PASSWORD}@postgres:5432/quantdesk
+      RUST_LOG: info
+    # Optional: mount an edited configuration.
+    # volumes:
+    #   - ./quantdesk.toml:/etc/quantdesk/quantdesk.toml:ro
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    networks: [internal]
+
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [qd-server]
+    environment:
+      QD_DOMAIN: ${QD_DOMAIN:-localhost}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks: [internal]
+
+volumes:
+  pgdata:
+  caddy_data:
+
+networks:
+  internal:

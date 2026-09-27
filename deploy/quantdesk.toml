@@ -1,0 +1,31 @@
+# Container configuration (ADR 0012). Mounted over or edited per deployment;
+# the database URL comes only from QD_DATABASE_URL (set by compose from .env).
+#
+# environment = "production" makes session cookies Secure: serve it only
+# behind the TLS proxy (deploy/Caddyfile). Live trading stays off.
+environment = "production"
+
+# Inside the compose network only; the proxy is the one published port.
+bind = "0.0.0.0:8080"
+database_max_connections = 10
+
+live_trading_enabled = false
+
+# Create this account with `qd account create` (see docs/OPERATIONS.md), then
+# replace the id here.
+account_id = "00000000-0000-7000-8000-000000000001"
+
+risk_config = "risk.toml"
+cost_schedules = ["costs/india-zerodha.toml"]
+validation_criteria = "validation.toml"
+review_criteria = "review.toml"
+frontend_dir = "/usr/share/quantdesk/frontend"
+session_hours = 12
+
+[paper]
+initial_equity = "1000000"
+start_date = "2026-10-01"
+daily_run_utc = "13:00:00"     # 18:30 IST, after the evening bar import
+
+[ai]
+enabled = false

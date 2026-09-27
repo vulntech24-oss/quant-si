@@ -1,0 +1,11 @@
+# Build outputs, dependencies and anything local or secret never enter the image.
+**/target
+**/node_modules
+frontend/dist
+.env
+.env.*
+**/*.pem
+**/*.key
+backend/config/quantdesk.toml
+.git
+design
