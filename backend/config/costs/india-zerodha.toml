@@ -1,0 +1,167 @@
+# Transaction cost schedules for Zerodha (India).
+#
+# UNVERIFIED. zerodha.com was not reachable from the build environment on
+# 2026-09-27, so these rates come from third-party summaries and earlier
+# knowledge of Zerodha's published charges. Before any live use, the owner must
+# check every rate against https://zerodha.com/charges and the exchange
+# circulars, then set status = "verified" and bump `version` if anything changed.
+# The Risk Gate refuses unverified schedules for live accounts.
+#
+# Rates are fractions of turnover written as strings ("0.001" = 0.1%), so no
+# value passes through binary floating point.
+
+# Cash equities and equity ETFs, NSE delivery.
+[[schedules]]
+id = "zerodha-nse-equity-delivery"
+version = 1
+effective_from = "2026-01-01"
+venue = "nse"
+instrument_kinds = ["cash_equity", "etf"]
+asset_classes = ["equity"]
+product = "delivery"
+currency = "INR"
+gst_rate = "0.18"
+rounding_dp = 2
+
+[schedules.brokerage]
+rate = "0"
+
+[[schedules.charges]]
+name = "stt"                      # securities transaction tax, 0.1% both sides
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.001" }
+gst = false
+
+[[schedules.charges]]
+name = "exchange_transaction"     # NSE cash, 0.00307%
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.0000307" }
+gst = true
+
+[[schedules.charges]]
+name = "sebi_fee"                 # INR 10 per crore
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.000001" }
+gst = true
+
+[[schedules.charges]]
+name = "stamp_duty"               # 0.015% on purchases
+applies_to = "purchase"
+basis = { kind = "turnover", rate = "0.00015" }
+gst = false
+
+[[schedules.charges]]
+name = "dp_charge"                # depository charge per scrip per day on disposals; modeled per order
+applies_to = "disposal"
+basis = { kind = "per_order", amount = "13" }
+gst = true
+
+[schedules.verification]
+status = "unverified"
+checked_on = "2026-09-27"
+sources = [
+    "https://zerodha.com/charges/ (not reachable from the build environment)",
+    "https://v2.webnotes.in/zerodha-hidden-charges (third party)",
+    "https://www.cashoverflow.in/zerodha-charges/ (third party)",
+]
+note = "Third-party figures. The DP charge applies per scrip per day, not per order."
+
+# Gold and silver ETFs, NSE delivery. These are not equity-oriented funds, so
+# no STT is modeled. Confirm this treatment before live use.
+[[schedules]]
+id = "zerodha-nse-commodity-etf-delivery"
+version = 1
+effective_from = "2026-01-01"
+venue = "nse"
+instrument_kinds = ["etf"]
+asset_classes = ["precious_metal"]
+product = "delivery"
+currency = "INR"
+gst_rate = "0.18"
+rounding_dp = 2
+
+[schedules.brokerage]
+rate = "0"
+
+[[schedules.charges]]
+name = "exchange_transaction"
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.0000307" }
+gst = true
+
+[[schedules.charges]]
+name = "sebi_fee"
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.000001" }
+gst = true
+
+[[schedules.charges]]
+name = "stamp_duty"
+applies_to = "purchase"
+basis = { kind = "turnover", rate = "0.00015" }
+gst = false
+
+[[schedules.charges]]
+name = "dp_charge"
+applies_to = "disposal"
+basis = { kind = "per_order", amount = "13" }
+gst = true
+
+[schedules.verification]
+status = "unverified"
+checked_on = "2026-09-27"
+sources = [
+    "https://zerodha.com/charges/ (not reachable from the build environment)",
+    "https://v2.webnotes.in/zerodha-hidden-charges (third party)",
+]
+note = "STT treatment of gold and silver ETFs is assumed (none); confirm."
+
+# Non-agricultural commodity futures (crude oil, gold, silver), MCX carry-forward.
+[[schedules]]
+id = "zerodha-mcx-futures"
+version = 1
+effective_from = "2026-01-01"
+venue = "mcx"
+instrument_kinds = ["future"]
+asset_classes = ["energy", "precious_metal"]
+product = "margin"
+currency = "INR"
+gst_rate = "0.18"
+rounding_dp = 2
+
+[schedules.brokerage]
+rate = "0.0003"                   # 0.03% or INR 20 per executed order, whichever is lower
+max_per_order = "20"
+
+[[schedules.charges]]
+name = "ctt"                      # commodity transaction tax, 0.01% on disposals
+applies_to = "disposal"
+basis = { kind = "turnover", rate = "0.0001" }
+gst = false
+
+[[schedules.charges]]
+name = "exchange_transaction"     # MCX futures, 0.0021%
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.000021" }
+gst = true
+
+[[schedules.charges]]
+name = "sebi_fee"
+applies_to = "both"
+basis = { kind = "turnover", rate = "0.000001" }
+gst = true
+
+[[schedules.charges]]
+name = "stamp_duty"               # 0.002% on purchases
+applies_to = "purchase"
+basis = { kind = "turnover", rate = "0.00002" }
+gst = false
+
+[schedules.verification]
+status = "unverified"
+checked_on = "2026-09-27"
+sources = [
+    "https://zerodha.com/charges/ (not reachable from the build environment)",
+    "https://v2.webnotes.in/zerodha-commodity-brokerage (third party)",
+]
+note = "Third-party figures."

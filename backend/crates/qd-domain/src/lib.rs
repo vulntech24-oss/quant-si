@@ -11,8 +11,10 @@
 //! - [`instrument`]: `InstrumentSpec` (data, never hardcoded) and tick/lot rounding.
 //! - [`action`]: `TradeAction` and the explicit UI labels (INV-12).
 //! - [`outcome`]: `DecisionOutcome`, `NoTradeReason`, `ExitReason`.
+//! - [`market`]: daily bars and point-in-time bar series.
 //! - [`plan`]: tick-rounded, validated trade plans.
 //! - [`economics`]: per-unit economics, outcome probabilities, expected value.
+//! - [`costs`]: the versioned, data-driven cost model.
 //! - [`sizing`]: position sizing steps that do not depend on portfolio state.
 //! - [`portfolio`]: open risk, daily P&L, drawdown, R-multiple.
 //! - [`proposal`]: the complete `TradeProposal`.
@@ -28,11 +30,13 @@
 )]
 
 pub mod action;
+pub mod costs;
 pub mod economics;
 pub mod halt;
 pub mod ids;
 pub mod instrument;
 pub mod lifecycle;
+pub mod market;
 pub mod num;
 pub mod order_rules;
 pub mod outcome;

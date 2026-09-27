@@ -97,6 +97,28 @@ impl TradeAction {
             Self::CloseShort => "BUY TO COVER (close short)",
         }
     }
+
+    /// Whether the action acquires or disposes of units. Statutory charges
+    /// (transaction taxes, stamp duty) depend on this, not on the side.
+    #[must_use]
+    pub const fn transfer(self) -> Transfer {
+        match self {
+            Self::OpenLong | Self::CloseShort => Transfer::Purchase,
+            Self::CloseLong | Self::OpenShort => Transfer::Disposal,
+        }
+    }
+}
+
+/// Direction of the transfer of units in one order, used only for charges.
+///
+/// OpenLong and CloseShort acquire units; CloseLong and OpenShort dispose of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Transfer {
+    /// Units are acquired.
+    Purchase,
+    /// Units are disposed of.
+    Disposal,
 }
 
 /// An action that opens a position. `DecisionOutcome::Enter` can only hold these.
