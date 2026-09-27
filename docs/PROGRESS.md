@@ -14,8 +14,8 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 5 | `qd-api` and frontend integration | **Done** (2026-09-27) |
 | 6 | Paper trading, restore from the journal (provider adapters blocked) | **Done** (2026-09-27) |
 | 7 | Validation, evidence, Monte Carlo, review and calibration | **Done** (2026-09-27) |
-| 8 | AI orchestrator (advisory) | Next (needs §4 item 8; provider docs) |
-| 9 | Kite live order executor (`live-orders`) | Not started (needs §4 items 5–7) |
+| 8 | Advisory AI in shadow mode (provider adapters blocked) | **Done** (2026-09-27) |
+| 9 | Live trading path (`live-orders`), deployment, monitoring | Next (Kite docs blocked) |
 
 ## Phase 0: audit (2026-09-27)
 
@@ -338,6 +338,44 @@ Decisions and assumptions: ADR 0010.
 New invariant tests: `invariant_11_stage_events_need_recorded_passing_evidence_of_the_right_kind`,
 `invariant_11_validation_evidence_promotes_and_feeds_paper_decisions`.
 
+## Phase 8: advisory AI in shadow mode (2026-09-27)
+
+Built:
+
+- `qd-ai`:
+  - the `Advisor` interface and an input packet built from the post-risk
+    decision (no equity, quantities or secrets);
+  - validated, bounded advice;
+  - an orchestrator: entry decisions only, once per advisor, daily budget,
+    timeout per call, failures isolated;
+  - `checklist-v1`, a deterministic advisor;
+  - a scorecard of stances against outcomes;
+  - `AiService` behind the `AiAdvisory` port.
+- `JournalEntry::AiAdvice` (append-only): the orchestrator's only write.
+- `qd-server`: `[ai]` config (disabled by default), wiring, and an AI run
+  after the daily paper run. `qd ai run|advice|scorecard`; `POST /api/ai/run`,
+  `GET /api/ai/advice`, `GET /api/ai/scorecard`. Frontend: an AI page, and
+  advice on the decision detail marked advisory.
+- `docs/integrations/ai-providers.md`: provider adapters blocked (docs unreachable).
+
+Decisions and assumptions: ADR 0011.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, tests, build.
+- `cargo test --workspace`: 183 tests; the `live-orders` run passes.
+- INV-04 tests:
+  - the `qd-ai` manifest and sources cannot reach orders, limits, halts, the
+    registry, accounts or secrets;
+  - the orchestrator appends only advice;
+  - on PostgreSQL, an AI run after paper trading leaves every other journal
+    entry, halt, stage event and account unchanged.
+- Mutation check: removing the daily budget check is caught.
+
+New invariant tests: `invariant_04_the_ai_crate_cannot_reach_orders_limits_halts_or_credentials`,
+`invariant_04_the_orchestrator_only_appends_advice_once_per_advisor`
+(and the AI part of `invariant_11_validation_evidence_promotes_and_feeds_paper_decisions`).
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -375,12 +413,14 @@ New invariant tests: `invariant_11_stage_events_need_recorded_passing_evidence_o
 - A startup halt from a failed boot stays active until the owner re-arms it
   (ADR 0008).
 
-## Next steps (Phase 8)
+## Next steps (Phase 9)
 
-1. AI orchestrator (advisory only, INV-04): read each provider's current docs
-   first (OpenAI, Gemini, xAI) and record them in `docs/integrations/`.
-   Keys come from the server environment only (INV-15).
-2. Shadow mode: AI commentary is stored beside decisions and never changes
-   orders, sizes, limits, parameters, credentials or halts. Its advice is
-   scored later against outcomes, like the review does for probabilities.
-3. Budget limits per provider (§4 item 8), disabled by default.
+1. Live trading path, still off by default and behind every INV-14 condition:
+   the Kite order executor and account reader need the Kite docs (blocked).
+   Until then, complete what does not need them: automatic demotion on live
+   breach (INV-11) and live-arming checks end to end.
+2. Deployment: Dockerfile (multi-stage, non-root), docker-compose with
+   PostgreSQL, a reverse proxy with TLS, backups, and a runbook.
+3. Monitoring: structured health, metrics endpoint, alerts on halts, restore
+   failures, unprotected positions and stale data.
+4. Final documentation: operator guide, security notes, the full phase report.

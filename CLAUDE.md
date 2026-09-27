@@ -10,7 +10,7 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 7 (validation, evidence, review) done; Phase 8 next**.
+- Current phase: **Phase 8 (advisory AI, shadow mode) done; Phase 9 next**.
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -93,6 +93,8 @@ backend/                     Cargo workspace (ADR 0002)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
     src/evidence.rs          evidence records (INV-11), evidence tables, stored evidence source
     src/review.rs            predicted-vs-realized review, calibration, paper-review evidence
+  crates/qd-ai/              advisory AI (INV-04): Advisor, checklist-v1, orchestrator, scorecard;
+                             depends on nothing that can act on trading state (tested)
   crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
   crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics,
                              validation (walk-forward/OOS/holdout), montecarlo, validator
@@ -124,7 +126,7 @@ docs/                        spec, ADRs, progress log, integrations/ (provider n
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-ai, qd-broker-kite, qd-marketdata (provider docs
+Target crates not yet created (§5.3): qd-broker-kite, qd-marketdata (provider docs
 unreachable so far: `docs/integrations/`).
 Create a crate only when it has real code.
 
@@ -136,6 +138,8 @@ Create a crate only when it has real code.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
+- AI advice is shadow-only: `qd-ai` may depend only on `qd-app` and `qd-domain`, and
+  its only write is an `ai_advice` journal entry (ADR 0011).
 - Promotions cite recorded evidence that the registry checks: a passed validation up to
   Paper, a passed paper review for live stages (ADR 0010). Never weaken these checks.
 - The journal is the source of truth for trading state; never add mutable position or
