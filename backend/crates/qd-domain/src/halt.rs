@@ -80,10 +80,50 @@ pub enum HaltError {
     /// A halt cannot be cleared before it started.
     #[error("cannot clear a halt before it started")]
     ClearedBeforeStart,
+    /// A stored record has a clear time without a clearer, or the reverse.
+    #[error("halt record is inconsistent")]
+    InconsistentRecord,
 }
 
-/// One halt. Built only through [`Halt::new`] and [`Halt::clear`], so its rules always hold.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+/// A halt as stored. Converting it back re-applies every construction rule.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HaltRecord {
+    id: HaltId,
+    kind: HaltKind,
+    scope: HaltScope,
+    reason: String,
+    started_at: DateTime<Utc>,
+    auto_clear_at: Option<DateTime<Utc>>,
+    requires_manual_rearm: bool,
+    cleared_at: Option<DateTime<Utc>>,
+    cleared_by: Option<ClearedBy>,
+}
+
+impl TryFrom<HaltRecord> for Halt {
+    type Error = HaltError;
+
+    fn try_from(r: HaltRecord) -> Result<Self, Self::Error> {
+        let halt = Self::new(
+            r.id,
+            r.kind,
+            r.scope,
+            r.reason,
+            r.started_at,
+            r.auto_clear_at,
+            r.requires_manual_rearm,
+        )?;
+        match (r.cleared_at, r.cleared_by) {
+            (None, None) => Ok(halt),
+            (Some(at), Some(by)) => halt.clear(by, at),
+            _ => Err(HaltError::InconsistentRecord),
+        }
+    }
+}
+
+/// One halt. Built only through [`Halt::new`] and [`Halt::clear`] (also when
+/// read back from storage), so its rules always hold.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "HaltRecord")]
 pub struct Halt {
     id: HaltId,
     kind: HaltKind,

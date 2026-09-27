@@ -507,3 +507,26 @@ fn invariant_17_a_risk_blocked_signal_headlines_as_no_trade_with_its_reason() {
     };
     assert_eq!(halted.headline(), "NO TRADE");
 }
+
+#[test]
+fn invariant_07_stored_halts_are_revalidated_when_read_back() {
+    let h = halt(HaltKind::HardHalt, HaltScope::Global);
+    let json = serde_json::to_string(&h).unwrap();
+    assert_eq!(serde_json::from_str::<Halt>(&json).unwrap(), h);
+    // A stored hard halt claiming the system cleared it is refused.
+    let tampered = json
+        .replace(
+            r#""cleared_at":null"#,
+            r#""cleared_at":"2026-03-16T11:00:00Z""#,
+        )
+        .replace(r#""cleared_by":null"#, r#""cleared_by":{"by":"system"}"#);
+    assert!(serde_json::from_str::<Halt>(&tampered).is_err());
+    let cleared = h
+        .clear(
+            ClearedBy::Human(UserId::new_at(common::at(0, 0))),
+            common::at(11, 0),
+        )
+        .unwrap();
+    let json = serde_json::to_string(&cleared).unwrap();
+    assert_eq!(serde_json::from_str::<Halt>(&json).unwrap(), cleared);
+}
