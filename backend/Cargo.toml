@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "crates/qd-ai",
+    "crates/qd-ai-providers",
     "crates/qd-api",
     "crates/qd-app",
     "crates/qd-backtest",
@@ -25,6 +26,7 @@ qd-domain = { path = "crates/qd-domain" }
 qd-strategy = { path = "crates/qd-strategy" }
 qd-risk = { path = "crates/qd-risk" }
 qd-ai = { path = "crates/qd-ai" }
+qd-ai-providers = { path = "crates/qd-ai-providers" }
 qd-app = { path = "crates/qd-app" }
 qd-backtest = { path = "crates/qd-backtest" }
 qd-broker-paper = { path = "crates/qd-broker-paper" }
