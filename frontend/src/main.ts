@@ -7,7 +7,7 @@ import "./styles.css";
 import { ApiError, api, type Me, type Status } from "./api";
 import { clear, h } from "./dom";
 import { formatIst } from "./format";
-import { backtestView, type Ctx, decisionView, decisionsView, haltsView, journalView, strategiesView, withStepUp } from "./views";
+import { backtestView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, strategiesView, withStepUp } from "./views";
 
 const root = document.getElementById("app");
 
@@ -27,6 +27,7 @@ function haltBadge(status: Status | null): HTMLElement {
 
 const NAV: Array<[string, string]> = [
   ["#/decisions", "Decisions"],
+  ["#/paper", "Paper"],
   ["#/halts", "Kill switch"],
   ["#/strategies", "Strategies"],
   ["#/backtest", "Backtest"],
@@ -51,6 +52,7 @@ async function render(ctx: Ctx): Promise<void> {
     let view: HTMLElement;
     if (route.startsWith("#/decisions/")) view = await decisionView(decodeURIComponent(route.slice("#/decisions/".length)));
     else if (route.startsWith("#/halts")) view = await haltsView(ctx, rerender);
+    else if (route.startsWith("#/paper")) view = await paperView(ctx, rerender);
     else if (route.startsWith("#/strategies")) view = await strategiesView(ctx, rerender);
     else if (route.startsWith("#/backtest")) view = await backtestView(ctx);
     else if (route.startsWith("#/journal")) view = await journalView();

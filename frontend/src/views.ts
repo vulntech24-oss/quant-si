@@ -5,7 +5,7 @@
 import { ApiError, api, type DecisionSummary, type HaltView, type Me, type Status, type StrategyRow } from "./api";
 import { clear, h } from "./dom";
 import { formatIst, formatNumber, formatPercent } from "./format";
-import { reasonText } from "./labels";
+import { actionLabel, reasonText } from "./labels";
 
 export interface Ctx {
   me: Me;
@@ -219,6 +219,56 @@ function sparkline(values: string[]): SVGSVGElement {
   line.setAttribute("points", points);
   svg.append(line);
   return svg;
+}
+
+// ---------- paper trading ----------
+
+const OPEN_STATES = new Set(["opening", "open", "protected", "unprotected", "exiting"]);
+
+export async function paperView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const title = h("h1", {}, "Paper trading");
+  const intro = h("p", { class: "muted" }, "Simulated fills on completed daily bars with the same rules as backtests. No order ever reaches a broker. The book is rebuilt from the journal on every run.");
+  let state: Json;
+  try {
+    state = await api.paper();
+  } catch (err) {
+    return h("section", {}, title, intro, h("p", { class: "empty" }, errorText(err)));
+  }
+  const instruments = await api.instruments();
+  const symbol = (id: unknown) => instruments.find((i) => i.id === id)?.symbol ?? String(id);
+  const lastDay = get(state, "last_day") as Json | null;
+  const positions = ((get(state, "positions") as Json[] | undefined) ?? []).filter((p) => OPEN_STATES.has(String(p["state"])));
+  const orders = (get(state, "working_orders") as Json[] | undefined) ?? [];
+  const inconsistency = str(get(state, "inconsistency"));
+  const message = h("p", { class: "error", role: "alert" });
+  const result = h("div", { class: "stack" });
+  const through = h("input", { type: "date", "aria-label": "Process through", value: new Date().toISOString().slice(0, 10) });
+  const run = async (e: Event) => {
+    e.preventDefault();
+    clear(result);
+    result.append(h("p", { class: "muted" }, "Running…"));
+    try {
+      const report = await api.paperRun(through.value);
+      clear(result);
+      const days = (get(report, "days") as Json[] | undefined) ?? [];
+      const skipped = (get(report, "skipped_versions") as string[] | undefined) ?? [];
+      result.append(h("p", {}, days.length === 0 ? "Nothing new to process." : `Processed ${days.length} trading day(s).`), ...skipped.map((s) => h("p", { class: "muted" }, `Not run: ${s}`)));
+      rerender();
+    } catch (err) {
+      clear(result);
+      message.textContent = errorText(err);
+    }
+  };
+  const book = lastDay
+    ? h("div", { class: "card metrics" }, metric("Last day", str(lastDay["date"]) ?? "—"), metric("Equity", formatNumber(str(lastDay["equity"]))), metric("Realized net", formatNumber(str(get(lastDay, "book.realized_net")))), metric("Peak equity", formatNumber(str(get(lastDay, "book.high_water_mark")))), metric("Losses in a row", str(get(lastDay, "book.consecutive_losses")) ?? "0"))
+    : h("p", { class: "empty" }, "No paper day processed yet.");
+  const positionsTable = positions.length === 0
+    ? h("p", { class: "empty" }, "No open positions.")
+    : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Instrument", "Side", "State", "Qty", "Entry", "Stop", "Target", "Bars held"].map((t) => h("th", {}, t)))), h("tbody", {}, ...positions.map((p) => h("tr", {}, h("td", {}, symbol(p["instrument"])), h("td", {}, str(p["side"]) ?? ""), h("td", {}, h("span", { class: p["state"] === "unprotected" ? "chip short" : "chip neutral" }, String(p["state"]))), h("td", { class: "mono right" }, formatNumber(str(p["quantity"]), 0)), h("td", { class: "mono right" }, formatNumber(str(p["entry_price"]))), h("td", { class: "mono right" }, formatNumber(str(p["stop"]))), h("td", { class: "mono right" }, formatNumber(str(p["target"]))), h("td", { class: "mono right" }, str(p["bars_held"]) ?? "0")))));
+  const ordersTable = orders.length === 0
+    ? h("p", { class: "empty" }, "No working orders.")
+    : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Instrument", "Action", "Purpose", "Type", "Qty", "Limit", "Trigger", "State"].map((t) => h("th", {}, t)))), h("tbody", {}, ...orders.map((o) => h("tr", {}, h("td", {}, symbol(get(o, "intent.instrument"))), h("td", {}, actionLabel(String(get(o, "intent.action")))), h("td", {}, String(get(o, "intent.purpose.purpose") ?? "").replace(/_/g, " ")), h("td", {}, String(get(o, "intent.terms.order_type") ?? "").replace(/_/g, " ")), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.quantity")), 0)), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.terms.limit")))), h("td", { class: "mono right" }, formatNumber(str(get(o, "intent.terms.trigger")))), h("td", {}, String(o["state"]).replace(/_/g, " "))))));
+  return h("section", {}, title, intro, inconsistency ? h("p", { class: "error", role: "alert" }, `The book cannot be trusted: ${inconsistency}. Entries are halted until you investigate.`) : null, isOwner(ctx) ? h("form", { class: "card row wrap", onsubmit: run }, h("label", {}, "Process through ", through), h("button", { class: "primary" }, "Run paper day(s)")) : null, message, result, book, h("h2", {}, "Open positions"), positionsTable, h("h2", {}, "Working orders"), ordersTable);
 }
 
 // ---------- journal ----------

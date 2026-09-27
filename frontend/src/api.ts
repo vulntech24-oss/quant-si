@@ -104,5 +104,7 @@ export const api = {
   strategyEvent: (id: string, event: Record<string, unknown>) => request<{ stage: unknown }>("POST", `/strategies/${encodeURIComponent(id)}/events`, event),
   instruments: () => request<Array<{ id: string; symbol: string; version: number; currency: string }>>("GET", "/instruments"),
   backtest: (body: { instrument: string; from: string; to: string; equity: string }) => request<Record<string, unknown>>("POST", "/backtests", body),
+  paper: () => request<Record<string, unknown>>("GET", "/paper"),
+  paperRun: (through: string) => request<Record<string, unknown>>("POST", "/paper/run", { through }),
   setLiveArmed: (armed: boolean) => request<{ armed: boolean }>("POST", "/account/live-armed", { armed }),
 };
