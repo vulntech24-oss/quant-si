@@ -376,3 +376,121 @@ pub trait AiAdvisory: Send + Sync {
     /// How each advisor's stances matched realized outcomes.
     async fn scorecard(&self) -> Result<serde_json::Value, StoreError>;
 }
+
+/// One saved version of a settings section (append-only history).
+#[derive(Clone, Debug, PartialEq, Serialize)]
+pub struct SettingVersion {
+    /// Section name (`paper`, `risk`, `ai`, `validation`, `review`).
+    pub section: String,
+    /// The section's full value; `None` means "back to the file default".
+    pub value: Option<serde_json::Value>,
+    /// Version number, per section.
+    pub version: i64,
+    /// Who saved it.
+    pub updated_by: String,
+    /// When.
+    pub updated_at: DateTime<Utc>,
+}
+
+/// Settings saved from the web UI, layered over the configuration files (ADR 0013).
+#[async_trait]
+pub trait SettingsStore: Send + Sync {
+    /// The latest version of every section that has one.
+    async fn latest(&self) -> Result<Vec<SettingVersion>, StoreError>;
+    /// Saves a new version of a section and returns its version number.
+    async fn put(
+        &self,
+        section: &str,
+        value: Option<&serde_json::Value>,
+        actor: &str,
+    ) -> Result<i64, StoreError>;
+}
+
+/// A secret value held on the server. `Debug` is redacted; call
+/// [`SecretValue::expose`] only where the value is used (INV-15).
+#[derive(Clone, PartialEq, Eq)]
+pub struct SecretValue(String);
+
+impl SecretValue {
+    /// Wraps a value.
+    #[must_use]
+    pub const fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    /// The value. Never log it or send it to a client.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for SecretValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("SecretValue(***)")
+    }
+}
+
+/// What the UI may know about a secret: whether it is set, never its value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SecretStatus {
+    /// Name from the catalog.
+    pub name: String,
+    /// Whether a value is stored.
+    pub set: bool,
+    /// Whether the stored value can be decrypted with the current master key.
+    pub readable: bool,
+    /// When it was last set.
+    pub updated_at: Option<DateTime<Utc>>,
+    /// Who set it.
+    pub updated_by: Option<String>,
+}
+
+/// Write-only secret administration, for the API (INV-15): status, set,
+/// clear. There is deliberately no read of values here.
+#[async_trait]
+pub trait SecretStore: Send + Sync {
+    /// Whether values can be stored (a master key is configured).
+    fn available(&self) -> bool;
+    /// Status of every secret that has a stored value.
+    async fn status(&self) -> Result<Vec<SecretStatus>, StoreError>;
+    /// Stores (encrypted) or replaces a value.
+    async fn set(&self, name: &str, value: &SecretValue, actor: &str) -> Result<(), StoreError>;
+    /// Deletes a value.
+    async fn clear(&self, name: &str, actor: &str) -> Result<(), StoreError>;
+}
+
+/// Reads secret values. Handed only to server-side adapters (brokers, AI
+/// providers), never to the API.
+#[async_trait]
+pub trait SecretReader: Send + Sync {
+    /// The value, if set.
+    async fn get(&self, name: &str) -> Result<Option<SecretValue>, StoreError>;
+}
+
+/// Why a settings change was refused.
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum SettingsError {
+    /// Unknown section or field, or an invalid value.
+    #[error("{0}")]
+    Invalid(String),
+    /// Storage failed.
+    #[error(transparent)]
+    Store(#[from] StoreError),
+}
+
+/// Settings administration for the API (implemented by the server).
+#[async_trait]
+pub trait SettingsAdmin: Send + Sync {
+    /// Every section with its fields, current values and source.
+    async fn view(&self) -> Result<serde_json::Value, StoreError>;
+    /// Validates and saves new values for some fields of a section.
+    async fn update(
+        &self,
+        section: &str,
+        values: &serde_json::Map<String, serde_json::Value>,
+        actor: &str,
+    ) -> Result<serde_json::Value, SettingsError>;
+    /// Returns a section to its configuration-file default.
+    async fn reset(&self, section: &str, actor: &str) -> Result<serde_json::Value, SettingsError>;
+}

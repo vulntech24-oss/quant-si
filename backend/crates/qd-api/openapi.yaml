@@ -56,6 +56,17 @@ paths:
     get: {summary: "Predicted vs realized review of the account's paper results: calibration bins, Brier score, EV vs realized R, and the paper-review checks per version"}
   /api/review/{version}/record:
     post: {summary: "Record a paper review of a version as evidence, pass or fail (owner). Only a passed paper review can back a promotion to a live stage"}
+  /api/settings:
+    get: {summary: "Editable settings sections (paper, risk, ai, validation, review) with fields, values and source (file or saved), plus read-only server facts"}
+  /api/settings/{section}:
+    put: {summary: "Save new values for some fields of a section (owner, step-up). Body {values: {field: value}}; validated before it is stored and audited"}
+  /api/settings/{section}/reset:
+    post: {summary: "Return a section to its configuration-file default (owner, step-up)"}
+  /api/secrets:
+    get: {summary: "The secret catalog with status only (set, when, by whom). Values are never returned"}
+  /api/secrets/{name}:
+    put: {summary: "Store or replace a secret, encrypted at rest (owner, step-up). Body {value}. The response carries no value"}
+    delete: {summary: "Delete a secret (owner, step-up)"}
   /api/paper:
     get: {summary: "The paper book restored from the journal: last day, positions, working orders (409 if paper trading is not configured)"}
   /api/paper/run:

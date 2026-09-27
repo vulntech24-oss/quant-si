@@ -49,6 +49,20 @@ pub struct ReviewCriteria {
     pub max_brier: Decimal,
 }
 
+impl ReviewCriteria {
+    /// Range checks.
+    pub fn validate(&self) -> Result<(), String> {
+        let unit = |d: Decimal| (Decimal::ZERO..=Decimal::ONE).contains(&d);
+        if !unit(self.max_drawdown) || !unit(self.max_brier) {
+            return Err("review: max_drawdown and max_brier must be between 0 and 1".to_owned());
+        }
+        if self.max_expectancy_shortfall_r < Decimal::ZERO {
+            return Err("review: max_expectancy_shortfall_r must not be negative".to_owned());
+        }
+        Ok(())
+    }
+}
+
 /// A predicted-vs-realized bin of `p_target`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct CalibrationBin {

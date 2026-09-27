@@ -24,3 +24,7 @@ dist/
 
 # Local server configuration (copy of config/quantdesk.example.toml)
 /backend/config/quantdesk.toml
+
+# Server state (generated secrets master key). Never commit.
+.data/
+master.key

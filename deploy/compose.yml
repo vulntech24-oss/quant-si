@@ -31,9 +31,11 @@ services:
     environment:
       QD_DATABASE_URL: postgres://quantdesk:${QD_POSTGRES_PASSWORD}@postgres:5432/quantdesk
       RUST_LOG: info
-    # Optional: mount an edited configuration.
-    # volumes:
-    #   - ./quantdesk.toml:/etc/quantdesk/quantdesk.toml:ro
+    volumes:
+      # Generated secrets master key (see quantdesk.toml data_dir).
+      - qdstate:/var/lib/quantdesk
+      # Optional: mount an edited configuration.
+      # - ./quantdesk.toml:/etc/quantdesk/quantdesk.toml:ro
     read_only: true
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
@@ -55,6 +57,7 @@ services:
 
 volumes:
   pgdata:
+  qdstate:
   caddy_data:
 
 networks:

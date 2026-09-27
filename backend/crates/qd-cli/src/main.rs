@@ -411,14 +411,7 @@ async fn run(cli: Cli) -> Result<(), String> {
         Command::Paper(cmd) => paper(cmd, &stores, actor, now).await,
         Command::Ai { config, command } => {
             use qd_app::ports::AiAdvisory;
-            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
-                .map_err(|e| e.to_string())?;
-            let service = qd_server::ai::ai_service(
-                &config,
-                &stores,
-                std::sync::Arc::new(qd_server::SystemClock),
-            )
-            .ok_or("advisory AI is disabled ([ai] enabled = false)")?;
+            let service = qd_server::runtime::DynAi(runtime(&config, &stores)?);
             let out = match command {
                 AiCommand::Run => {
                     stores
@@ -437,6 +430,21 @@ async fn run(cli: Cli) -> Result<(), String> {
     }
 }
 
+/// The server runtime for a configuration file: file defaults plus the
+/// settings saved in the web UI, exactly as the server uses them.
+fn runtime(
+    config: &std::path::Path,
+    stores: &Stores,
+) -> Result<std::sync::Arc<qd_server::runtime::Runtime>, String> {
+    let config = qd_server::config::ServerConfig::load(config, &|k| std::env::var(k).ok())
+        .map_err(|e| e.to_string())?;
+    Ok(std::sync::Arc::new(qd_server::runtime::Runtime {
+        config,
+        stores: stores.clone(),
+        clock: std::sync::Arc::new(qd_server::SystemClock),
+    }))
+}
+
 async fn paper(
     cmd: PaperCommand,
     stores: &Stores,
@@ -447,12 +455,7 @@ async fn paper(
     let path = match &cmd {
         PaperCommand::Run { config, .. } | PaperCommand::State { config } => config.clone(),
     };
-    let config = qd_server::config::ServerConfig::load(&path, &|k| std::env::var(k).ok())
-        .map_err(|e| e.to_string())?;
-    let clock: std::sync::Arc<dyn qd_app::ports::Clock> =
-        std::sync::Arc::new(qd_server::SystemClock);
-    let runner = qd_server::paper::paper_runner(&config, stores, clock)?
-        .ok_or("the configuration has no [paper] section")?;
+    let runner = qd_server::runtime::DynPaper(runtime(&path, stores)?);
     match cmd {
         PaperCommand::Run { through, .. } => {
             let through = through.unwrap_or_else(|| now.date_naive());
@@ -521,19 +524,7 @@ async fn strategy(
             equity,
         } => {
             use qd_app::ports::Validator;
-            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
-                .map_err(|e| e.to_string())?;
-            let validator = qd_backtest::validator::StoreValidator::new(
-                stores.market.clone(),
-                registry,
-                stores.evidence.clone(),
-                stores.audit.clone(),
-                std::sync::Arc::new(config.costs.clone()),
-                config.risk.clone(),
-                config.validation.clone(),
-                std::sync::Arc::new(qd_server::SystemClock),
-            )
-            .map_err(|e| e.to_string())?;
+            let validator = qd_server::runtime::DynValidator(runtime(&config, stores)?);
             let record = validator
                 .validate(
                     &qd_app::ports::ValidationRequest {
@@ -560,16 +551,7 @@ async fn strategy(
         }
         StrategyCommand::Review { config, record } => {
             use qd_app::review::Reviewer;
-            let config = qd_server::config::ServerConfig::load(&config, &|k| std::env::var(k).ok())
-                .map_err(|e| e.to_string())?;
-            let reviewer = qd_app::review::JournalReviewer {
-                reader: stores.journal.clone(),
-                evidence: stores.evidence.clone(),
-                audit: stores.audit.clone(),
-                clock: std::sync::Arc::new(qd_server::SystemClock),
-                account: config.file.account_id,
-                criteria: config.review.clone(),
-            };
+            let reviewer = qd_server::runtime::DynReviewer(runtime(&config, stores)?);
             let out = match record {
                 Some(version) => reviewer.record(version, actor).await,
                 None => reviewer.review().await,

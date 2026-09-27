@@ -24,7 +24,8 @@ WORKDIR /src/backend
 COPY backend/ ./
 RUN --mount=type=secret,id=ca_bundle,required=false \
     if [ -f /run/secrets/ca_bundle ]; then export CARGO_HTTP_CAINFO=/run/secrets/ca_bundle; fi; \
-    cargo build --release --locked -p qd-server -p qd-cli ${FEATURES:+--features "$FEATURES"}
+    cargo build --release --locked -p qd-server -p qd-cli ${FEATURES:+--features "$FEATURES"} \
+    && mkdir -p /out/state
 
 # ---- runtime ----
 # No package manager step: CA certificates come from the build stage, the
@@ -37,6 +38,9 @@ COPY --from=frontend /src/frontend/dist /usr/share/quantdesk/frontend
 COPY backend/config/risk.toml backend/config/validation.toml backend/config/review.toml /etc/quantdesk/
 COPY backend/config/costs /etc/quantdesk/costs
 COPY deploy/quantdesk.toml /etc/quantdesk/quantdesk.toml
+# State directory for the generated secrets master key; a named volume
+# mounted here inherits this ownership.
+COPY --from=backend --chown=10001:10001 /out/state /var/lib/quantdesk
 USER 10001:10001
 ENV QD_CONFIG=/etc/quantdesk/quantdesk.toml
 EXPOSE 8080

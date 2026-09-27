@@ -11,7 +11,7 @@ use qd_app::live::{Environment, LivePolicy, live_orders_compiled};
 use qd_domain::costs::{CostScheduleData, CostScheduleSet, ScheduleCostModel};
 use qd_domain::ids::AccountId;
 use qd_risk::config::{RiskConfig, RiskConfigData};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 /// A secret string. Its `Debug` output is redacted.
@@ -80,6 +80,10 @@ pub struct ConfigFile {
     /// Session lifetime in hours. Default: 12.
     #[serde(default = "default_session_hours")]
     pub session_hours: i64,
+    /// Writable directory for server state (the generated master key),
+    /// relative to this file. Optional (ADR 0013).
+    #[serde(default)]
+    pub data_dir: Option<PathBuf>,
     /// Paper trading. Absent: no paper runner, and entries stay halted
     /// because no venue can be reconciled.
     #[serde(default)]
@@ -98,7 +102,7 @@ const fn default_ai_timeout() -> u64 {
 }
 
 /// Advisory AI settings (ADR 0011). Advice is shadow-only (INV-04).
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct AiConfig {
     /// Master switch. Default: false.
@@ -113,6 +117,19 @@ pub struct AiConfig {
     /// Thresholds of the deterministic checklist advisor.
     #[serde(default)]
     pub checklist: qd_ai::checklist::ChecklistConfig,
+}
+
+impl AiConfig {
+    /// Range checks.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.timeout_seconds == 0 || self.timeout_seconds > 300 {
+            return Err("ai.timeout_seconds must be between 1 and 300".to_owned());
+        }
+        if self.max_calls_per_day > 100_000 {
+            return Err("ai.max_calls_per_day must be at most 100000".to_owned());
+        }
+        Ok(())
+    }
 }
 
 impl Default for AiConfig {
@@ -140,7 +157,7 @@ const fn default_warm_up_days() -> i64 {
 }
 
 /// Paper-trading settings (ADR 0009).
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct PaperConfig {
     /// Starting equity in the account currency.
@@ -220,6 +237,8 @@ pub struct ServerConfig {
     pub validation: qd_backtest::validation::ValidationCriteria,
     /// Paper-review criteria (ADR 0010).
     pub review: qd_app::review::ReviewCriteria,
+    /// Master key for the secrets store (ADR 0013); `None` disables it.
+    pub master_key: Option<qd_store::settings::MasterKey>,
     /// Directory the config file is in (relative paths resolve against it).
     pub base_dir: PathBuf,
 }
@@ -236,6 +255,85 @@ fn parse<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T, ConfigError> 
         path: path.to_owned(),
         detail: e.to_string(),
     })
+}
+
+impl PaperConfig {
+    /// Range checks.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.initial_equity <= rust_decimal::Decimal::ZERO
+            || self.slippage_ticks < rust_decimal::Decimal::ZERO
+            || !(250..=3650).contains(&self.warm_up_days)
+        {
+            return Err(
+                "paper: initial_equity must be positive, slippage_ticks non-negative, \
+                 warm_up_days between 250 and 3650"
+                    .to_owned(),
+            );
+        }
+        Ok(())
+    }
+}
+
+/// Loads the secrets master key: `QD_MASTER_KEY` (64 hex characters) wins;
+/// otherwise `<data_dir>/master.key`, generated on first start with mode
+/// 0600. With neither, the secrets store is disabled.
+pub fn load_master_key(
+    env_value: Option<String>,
+    data_dir: Option<&Path>,
+) -> Result<Option<qd_store::settings::MasterKey>, ConfigError> {
+    let parse_hex = |text: &str, source: &str| {
+        let bytes = hex::decode(text.trim()).map_err(|_| {
+            ConfigError::Unsafe(format!("{source} must be 64 hexadecimal characters"))
+        })?;
+        let key: [u8; 32] = bytes.try_into().map_err(|_| {
+            ConfigError::Unsafe(format!("{source} must be 64 hexadecimal characters"))
+        })?;
+        Ok(Some(qd_store::settings::MasterKey::new(key)))
+    };
+    if let Some(value) = env_value.filter(|v| !v.trim().is_empty()) {
+        return parse_hex(&value, "QD_MASTER_KEY");
+    }
+    let Some(dir) = data_dir else {
+        return Ok(None);
+    };
+    let path = dir.join("master.key");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => parse_hex(&text, "the master key file"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            std::fs::create_dir_all(dir).map_err(|source| ConfigError::Read {
+                path: dir.to_owned(),
+                source,
+            })?;
+            let mut key = [0_u8; 32];
+            getrandom::fill(&mut key).map_err(|e| {
+                ConfigError::Unsafe(format!("no randomness for the master key: {e}"))
+            })?;
+            write_private(&path, hex::encode(key).as_bytes())?;
+            Ok(Some(qd_store::settings::MasterKey::new(key)))
+        }
+        Err(source) => Err(ConfigError::Read { path, source }),
+    }
+}
+
+/// Writes a new file readable only by its owner; refuses to overwrite.
+fn write_private(path: &Path, contents: &[u8]) -> Result<(), ConfigError> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(path).map_err(|source| ConfigError::Read {
+        path: path.to_owned(),
+        source,
+    })?;
+    file.write_all(contents)
+        .map_err(|source| ConfigError::Read {
+            path: path.to_owned(),
+            source,
+        })
 }
 
 impl ServerConfig {
@@ -267,6 +365,10 @@ impl ServerConfig {
             detail,
         })?;
         let review: qd_app::review::ReviewCriteria = parse(&base.join(&file.review_criteria))?;
+        review.validate().map_err(|detail| ConfigError::Parse {
+            path: file.review_criteria.clone(),
+            detail,
+        })?;
         let database_url = env("QD_DATABASE_URL")
             .filter(|v| !v.trim().is_empty())
             .map(Secret::new)
@@ -276,22 +378,13 @@ impl ServerConfig {
             live_trading_enabled: file.live_trading_enabled,
         };
         if let Some(paper) = &file.paper {
-            if paper.initial_equity <= rust_decimal::Decimal::ZERO
-                || paper.slippage_ticks < rust_decimal::Decimal::ZERO
-                || !(250..=3650).contains(&paper.warm_up_days)
-            {
-                return Err(ConfigError::Unsafe(
-                    "paper: initial_equity must be positive, slippage_ticks non-negative, \
-                     warm_up_days between 250 and 3650"
-                        .to_owned(),
-                ));
-            }
+            paper.validate().map_err(ConfigError::Unsafe)?;
         }
-        if file.ai.timeout_seconds == 0 || file.ai.timeout_seconds > 300 {
-            return Err(ConfigError::Unsafe(
-                "ai.timeout_seconds must be between 1 and 300".to_owned(),
-            ));
-        }
+        file.ai.validate().map_err(ConfigError::Unsafe)?;
+        let master_key = load_master_key(
+            env("QD_MASTER_KEY"),
+            file.data_dir.as_ref().map(|d| base.join(d)).as_deref(),
+        )?;
         if !(1..=168).contains(&file.session_hours) {
             return Err(ConfigError::Unsafe(
                 "session_hours must be between 1 and 168".to_owned(),
@@ -306,6 +399,7 @@ impl ServerConfig {
             live,
             validation,
             review,
+            master_key,
             base_dir: base.to_owned(),
         };
         config.validate()?;

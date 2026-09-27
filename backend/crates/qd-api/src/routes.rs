@@ -57,6 +57,14 @@ pub fn router(state: ApiState) -> Router {
         .route("/ai/scorecard", get(ai_scorecard))
         .route("/review", get(review))
         .route("/review/{version}/record", post(record_review))
+        .route("/settings", get(settings_view))
+        .route("/settings/{section}", axum::routing::put(settings_update))
+        .route("/settings/{section}/reset", post(settings_reset))
+        .route("/secrets", get(secrets_status))
+        .route(
+            "/secrets/{name}",
+            axum::routing::put(secret_set).delete(secret_clear),
+        )
         .route("/paper", get(paper_state))
         .route("/paper/run", post(paper_run))
         .route("/account/live-armed", post(live_armed))
@@ -641,7 +649,11 @@ async fn ai_run(State(state): State<ApiState>, caller: Caller) -> Result<Json<Va
         .record(&caller.actor(), "ai.run", json!({}))
         .await
         .map_err(internal)?;
-    service.run().await.map(Json).map_err(internal)
+    service
+        .run()
+        .await
+        .map(Json)
+        .map_err(|e| ApiError::Conflict(e.0))
 }
 
 #[derive(Deserialize)]
@@ -684,6 +696,130 @@ async fn record_review(
         .await
         .map(Json)
         .map_err(|e| ApiError::BadRequest(e.0))
+}
+
+// ---------- settings and secrets (ADR 0013) ----------
+
+fn settings_error(e: qd_app::ports::SettingsError) -> ApiError {
+    match e {
+        qd_app::ports::SettingsError::Invalid(m) => ApiError::BadRequest(m),
+        qd_app::ports::SettingsError::Store(e) => internal(e),
+    }
+}
+
+async fn settings_view(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    state
+        .settings_admin
+        .view()
+        .await
+        .map(Json)
+        .map_err(internal)
+}
+
+#[derive(Deserialize)]
+struct SettingsBody {
+    values: serde_json::Map<String, Value>,
+}
+
+async fn settings_update(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(section): Path<String>,
+    Json(body): Json<SettingsBody>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    state
+        .settings_admin
+        .update(&section, &body.values, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+async fn settings_reset(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(section): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    state
+        .settings_admin
+        .reset(&section, &caller.actor())
+        .await
+        .map(Json)
+        .map_err(settings_error)
+}
+
+/// Every catalog secret with its status. Values are never returned (INV-15).
+async fn secrets_status(
+    State(state): State<ApiState>,
+    _caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    let stored = state.secrets.status().await.map_err(internal)?;
+    let secrets: Vec<Value> = qd_app::secrets::SECRETS
+        .iter()
+        .map(|spec| {
+            let status = stored.iter().find(|s| s.name == spec.name);
+            json!({
+                "name": spec.name,
+                "provider": spec.provider,
+                "label": spec.label,
+                "help": spec.help,
+                "set": status.is_some(),
+                "readable": status.is_none_or(|s| s.readable),
+                "updated_at": status.and_then(|s| s.updated_at),
+                "updated_by": status.and_then(|s| s.updated_by.clone()),
+            })
+        })
+        .collect();
+    Ok(Json(
+        json!({ "available": state.secrets.available(), "secrets": secrets }),
+    ))
+}
+
+#[derive(Deserialize)]
+struct SecretBody {
+    value: String,
+}
+
+async fn secret_set(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(name): Path<String>,
+    Json(body): Json<SecretBody>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    if qd_app::secrets::spec(&name).is_none() {
+        return Err(ApiError::NotFound);
+    }
+    let value = qd_app::ports::SecretValue::new(body.value);
+    state
+        .secrets
+        .set(&name, &value, &caller.actor())
+        .await
+        .map_err(|e| ApiError::BadRequest(e.0))?;
+    // Only the status comes back, never the value.
+    Ok(Json(json!({ "name": name, "set": true })))
+}
+
+async fn secret_clear(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(name): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    if qd_app::secrets::spec(&name).is_none() {
+        return Err(ApiError::NotFound);
+    }
+    state
+        .secrets
+        .clear(&name, &caller.actor())
+        .await
+        .map_err(|e| ApiError::BadRequest(e.0))?;
+    Ok(Json(json!({ "name": name, "set": false })))
 }
 
 // ---------- paper trading ----------

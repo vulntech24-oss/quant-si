@@ -92,16 +92,37 @@ async fn run() -> Result<(), String> {
     qd_store::migrate(&pool).await.map_err(|e| e.to_string())?;
     let stores = Stores::new(&pool);
     let clock: Arc<dyn qd_app::ports::Clock> = Arc::new(qd_server::SystemClock);
-    let paper = qd_server::paper::paper_runner(&config, &stores, clock.clone())?;
+    tracing::info!(
+        secrets_available = config.master_key.is_some(),
+        "secrets store (set QD_MASTER_KEY or data_dir to enable)"
+    );
+    let secrets = Arc::new(qd_store::settings::PgSecrets::new(
+        pool.clone(),
+        config.master_key.clone(),
+        stores.audit.clone(),
+    ));
+    let runtime = Arc::new(qd_server::runtime::Runtime {
+        config: config.clone(),
+        stores: stores.clone(),
+        clock: clock.clone(),
+    });
+    // Settings saved in the web UI are validated on every read; a bad one
+    // stops the server here rather than failing later.
+    runtime.effective().await.map_err(|e| e.to_string())?;
+    let paper = Arc::new(qd_server::runtime::DynPaper(runtime.clone()));
+    let ai: Arc<dyn qd_app::ports::AiAdvisory> =
+        Arc::new(qd_server::runtime::DynAi(runtime.clone()));
 
-    // Reconciliation is against the paper venue when paper trading is
-    // configured; with no venue at all, entries stay halted (INV-07).
-    let reconciler = paper
-        .as_deref()
-        .map(|r| r as &dyn qd_app::ports::Reconciler);
-    let report = startup(&pool, stores.halts.as_ref(), reconciler, Utc::now())
-        .await
-        .map_err(|e| e.to_string())?;
+    // Reconciliation is against the paper venue when paper trading is on;
+    // with no venue at all, entries stay halted (INV-07).
+    let report = startup(
+        &pool,
+        stores.halts.as_ref(),
+        Some(paper.as_ref() as &dyn qd_app::ports::Reconciler),
+        Utc::now(),
+    )
+    .await
+    .map_err(|e| e.to_string())?;
     for check in &report.checks {
         tracing::info!(check = check.name, ok = check.ok, detail = %check.detail, "startup check");
     }
@@ -109,43 +130,19 @@ async fn run() -> Result<(), String> {
         startup_halt_cleared = report.startup_halt_cleared,
         "startup complete"
     );
-
-    let ai = qd_server::ai::ai_service(&config, &stores, clock.clone())
-        .map(|s| s as Arc<dyn qd_app::ports::AiAdvisory>);
-    tracing::info!(enabled = ai.is_some(), "advisory AI (shadow mode)");
-    if let (Some(runner), Some(run_at)) = (
-        &paper,
-        config.file.paper.as_ref().and_then(|p| p.daily_run_utc),
-    ) {
-        tracing::info!(%run_at, "automatic daily paper run enabled");
-        qd_server::paper::spawn_daily(runner.clone(), clock.clone(), run_at, ai.clone());
-    }
-    let backtests = qd_backtest::research::ResearchBacktester::new(
-        stores.market.clone(),
-        Arc::new(config.costs.clone()),
-        &config.risk,
+    let paper_port = paper.clone() as Arc<dyn qd_app::ports::PaperTrading>;
+    qd_server::paper::spawn_daily(
+        runtime.clone(),
+        paper_port.clone(),
+        ai.clone(),
         clock.clone(),
-    )
-    .map_err(|e| e.to_string())?;
+    );
+
     let registry = qd_app::registry::StrategyRegistry::new(
         stores.registry.clone(),
         stores.audit.clone(),
         stores.evidence.clone(),
     );
-    let validator = qd_backtest::validator::StoreValidator::new(
-        stores.market.clone(),
-        registry.clone(),
-        stores.evidence.clone(),
-        stores.audit.clone(),
-        Arc::new(config.costs.clone()),
-        config.risk.clone(),
-        config.validation.clone(),
-        clock.clone(),
-    )
-    .map_err(|e| e.to_string())?;
-    let paper_port = paper
-        .clone()
-        .map(|r| r as Arc<dyn qd_app::ports::PaperTrading>);
     let api_state = qd_api::ApiState {
         auth: stores.auth.clone(),
         journal: stores.journal.clone(),
@@ -154,19 +151,14 @@ async fn run() -> Result<(), String> {
         market: stores.market.clone(),
         accounts: stores.accounts.clone(),
         audit: stores.audit.clone(),
-        backtests: Arc::new(backtests),
-        paper: paper_port.clone(),
-        validator: Arc::new(validator),
-        ai,
-        reviewer: Arc::new(qd_app::review::JournalReviewer {
-            reader: stores.journal.clone(),
-            evidence: stores.evidence.clone(),
-            audit: stores.audit.clone(),
-            clock: clock.clone(),
-            account: config.file.account_id,
-            criteria: config.review.clone(),
-        }),
+        backtests: Arc::new(qd_server::runtime::DynBacktests(runtime.clone())),
+        paper: Some(paper_port.clone()),
+        validator: Arc::new(qd_server::runtime::DynValidator(runtime.clone())),
+        ai: Some(ai),
+        reviewer: Arc::new(qd_server::runtime::DynReviewer(runtime.clone())),
         evidence: stores.evidence.clone(),
+        settings_admin: runtime.clone(),
+        secrets,
         clock,
         settings: qd_api::ApiSettings {
             account_id: config.file.account_id,
@@ -181,7 +173,7 @@ async fn run() -> Result<(), String> {
     let health = HealthState {
         pool,
         halts: Arc::clone(&stores.halts) as Arc<dyn qd_app::ports::HaltStore>,
-        paper: paper_port,
+        paper: Some(paper_port),
     };
     qd_server::http::spawn_alert_log(health.clone(), std::time::Duration::from_secs(300));
     let mut app = qd_api::router(api_state).merge(router(health));

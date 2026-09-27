@@ -3,8 +3,9 @@
 //! - Only `enter` decisions are sent to advisors (NO TRADE needs no second
 //!   opinion, and this bounds provider cost).
 //! - Each advisor advises once per decision; re-runs skip what is advised.
-//! - A daily call budget per advisor and a timeout per call. When the
-//!   budget runs out, the rest waits for the next day. Nothing retries in a loop.
+//! - A daily call budget per advisor (counted from today's journaled
+//!   advice) and a timeout per call. When the budget runs out, the rest waits
+//!   for the next day. Nothing retries in a loop.
 //! - Failures are counted and logged, never retried in the same run, and
 //!   never affect trading: the only write is the `ai_advice` journal entry.
 
@@ -135,6 +136,20 @@ impl AiOrchestrator {
     /// Advises on every entry decision not yet advised by each advisor.
     pub async fn run(&self) -> Result<AiRunReport, StoreError> {
         let (decisions, existing) = load(self.reader.as_ref()).await?;
+        // The budget counts today's journaled advice, so it holds across
+        // restarts and across orchestrators built per run.
+        {
+            let today = self.clock.now().date_naive();
+            let mut usage = self
+                .usage
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
+            usage.clear();
+            for a in existing.iter().filter(|a| a.at.date_naive() == today) {
+                let entry = usage.entry(a.advisor.clone()).or_insert((today, 0));
+                entry.1 += 1;
+            }
+        }
         let advised: HashSet<(DecisionId, String)> = existing
             .iter()
             .map(|a| (a.decision, a.advisor.clone()))

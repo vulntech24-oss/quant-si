@@ -21,6 +21,11 @@ account_id = "00000000-0000-7000-8000-000000000001"
 risk_config = "risk.toml"
 cost_schedules = ["costs/india-zerodha.toml"]
 
+# API keys entered in the web UI (Settings) are encrypted with a master key:
+# QD_MASTER_KEY (64 hex characters) in the environment, or a key generated on
+# first start in data_dir. Without either, the Settings page cannot store keys.
+# data_dir = "../.data"
+
 # Paper trading (ADR 0009). The account above must be a paper account.
 # Remove this section to disable the paper runner; entries then stay halted
 # because no venue can be reconciled at startup.

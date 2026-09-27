@@ -72,6 +72,10 @@ pub struct ApiState {
     pub evidence: Arc<dyn qd_app::evidence::EvidenceStore>,
     /// Advisory AI, when enabled (INV-04).
     pub ai: Option<Arc<dyn qd_app::ports::AiAdvisory>>,
+    /// Settings saved from the web UI (ADR 0013).
+    pub settings_admin: Arc<dyn qd_app::ports::SettingsAdmin>,
+    /// Write-only secrets (INV-15).
+    pub secrets: Arc<dyn qd_app::ports::SecretStore>,
     /// Paper review and calibration.
     pub reviewer: Arc<dyn qd_app::review::Reviewer>,
     /// Clock.

@@ -4,6 +4,8 @@
 //! `backend/migrations`). Queries are runtime-checked `sqlx` queries covered by
 //! integration tests against a real PostgreSQL (ADR 0007).
 
+pub mod settings;
+
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -895,6 +897,8 @@ pub struct Stores {
     pub locks: Arc<PgRunLock>,
     /// Evidence records.
     pub evidence: Arc<PgEvidence>,
+    /// Settings saved from the web UI.
+    pub settings: Arc<settings::PgSettings>,
 }
 
 impl Stores {
@@ -911,6 +915,7 @@ impl Stores {
             auth: Arc::new(PgAuth::new(pool.clone())),
             locks: Arc::new(PgRunLock::new(pool.clone())),
             evidence: Arc::new(PgEvidence::new(pool.clone())),
+            settings: Arc::new(settings::PgSettings::new(pool.clone())),
         }
     }
 }

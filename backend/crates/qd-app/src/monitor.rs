@@ -171,6 +171,8 @@ pub async fn collect(
     let paper = match paper {
         None => None,
         Some(p) => match p.state().await {
+            // Paper trading switched off: no paper book to watch.
+            Ok(state) if state.get("configured") == Some(&Value::Bool(false)) => None,
             Ok(state) => Some(paper_health(&state, now)),
             Err(e) => {
                 alerts.push(Alert {

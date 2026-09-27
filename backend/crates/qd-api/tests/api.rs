@@ -57,6 +57,43 @@ impl qd_app::ports::Validator for FakeValidator {
     }
 }
 
+/// Records what the API asked of it; the real settings admin is tested in qd-server.
+#[derive(Default)]
+struct FakeSettingsAdmin {
+    updates: std::sync::Mutex<Vec<(String, String)>>,
+}
+
+#[async_trait::async_trait]
+impl qd_app::ports::SettingsAdmin for FakeSettingsAdmin {
+    async fn view(&self) -> Result<serde_json::Value, StoreError> {
+        Ok(serde_json::json!({ "sections": [] }))
+    }
+    async fn update(
+        &self,
+        section: &str,
+        _: &serde_json::Map<String, serde_json::Value>,
+        actor: &str,
+    ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
+        if section == "bogus" {
+            return Err(qd_app::ports::SettingsError::Invalid(
+                "unknown settings section bogus".to_owned(),
+            ));
+        }
+        self.updates
+            .lock()
+            .unwrap()
+            .push((section.to_owned(), actor.to_owned()));
+        Ok(serde_json::json!({ "name": section }))
+    }
+    async fn reset(
+        &self,
+        section: &str,
+        _: &str,
+    ) -> Result<serde_json::Value, qd_app::ports::SettingsError> {
+        Ok(serde_json::json!({ "name": section }))
+    }
+}
+
 const OWNER_PASSWORD: &str = "correct horse battery staple";
 const VIEWER_PASSWORD: &str = "viewer password 123";
 
@@ -124,6 +161,12 @@ async fn app(pool: PgPool) -> App {
             criteria: toml::from_str(include_str!("../../../config/review.toml")).unwrap(),
         }),
         evidence: stores.evidence.clone(),
+        settings_admin: Arc::new(FakeSettingsAdmin::default()),
+        secrets: Arc::new(qd_store::settings::PgSecrets::new(
+            pool.clone(),
+            Some(qd_store::settings::MasterKey::new([7_u8; 32])),
+            stores.audit.clone(),
+        )),
         clock: Arc::new(FixedClock),
         settings: ApiSettings {
             account_id: account,
@@ -546,4 +589,219 @@ async fn paper_endpoints_report_when_paper_trading_is_not_configured(pool: PgPoo
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
+}
+
+async fn step_up(app: &App, cookie: &str) {
+    let (status, _, _) = call(
+        app,
+        "POST",
+        "/api/auth/step-up",
+        Some(cookie),
+        Some(serde_json::json!({"password": OWNER_PASSWORD})),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn invariant_15_secrets_are_write_only_encrypted_and_audited_by_name(pool: PgPool) {
+    let app = app(pool.clone()).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let secret = "sk-test-DO-NOT-LEAK-1234567890";
+    let body = serde_json::json!({ "value": secret });
+
+    // Viewers cannot write; the owner needs a fresh step-up.
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/secrets/openai_api_key",
+        Some(&viewer),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, b) = call(
+        &app,
+        "PUT",
+        "/api/secrets/openai_api_key",
+        Some(&owner),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(
+        (status, b["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("step_up_required"))
+    );
+    step_up(&app, &owner).await;
+    let (status, _, b) = call(
+        &app,
+        "PUT",
+        "/api/secrets/openai_api_key",
+        Some(&owner),
+        Some(body),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!b.to_string().contains(secret));
+
+    // Status says "set", and nowhere returns the value.
+    let (status, _, list) = call(&app, "GET", "/api/secrets", Some(&viewer), None, false).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(list["available"], true);
+    let entry = list["secrets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["name"] == "openai_api_key")
+        .unwrap()
+        .clone();
+    assert_eq!(
+        (entry["set"].as_bool(), entry["readable"].as_bool()),
+        (Some(true), Some(true))
+    );
+    assert!(!list.to_string().contains(secret));
+
+    // At rest it is ciphertext; the audit log names the secret, never the value.
+    let stored: Vec<u8> =
+        sqlx::query_scalar("SELECT ciphertext FROM secrets WHERE name = 'openai_api_key'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert!(!String::from_utf8_lossy(&stored).contains(secret));
+    let audit: Vec<serde_json::Value> =
+        sqlx::query_scalar("SELECT detail FROM audit_log WHERE action = 'secret.set'")
+            .fetch_all(&pool)
+            .await
+            .unwrap();
+    assert_eq!(audit.len(), 1);
+    assert!(!audit[0].to_string().contains(secret));
+
+    // Server-side adapters can read it; a different key cannot.
+    let reader = qd_store::settings::PgSecrets::new(
+        pool.clone(),
+        Some(qd_store::settings::MasterKey::new([7_u8; 32])),
+        app.stores.audit.clone(),
+    );
+    let value = qd_app::ports::SecretReader::get(&reader, "openai_api_key")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(value.expose(), secret);
+    assert_eq!(format!("{value:?}"), "SecretValue(***)");
+    let wrong = qd_store::settings::PgSecrets::new(
+        pool.clone(),
+        Some(qd_store::settings::MasterKey::new([8_u8; 32])),
+        app.stores.audit.clone(),
+    );
+    assert!(
+        qd_app::ports::SecretReader::get(&wrong, "openai_api_key")
+            .await
+            .is_err()
+    );
+
+    // Unknown names, pasted newlines, and clearing.
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/secrets/root_password",
+        Some(&owner),
+        Some(serde_json::json!({"value": "x"})),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/secrets/kite_api_key",
+        Some(&owner),
+        Some(serde_json::json!({"value": "abc\n"})),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let (status, _, _) = call(
+        &app,
+        "DELETE",
+        "/api/secrets/openai_api_key",
+        Some(&owner),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let remaining: i64 = sqlx::query_scalar("SELECT count(*) FROM secrets")
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(remaining, 0, "a cleared secret is really gone");
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn settings_changes_need_the_owner_and_a_step_up(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let viewer = login(&app, "viewer", VIEWER_PASSWORD).await;
+    let body = serde_json::json!({ "values": { "risk_per_trade": "0.005" } });
+    let (status, _, _) = call(&app, "GET", "/api/settings", Some(&viewer), None, false).await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/settings/risk",
+        Some(&viewer),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _, b) = call(
+        &app,
+        "PUT",
+        "/api/settings/risk",
+        Some(&owner),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(
+        (status, b["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("step_up_required"))
+    );
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/settings/risk",
+        Some(&owner),
+        Some(body.clone()),
+        false,
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "the CSRF header is required");
+    step_up(&app, &owner).await;
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/settings/risk",
+        Some(&owner),
+        Some(body.clone()),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = call(
+        &app,
+        "PUT",
+        "/api/settings/bogus",
+        Some(&owner),
+        Some(body),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
 }

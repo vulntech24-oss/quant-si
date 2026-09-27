@@ -13,6 +13,7 @@
 //! - [`memory`]: in-memory journal and halt store for backtests and tests.
 //! - [`evidence`]: recorded evidence (INV-11) and evidence tables.
 //! - [`review`]: predicted-vs-realized review, calibration and paper-review evidence.
+//! - [`secrets`]: the catalog of secrets the owner can enter in the web UI.
 //! - [`session`]: the daily trading cycle shared by backtest and paper (INV-08).
 //! - [`restore`]: rebuilding trading state from the journal after a restart.
 
@@ -29,4 +30,5 @@ pub mod positions;
 pub mod registry;
 pub mod restore;
 pub mod review;
+pub mod secrets;
 pub mod session;
