@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # QuantDesk: one image with qd-server, the qd CLI, the built frontend and the
 # data configuration. Paper trading by default; live orders are not compiled
-# in unless FEATURES="qd-app/live-orders" is passed, and even then need every
+# in unless FEATURES="qd-server/live-orders" is passed, and even then need every
 # INV-14 condition at runtime.
 
 # ---- frontend ----

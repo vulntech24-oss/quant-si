@@ -10,8 +10,9 @@ NO TRADE is a normal, frequent outcome.
 - Spec (source of truth): `docs/QUANTDESK_BUILD_SPEC.md`. It currently ends at
   §6.6; §7–§20 are missing (ADR 0001).
 - Decisions: `docs/adr/`. Progress and next steps: `docs/PROGRESS.md`.
-- Current phase: **Phase 9 (deployment, monitoring) done. Remaining work is blocked on
-  provider docs or owner decisions** (`docs/PROGRESS.md`, "What remains").
+- Current phase: **Phases 0–9 plus Zerodha Kite, live runner, hosted AI advisors and
+  Telegram done (ADR 0014). Remaining: crypto venue and owner decisions**
+  (`docs/PROGRESS.md`, "What remains").
   See `docs/PROGRESS.md`.
 
 ## Commands
@@ -93,9 +94,17 @@ backend/                     Cargo workspace (ADR 0002)
     src/registry.rs          Strategy Registry (stage = replay of stored events)
     src/session.rs           daily trading cycle shared by backtest and paper (INV-08)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
+    src/runs.rs              state, stage slots, instruments, book JSON for paper and live runs
     src/evidence.rs          evidence records (INV-11), evidence tables, stored evidence source
     src/review.rs            predicted-vs-realized review, calibration, paper-review evidence
     src/secrets.rs           catalog of secrets the owner can enter in the web UI
+  crates/qd-broker-kite/     Zerodha Kite Connect (ADR 0014, docs/integrations/kite.md)
+    src/client.rs, login.rs  HTTP client and error classes; login URL, checksum, token exchange
+    src/market.rs            instruments CSV, completed daily candles, IST
+    src/broker.rs            executor (orders only with live-orders; OCO = two-leg GTT),
+                             account reader, fills from the order book
+    src/runner.rs            LiveRunner (latest date only, intraday fill sync), demote_on_breach
+  crates/qd-ai-providers/    OpenAI/xAI (Responses) and Gemini advisors; advisory only (INV-04)
   crates/qd-ai/              advisory AI (INV-04): Advisor, checklist-v1, orchestrator, scorecard;
                              depends on nothing that can act on trading state (tested)
   crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
@@ -105,6 +114,8 @@ backend/                     Cargo workspace (ADR 0002)
     src/settings.rs          settings versions; encrypted secrets (XChaCha20-Poly1305)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
     src/runtime.rs           effective settings (files + web UI), per-run services, SettingsAdmin (ADR 0013)
+    src/kite.rs              Login with Zerodha, bar import, DynLive, schedules, reconcilers
+    src/notify.rs            Telegram notifier
   crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
   crates/qd-api/             HTTP API under /api (ADR 0008)
     src/auth.rs              argon2id, session cookie, Caller extractor, step-up, login throttle
@@ -134,8 +145,8 @@ docs/                        spec, ADRs, progress log, OPERATIONS.md, integratio
 .github/workflows/ci.yml     runs the commands above
 ```
 
-Target crates not yet created (§5.3): qd-broker-kite, qd-marketdata (provider docs
-unreachable so far: `docs/integrations/`).
+Target crate not yet created (§5.3): qd-marketdata (Kite provides the bars; NSE is
+unreachable: `docs/integrations/`). The crypto venue awaits an owner decision.
 Create a crate only when it has real code.
 
 ## Rules of thumb
@@ -161,6 +172,9 @@ Create a crate only when it has real code.
   need step-up on the server, not just a UI prompt.
 - No `todo!`, `unimplemented!`, `dbg!`, `unwrap`, `expect` in runtime code.
 - Never place a real order. Never ask for secret values; name the `.env` variables.
+- Broker adapters are tested against local fake servers only; order placement must stay
+  behind `live_orders_compiled()` and the gateway's INV-14 check.
+- The live book is configured only in the server file (`[live]`), never in the UI.
 - Read the provider's current docs before any integration; record them in
   `docs/integrations/<provider>.md`.
 - Small conventional commits, only when every check passes.

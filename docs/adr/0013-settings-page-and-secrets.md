@@ -15,6 +15,7 @@ trading to need deliberate server-side configuration.
 ### Settings: files are defaults, the UI overrides, every run reads them
 
 - Editable sections: `paper`, `risk`, `ai`, `validation` and `review`
+  (ADR 0014 adds `kite` and `notifications`)
   (`qd-server/src/runtime.rs`).
 - Saving a section validates it through the same typed constructors the
   files use (`RiskConfig::new`, `PaperConfig::validate`, and the others).

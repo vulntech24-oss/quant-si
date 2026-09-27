@@ -16,6 +16,7 @@ The phase plan is provisional until spec §17 is provided (ADR 0001).
 | 7 | Validation, evidence, Monte Carlo, review and calibration | **Done** (2026-09-27) |
 | 8 | Advisory AI in shadow mode (provider adapters blocked) | **Done** (2026-09-27) |
 | 9 | Deployment, monitoring, alerts, operator docs (live broker blocked) | **Done** (2026-09-27) |
+| — | Zerodha Kite, live runner, hosted AI advisors, Telegram, verified costs | **Done** (2026-09-27, ADR 0014) |
 
 ## Phase 0: audit (2026-09-27)
 
@@ -452,6 +453,72 @@ Decisions: ADR 0013.
   - enabling AI in Settings allowed an AI run immediately;
   - a saved Kite key was never returned by the API and never logged.
 
+## Zerodha Kite, live trading, AI providers, Telegram (2026-09-27)
+
+Built once the owner allowed network access. Every provider's docs were
+read first and recorded in `docs/integrations/`.
+
+- **Costs**: all three Zerodha schedules were verified against
+  zerodha.com/charges and marked verified.
+- **Gateway**: `submit_oco` journals the stop and the target, then sends
+  them as one broker call. If the pair is refused, the stop is sent alone.
+  Restored intents keep their broker order ids.
+- **`qd-broker-kite`**:
+  - client;
+  - login (checksum, one-time state, client-id check);
+  - instruments CSV and completed daily candles;
+  - account reader;
+  - executor: regular/AMO orders and protective two-leg GTTs, placement
+    only with `live-orders`;
+  - fills read back from the order book.
+- **Live runner**:
+  - daily cycle for the latest completed date only;
+  - intraday fill checks;
+  - unknown orders resolved by tag;
+  - automatic demotion to Paper while a hard halt covers a live version
+    (INV-11);
+  - an operational halt when the book disagrees with Zerodha (INV-06).
+- **`qd-ai-providers`**: OpenAI and xAI (Responses API) and Gemini
+  (`generateContent`), all with a strict JSON schema, advisory only.
+- **Server**:
+  - Settings sections `kite` and `notifications`, and per-provider AI
+    switches; `[live]` stays file-only;
+  - "Login with Zerodha" with a cookie-less callback;
+  - scheduled bar import, live run and fill checks;
+  - Telegram alerts and summaries;
+  - startup reconciliation of the live book;
+  - live alerts and metrics.
+- **Frontend**: a **Broker** page with:
+  - the setup checklist, "Login with Zerodha" and bar import;
+  - the Telegram test;
+  - the INV-14 conditions, arm/disarm, fill check and live run;
+  - the live book.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check` (ISC allowed for the
+  rustls stack); frontend typecheck, 12 tests, build.
+- `cargo test --workspace`: 218 tests. The `live-orders` run (qd-app,
+  qd-server, qd-broker-kite) passes. New tests include:
+  - `invariant_14_without_every_live_condition_no_order_reaches_kite`;
+  - `invariant_11_a_hard_halt_demotes_live_versions_to_paper`;
+  - `invariant_06_a_book_that_disagrees_with_kite_halts_live_entries`;
+  - with `live-orders`: the AMO entry form, then its fill, gives one
+    two-leg GTT with the right triggers and legs;
+  - login tests: forged or reused state, wrong client id (token not
+    stored), token never shown;
+  - Telegram routing and severity;
+  - provider request and response shapes, refusals and errors (keys never
+    in errors);
+  - `invariant_04` for the providers crate.
+- Every test runs against local fake servers. No real order was placed, and
+  no live endpoint was called.
+- Smoke run against a real server:
+  - Kite settings and keys saved from the API;
+  - the login URL carried a one-time state;
+  - a forged callback was redirected to `login=failed`;
+  - the secrets never appeared in the log.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
@@ -472,9 +539,13 @@ Decisions: ADR 0013.
 - The gateway's journal-failure latch clears only on restart (ADR 0006).
 - Tests need a PostgreSQL reachable through `DATABASE_URL` (ADR 0007).
 - Redis is deferred until a concrete need (ADR 0007).
-- **Provider adapters are blocked:** the build environment cannot reach
-  kite.trade, Binance or NSE (see `docs/integrations/`). Bars come in through
-  CSV import until the owner allows those hosts.
+- The Kite adapter is tested only against a fake of the documented API.
+  Before real money, place one tiny order by hand and check that the
+  journal, the book and Kite agree (ADR 0014).
+- A GTT stop leg that triggers after a gap beyond its limit stays an open
+  LIMIT order at Zerodha; QuantDesk does not chase it (ADR 0014).
+- NSE (bot protection) and Binance (HTTP 451 geo-block) remain unreachable
+  from the build environment. Kite provides the NSE, BSE and MCX bars.
 - Paper decisions are NO TRADE until a version passes validation (ADR 0010).
 - Validation and review thresholds are conservative starting points
   (`config/validation.toml`, `config/review.toml`); the owner should review them.
@@ -490,15 +561,21 @@ Decisions: ADR 0013.
 
 ## What remains (blocked or owner decisions)
 
-1. **Zerodha Kite adapter** (market data, live order executor, account
-   reader): blocked until the build environment can read kite.trade (or the
-   owner supplies the docs). Owner decisions are also needed: the Kite plan,
-   a static IP, DDPI.
-2. **Crypto venue** and **AI provider adapters**: blocked by the same egress
-   policy, and the venue and providers are open owner decisions.
-3. **Automatic demotion on live breach** (INV-11): with the live runner.
-4. **Cost schedules**: the owner must verify the rates and mark the
-   schedules verified.
-5. **Notifications** beyond logs (email or chat): need a provider choice.
-6. **Missing spec sections §7–§20**: every assumption is recorded in the
+1. **Crypto venue**: Binance refuses this region (HTTP 451). The owner
+   chooses a venue that serves their country; its adapter comes after its
+   docs are read.
+2. **Owner actions at Zerodha** before live orders:
+   - a Kite Connect plan ("Connect", for historical data);
+   - the redirect URL `https://<domain>/api/kite/callback`;
+   - a static IP registered for orders;
+   - DDPI or TPIN;
+   - TOTP.
+3. **Going live** is a server decision (INV-14):
+   - a `live-orders` build;
+   - `environment = "production"`;
+   - `live_trading_enabled = true`;
+   - a `[live]` book;
+   - arming;
+   - a version with a passed paper review at SmallCapital.
+4. **Missing spec sections §7–§20**: every assumption is recorded in the
    ADRs; the owner should confirm them.

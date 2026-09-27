@@ -22,8 +22,11 @@ TypeScript frontend.
 | HTTP API, owner authentication, frontend | Built |
 | Settings page: all settings and API keys from the web UI (keys encrypted, write-only) | Built |
 | Docker image, compose stack with TLS, backups, metrics, alerts | Built |
-| Zerodha Kite adapter (market data, live orders) | **Not built**: provider docs unreachable from the build environment |
-| Crypto venue, AI provider adapters (OpenAI, Gemini, xAI) | **Not built**: same reason; venue and providers are open owner decisions |
+| Zerodha Kite: daily login, bar import, account sync, live orders (GTT stop/target), live runner | Built (tested against a fake Kite; see ADR 0014 before real money) |
+| Automatic demotion of live strategies on a hard halt | Built |
+| Hosted AI advisors: OpenAI, Gemini, xAI (advisory only) | Built |
+| Telegram alerts and daily summaries | Built |
+| Crypto venue | **Not built**: Binance refuses this region (HTTP 451); the venue is an owner decision |
 
 Real money is disabled by default and cannot be enabled by configuration
 alone. Live orders need all of these (INV-14):
@@ -31,10 +34,10 @@ alone. Live orders need all of these (INV-14):
 - `environment = "production"`;
 - `live_trading_enabled = true`;
 - verified cost schedules;
+- a `[live]` book in the server file;
 - an armed live account (password step-up);
-- a strategy version at a live stage, which needs a passed paper review.
-
-No live broker executor exists yet.
+- a strategy version at a live stage, which needs a passed paper review;
+- today's "Login with Zerodha" session.
 
 ## Quick start (development)
 

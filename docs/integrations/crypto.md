@@ -1,9 +1,14 @@
 # Crypto venue
 
-- Status: **not implemented**.
-- The venue is an open owner decision (ADR 0004). Binance's documentation was
-  checked on 2026-09-27 and could not be fetched (egress policy denied
-  `api.binance.com` and `developers.binance.com`).
-- When the owner picks a venue: read its current REST docs for daily candles,
-  symbol filters (tick size, step size, minimum notional) and fees, record
-  them here, then write the adapter. Credentials go in `.env` only.
+- Status: **not implemented**; it needs an owner decision.
+- Checked 2026-09-27 from the build environment:
+  - `developers.binance.com` is reachable;
+  - `api.binance.com` answers **HTTP 451 (Unavailable For Legal Reasons)**:
+    Binance refuses API connections from this server's region. That is a
+    legal geo-block, not something the network allow-list can change.
+- Before building an adapter, choose a venue that serves your country and
+  that QuantDesk's server can reach from where it is deployed. For an India
+  deployment: Binance (if reachable from your server), CoinDCX, Delta
+  Exchange India or another FIU-registered exchange.
+  - Tell me which one, and allow its API and docs hosts.
+  - Use API keys without withdrawal rights (Settings → API keys → crypto).
