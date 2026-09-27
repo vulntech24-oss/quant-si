@@ -17,6 +17,20 @@ paths:
     get: {summary: The current user, role and step-up expiry}
   /api/auth/step-up:
     post: {summary: Re-enter the password to allow dangerous actions for 5 minutes}
+  /api/auth/totp:
+    get: {summary: "Two-factor state of the caller: available, enabled, pending"}
+  /api/auth/totp/setup:
+    post: {summary: "Start TOTP enrollment (owner, step-up); returns the secret and otpauth URI once"}
+  /api/auth/totp/enable:
+    post: {summary: "Turn TOTP on with a current code, body {code} (owner, step-up)"}
+  /api/auth/totp/disable:
+    post: {summary: "Turn TOTP off with a current code, body {code} (owner, step-up)"}
+  /api/auth/sessions:
+    get: {summary: "The caller's sessions (id, created, expires, current); never tokens"}
+  /api/auth/sessions/revoke-all:
+    post: {summary: "Log out everywhere, this session included"}
+  /api/auth/sessions/{id}:
+    delete: {summary: Revoke one of the caller's sessions}
   /api/status:
     get: {summary: Environment, account mode, live flags, halt state (unknown counts as halted)}
   /api/decisions:

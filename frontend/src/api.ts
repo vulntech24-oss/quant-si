@@ -145,7 +145,14 @@ export interface SecretRow {
 
 export const api = {
   me: () => request<Me>("GET", "/auth/me"),
-  login: (username: string, password: string) => request<Me>("POST", "/auth/login", { username, password }),
+  login: (username: string, password: string, code?: string) => request<Me>("POST", "/auth/login", code ? { username, password, code } : { username, password }),
+  totp: () => request<{ available: boolean; enabled: boolean; pending: boolean }>("GET", "/auth/totp"),
+  totpSetup: () => request<{ secret: string; uri: string }>("POST", "/auth/totp/setup"),
+  totpEnable: (code: string) => request<{ enabled: boolean }>("POST", "/auth/totp/enable", { code }),
+  totpDisable: (code: string) => request<{ enabled: boolean }>("POST", "/auth/totp/disable", { code }),
+  sessions: () => request<Array<{ id: string; created_at: string; expires_at: string; current: boolean }>>("GET", "/auth/sessions"),
+  revokeSession: (id: string) => request<{ revoked: string }>("DELETE", `/auth/sessions/${encodeURIComponent(id)}`),
+  revokeAllSessions: () => request<{ revoked: number }>("POST", "/auth/sessions/revoke-all"),
   logout: () => request<unknown>("POST", "/auth/logout"),
   stepUp: (password: string) => request<{ stepped_up_until: string }>("POST", "/auth/step-up", { password }),
   status: () => request<Status>("GET", "/status"),

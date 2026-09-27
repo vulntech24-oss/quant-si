@@ -180,6 +180,11 @@ async fn app(pool: PgPool) -> App {
         monitor: qd_app::monitor::MonitorSettings::default(),
         data: None,
         portfolio: None,
+        totp: Some(Arc::new(qd_store::settings::PgSecrets::new(
+            pool.clone(),
+            Some(qd_store::settings::MasterKey::new([7_u8; 32])),
+            stores.audit.clone(),
+        ))),
         live: None,
         broker: Some(Arc::new(FakeBrokerLink)),
         notifier: Some(notifier.clone()),
@@ -958,4 +963,195 @@ async fn the_test_notification_is_owner_only(pool: PgPool) {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(app.notifier.0.lock().unwrap().len(), 1);
+}
+
+fn totp_code(secret: &str, step: i64) -> String {
+    let key = qd_api::totp::base32_decode(secret).unwrap();
+    format!(
+        "{:06}",
+        qd_api::totp::hotp(&key, u64::try_from(step).unwrap(), 6).unwrap()
+    )
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn two_factor_login_needs_a_fresh_authenticator_code(pool: PgPool) {
+    let app = app(pool).await;
+    let owner = login(&app, "owner", OWNER_PASSWORD).await;
+    let (status, _, err) = call(
+        &app,
+        "POST",
+        "/api/auth/totp/setup",
+        Some(&owner),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::FORBIDDEN, Some("step_up_required"))
+    );
+    let pw = serde_json::json!({ "password": OWNER_PASSWORD });
+    call(
+        &app,
+        "POST",
+        "/api/auth/step-up",
+        Some(&owner),
+        Some(pw),
+        true,
+    )
+    .await;
+    let (status, _, setup) = call(
+        &app,
+        "POST",
+        "/api/auth/totp/setup",
+        Some(&owner),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let secret = setup["secret"].as_str().unwrap().to_owned();
+    assert!(
+        setup["uri"]
+            .as_str()
+            .unwrap()
+            .starts_with("otpauth://totp/QuantDesk:owner?secret=")
+    );
+    let step = qd_api::totp::step_at(FixedClock.now());
+
+    // A wrong code does not enable it; the right one does.
+    let wrong = serde_json::json!({ "code": "000000" });
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/auth/totp/enable",
+        Some(&owner),
+        Some(wrong),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let right = serde_json::json!({ "code": totp_code(&secret, step) });
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/auth/totp/enable",
+        Some(&owner),
+        Some(right),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The password alone no longer logs in.
+    let attempt = |code: Option<String>| {
+        let mut body = serde_json::json!({ "username": "owner", "password": OWNER_PASSWORD });
+        if let Some(c) = code {
+            body["code"] = serde_json::json!(c);
+        }
+        body
+    };
+    let (status, _, err) = call(
+        &app,
+        "POST",
+        "/api/auth/login",
+        None,
+        Some(attempt(None)),
+        true,
+    )
+    .await;
+    assert_eq!(
+        (status, err["code"].as_str()),
+        (StatusCode::UNAUTHORIZED, Some("totp_required"))
+    );
+    // The code used for enabling cannot be replayed; the next one works once.
+    let used = Some(totp_code(&secret, step));
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/auth/login",
+        None,
+        Some(attempt(used)),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    let next = Some(totp_code(&secret, step + 1));
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/auth/login",
+        None,
+        Some(attempt(next.clone())),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = call(
+        &app,
+        "POST",
+        "/api/auth/login",
+        None,
+        Some(attempt(next)),
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED, "each code works once");
+}
+
+#[sqlx::test(migrator = "qd_store::MIGRATOR")]
+async fn sessions_are_listed_without_tokens_and_can_be_logged_out_everywhere(pool: PgPool) {
+    let app = app(pool).await;
+    let first = login(&app, "owner", OWNER_PASSWORD).await;
+    let second = login(&app, "owner", OWNER_PASSWORD).await;
+    let (status, _, list) = call(
+        &app,
+        "GET",
+        "/api/auth/sessions",
+        Some(&second),
+        None,
+        false,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let list = list.as_array().unwrap().clone();
+    assert_eq!(list.len(), 2);
+    assert_eq!(list.iter().filter(|s| s["current"] == true).count(), 1);
+    let token = first.split('=').nth(1).unwrap();
+    assert!(!serde_json::to_string(&list).unwrap().contains(token));
+
+    // Revoke the other session by id.
+    let other = list.iter().find(|s| s["current"] == false).unwrap()["id"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let (status, _, _) = call(
+        &app,
+        "DELETE",
+        &format!("/api/auth/sessions/{other}"),
+        Some(&second),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _, _) = call(&app, "GET", "/api/status", Some(&first), None, false).await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+
+    // Log out everywhere, this session included.
+    let third = login(&app, "owner", OWNER_PASSWORD).await;
+    let (status, _, out) = call(
+        &app,
+        "POST",
+        "/api/auth/sessions/revoke-all",
+        Some(&second),
+        None,
+        true,
+    )
+    .await;
+    assert_eq!((status, out["revoked"].as_u64()), (StatusCode::OK, Some(2)));
+    for cookie in [&second, &third] {
+        let (status, _, _) = call(&app, "GET", "/api/status", Some(cookie), None, false).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED);
+    }
 }

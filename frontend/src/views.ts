@@ -852,3 +852,52 @@ export async function portfolioView(): Promise<HTMLElement> {
     strategies.length === 0 ? h("p", { class: "empty" }, "No closed trades yet.") : h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Strategy", "Trades", "Wins", "Net P&L", "Mean R"].map((t) => h("th", {}, t)))), h("tbody", {}, ...strategies.map((s) => h("tr", {}, h("td", {}, String(s["strategy"])), h("td", { class: "mono right" }, String(s["trades"])), h("td", { class: "mono right" }, String(s["wins"])), h("td", { class: "mono right" }, formatNumber(str(s["net_pnl"]))), h("td", { class: "mono right" }, formatNumber(str(s["mean_r"]))))))),
   );
 }
+
+// ---------- security: two-factor login and sessions ----------
+
+export async function securityView(ctx: Ctx, rerender: () => void): Promise<HTMLElement> {
+  const [totp, sessions] = await Promise.all([api.totp(), api.sessions()]);
+  const message = h("p", { class: "error", role: "alert" });
+  const owner = isOwner(ctx);
+  const fail = (err: unknown) => { message.textContent = errorText(err); };
+  const code = () => h("input", { autocomplete: "one-time-code", inputmode: "numeric", maxlength: "6", "aria-label": "Authenticator code", placeholder: "6-digit code" }) as HTMLInputElement;
+  const factor = h("div", { class: "card stack" }, h("h2", {}, "Two-factor login (authenticator app)"));
+  if (!totp.available) {
+    factor.append(h("p", { class: "muted" }, "Not available: the server has no master key for encrypting the secret."));
+  } else if (totp.enabled) {
+    const c = code();
+    factor.append(h("p", { class: "chip long" }, "On: logins need your password and a code."));
+    if (owner) factor.append(h("form", { class: "row wrap", onsubmit: async (e: Event) => { e.preventDefault(); try { await withStepUp(() => api.totpDisable(c.value)); rerender(); } catch (err) { fail(err); } } }, c, h("button", { class: "danger" }, "Turn off")));
+  } else if (owner) {
+    const setupBox = h("div", { class: "stack" });
+    factor.append(
+      h("p", { class: "muted" }, "Adds a 6-digit code from an authenticator app (Google Authenticator, Aegis, 1Password…) to every login. The secret is stored encrypted on the server."),
+      h("button", { class: "primary", onclick: async () => {
+        try {
+          const s = await withStepUp(() => api.totpSetup());
+          const c = code();
+          clear(setupBox);
+          setupBox.append(
+            h("p", {}, "Add this key to your app (manual entry, time-based), then enter the code it shows:"),
+            h("p", { class: "mono secret-key" }, s.secret.replace(/(.{4})/g, "$1 ").trim()),
+            h("details", {}, h("summary", {}, "otpauth link (for apps that import links)"), h("p", { class: "mono small wrap-anywhere" }, s.uri)),
+            h("form", { class: "row wrap", onsubmit: async (e: Event) => { e.preventDefault(); try { await withStepUp(() => api.totpEnable(c.value)); rerender(); } catch (err) { fail(err); } } }, c, h("button", { class: "primary" }, "Turn on")),
+            h("p", { class: "muted small" }, "The key is shown only now. Store a copy somewhere safe: without it or the app, the owner can only be reset on the server."),
+          );
+        } catch (err) { fail(err); }
+      } }, totp.pending ? "Start again" : "Set up"),
+      setupBox,
+    );
+  }
+  const list = h("table", { class: "table" }, h("thead", {}, h("tr", {}, ...["Session", "Started", "Expires", ""].map((t) => h("th", {}, t)))), h("tbody", {}, ...sessions.map((s) => h("tr", {},
+    h("td", { class: "mono" }, s.current ? `${s.id} (this one)` : s.id),
+    h("td", {}, formatIst(s.created_at)),
+    h("td", {}, formatIst(s.expires_at)),
+    h("td", {}, s.current ? null : h("button", { class: "ghost", onclick: async () => { try { await api.revokeSession(s.id); rerender(); } catch (err) { fail(err); } } }, "Log out")),
+  ))));
+  const everywhere = h("button", { class: "danger", onclick: async () => {
+    if (!window.confirm("Log out of every session, this one included?")) return;
+    try { await api.revokeAllSessions(); location.reload(); } catch (err) { fail(err); }
+  } }, "Log out everywhere");
+  return h("section", {}, h("h1", {}, "Security"), message, factor, h("div", { class: "card stack" }, h("h2", {}, "Active sessions"), list, everywhere));
+}

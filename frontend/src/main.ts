@@ -7,7 +7,7 @@ import "./styles.css";
 import { ApiError, api, type Me, type Status } from "./api";
 import { clear, h } from "./dom";
 import { formatIst } from "./format";
-import { aiView, backtestView, brokerView, dataView, portfolioView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
+import { aiView, backtestView, brokerView, dataView, portfolioView, securityView, type Ctx, decisionView, decisionsView, haltsView, journalView, paperView, reviewView, settingsView, strategiesView, validationView, withStepUp } from "./views";
 
 const root = document.getElementById("app");
 
@@ -45,6 +45,7 @@ const NAV: Array<[string, string]> = [
   ["#/backtest", "Backtest"],
   ["#/journal", "Journal"],
   ["#/settings", "Settings"],
+  ["#/security", "Security"],
 ];
 
 async function render(ctx: Ctx): Promise<void> {
@@ -74,6 +75,7 @@ async function render(ctx: Ctx): Promise<void> {
     else if (route.startsWith("#/review")) view = await reviewView(ctx, rerender);
     else if (route.startsWith("#/ai")) view = await aiView(ctx, rerender);
     else if (route.startsWith("#/settings")) view = await settingsView(ctx, rerender);
+    else if (route.startsWith("#/security")) view = await securityView(ctx, rerender);
     else if (route.startsWith("#/strategies")) view = await strategiesView(ctx, rerender);
     else if (route.startsWith("#/backtest")) view = await backtestView(ctx);
     else if (route.startsWith("#/journal")) view = await journalView();
@@ -99,11 +101,21 @@ function liveArmToggle(ctx: Ctx): HTMLElement | null {
 function loginScreen(onDone: (me: Me) => void): HTMLElement {
   const username = h("input", { autocomplete: "username", "aria-label": "Username", placeholder: "Username" });
   const password = h("input", { type: "password", autocomplete: "current-password", "aria-label": "Password", placeholder: "Password" });
+  const code = h("input", { autocomplete: "one-time-code", inputmode: "numeric", maxlength: "6", "aria-label": "Authenticator code", placeholder: "6-digit code from your authenticator", hidden: true });
   const message = h("p", { class: "error", role: "alert" });
   return h("main", { class: "login" }, h("form", { class: "card stack", onsubmit: async (e: Event) => {
     e.preventDefault();
-    try { onDone(await api.login(username.value, password.value)); } catch (err) { message.textContent = err instanceof ApiError && err.status === 429 ? "Too many attempts. Try again later." : "Invalid username or password."; }
-  } }, h("div", { class: "brand" }, h("img", { src: "/mark.svg", alt: "", width: "32", height: "32" }), h("span", {}, "QuantDesk")), username, password, h("button", { class: "primary" }, "Log in"), message));
+    try { onDone(await api.login(username.value, password.value, code.hidden ? undefined : code.value)); } catch (err) {
+      if (err instanceof ApiError && err.code === "totp_required") {
+        const first = code.hidden;
+        code.hidden = false;
+        code.focus();
+        message.textContent = first ? "Enter the code from your authenticator app." : "Wrong or already used code. Wait for the next one.";
+      } else {
+        message.textContent = err instanceof ApiError && err.status === 429 ? "Too many attempts. Try again later." : "Invalid username or password.";
+      }
+    }
+  } }, h("div", { class: "brand" }, h("img", { src: "/mark.svg", alt: "", width: "32", height: "32" }), h("span", {}, "QuantDesk")), username, password, code, h("button", { class: "primary" }, "Log in"), message));
 }
 
 async function start(me: Me): Promise<void> {

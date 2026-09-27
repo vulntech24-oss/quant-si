@@ -223,6 +223,60 @@ pub trait AuthStore: Send + Sync {
     async fn step_up(&self, token_hash: &str, until: DateTime<Utc>) -> Result<(), StoreError>;
     /// Deletes a session (logout).
     async fn delete_session(&self, token_hash: &str) -> Result<(), StoreError>;
+    /// A user's unexpired sessions, newest first.
+    async fn sessions_for(
+        &self,
+        user: qd_domain::ids::UserId,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<SessionInfo>, StoreError>;
+    /// Deletes every session of a user ("log out everywhere"); returns how many.
+    async fn delete_user_sessions(&self, user: qd_domain::ids::UserId) -> Result<u64, StoreError>;
+}
+
+/// One session, as the owner sees it (never the token).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SessionInfo {
+    /// SHA-256 of the token (identifies the session; not usable to log in).
+    pub token_hash: String,
+    /// When it was created.
+    pub created_at: DateTime<Utc>,
+    /// When it expires.
+    pub expires_at: DateTime<Utc>,
+}
+
+/// A user's TOTP second factor (RFC 6238), as stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TotpRecord {
+    /// The shared secret, base32 (encrypted at rest).
+    pub secret: SecretValue,
+    /// Whether logins require it (false while enrollment is pending).
+    pub enabled: bool,
+    /// The last time step a code was accepted for (replay protection).
+    pub last_step: i64,
+}
+
+/// TOTP secrets, encrypted with the master key (ADR 0015).
+#[async_trait]
+pub trait TotpStore: Send + Sync {
+    /// The user's record.
+    async fn totp(&self, user: qd_domain::ids::UserId) -> Result<Option<TotpRecord>, StoreError>;
+    /// Starts (or restarts) enrollment with a new secret, not yet enabled.
+    async fn put_pending_totp(
+        &self,
+        user: qd_domain::ids::UserId,
+        secret: &SecretValue,
+    ) -> Result<(), StoreError>;
+    /// Enables the pending secret.
+    async fn enable_totp(&self, user: qd_domain::ids::UserId) -> Result<(), StoreError>;
+    /// Removes the second factor.
+    async fn remove_totp(&self, user: qd_domain::ids::UserId) -> Result<(), StoreError>;
+    /// Records an accepted time step; false if it is not newer than the last
+    /// accepted one (the code was already used).
+    async fn use_totp_step(
+        &self,
+        user: qd_domain::ids::UserId,
+        step: i64,
+    ) -> Result<bool, StoreError>;
 }
 
 /// A journal entry as stored.

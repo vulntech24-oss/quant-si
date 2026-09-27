@@ -8,6 +8,7 @@
 pub mod auth;
 pub mod dto;
 pub mod routes;
+pub mod totp;
 
 use std::sync::Arc;
 
@@ -82,6 +83,8 @@ pub struct ApiState {
     pub live: Option<Arc<dyn PaperTrading>>,
     /// The broker connection (Zerodha Kite login, data, fills).
     pub broker: Option<Arc<dyn qd_app::ports::BrokerLink>>,
+    /// TOTP second factors (encrypted with the master key).
+    pub totp: Option<Arc<dyn qd_app::ports::TotpStore>>,
     /// Portfolio views of the paper and live books.
     pub portfolio: Option<Arc<dyn qd_app::ports::PortfolioReader>>,
     /// Instruments and bar uploads from the web UI.
@@ -112,6 +115,9 @@ pub enum ApiError {
     /// The action needs a recent password re-entry.
     #[error("step-up authentication required")]
     StepUpRequired,
+    /// The password was right; the authenticator code is missing or wrong.
+    #[error("authenticator code required")]
+    TotpRequired,
     /// Invalid input.
     #[error("bad request: {0}")]
     BadRequest(String),
@@ -141,6 +147,7 @@ impl IntoResponse for ApiError {
             Self::Unauthorized => (StatusCode::UNAUTHORIZED, "unauthorized"),
             Self::Forbidden(_) => (StatusCode::FORBIDDEN, "forbidden"),
             Self::StepUpRequired => (StatusCode::FORBIDDEN, "step_up_required"),
+            Self::TotpRequired => (StatusCode::UNAUTHORIZED, "totp_required"),
             Self::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             Self::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             Self::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),

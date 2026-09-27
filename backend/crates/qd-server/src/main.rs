@@ -173,6 +173,7 @@ async fn run() -> Result<(), String> {
     let api_state = qd_api::ApiState {
         monitor: monitor.clone(),
         data: Some(Arc::new(qd_server::data::DataService(runtime.clone()))),
+        totp: Some(runtime.secrets.clone() as Arc<dyn qd_app::ports::TotpStore>),
         portfolio: Some(Arc::new(qd_app::book_view::JournalPortfolio {
             reader: stores.journal.clone(),
             market: stores.market.clone(),

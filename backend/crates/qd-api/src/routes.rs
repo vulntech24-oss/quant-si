@@ -38,6 +38,13 @@ pub fn router(state: ApiState) -> Router {
         .route("/auth/logout", post(logout))
         .route("/auth/me", get(me))
         .route("/auth/step-up", post(step_up))
+        .route("/auth/totp", get(totp_status))
+        .route("/auth/totp/setup", post(totp_setup))
+        .route("/auth/totp/enable", post(totp_enable))
+        .route("/auth/totp/disable", post(totp_disable))
+        .route("/auth/sessions", get(sessions_list))
+        .route("/auth/sessions/revoke-all", post(sessions_revoke_all))
+        .route("/auth/sessions/{id}", axum::routing::delete(session_revoke))
         .route("/status", get(status))
         .route("/decisions", get(decisions))
         .route("/decisions/{id}", get(decision))
@@ -94,6 +101,9 @@ pub fn router(state: ApiState) -> Router {
 struct LoginRequest {
     username: String,
     password: String,
+    /// The authenticator code, when the account has TOTP enabled.
+    #[serde(default)]
+    code: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -129,6 +139,34 @@ async fn login(
             .await;
         return Err(ApiError::Unauthorized);
     };
+    // Second factor (ADR 0015): with TOTP enabled, the password alone is not
+    // enough. A missing or wrong code counts as a failed attempt.
+    if let Some(store) = &state.totp {
+        if let Some(record) = store.totp(user.id).await.map_err(internal)? {
+            if record.enabled {
+                let step = body
+                    .code
+                    .as_deref()
+                    .and_then(|c| crate::totp::verify(record.secret.expose(), c, now));
+                let accepted = match step {
+                    Some(step) => store.use_totp_step(user.id, step).await.map_err(internal)?,
+                    None => false,
+                };
+                if !accepted {
+                    state.limiter.failed(&body.username, now);
+                    let _ = state
+                        .audit
+                        .record(
+                            "anonymous",
+                            "auth.totp_failed",
+                            json!({ "username": body.username, "code_given": body.code.is_some() }),
+                        )
+                        .await;
+                    return Err(ApiError::TotpRequired);
+                }
+            }
+        }
+    }
     state.limiter.succeeded(&body.username);
     let token = auth::new_token()?;
     let session = SessionRecord {
@@ -224,6 +262,220 @@ async fn step_up(
         .await
         .map_err(internal)?;
     Ok(Json(json!({ "stepped_up_until": until })))
+}
+
+// ---------- second factor and sessions (ADR 0015) ----------
+
+fn totp_store(state: &ApiState) -> Result<&std::sync::Arc<dyn qd_app::ports::TotpStore>, ApiError> {
+    state
+        .totp
+        .as_ref()
+        .ok_or_else(|| ApiError::Conflict("two-factor login is not available".to_owned()))
+}
+
+async fn totp_status(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    let record = match &state.totp {
+        Some(store) => store.totp(caller.user.id).await.map_err(internal)?,
+        None => None,
+    };
+    Ok(Json(json!({
+        "available": state.totp.is_some(),
+        "enabled": record.as_ref().is_some_and(|r| r.enabled),
+        "pending": record.as_ref().is_some_and(|r| !r.enabled),
+    })))
+}
+
+/// Starts enrollment: a new secret, shown once, to add to an authenticator app.
+async fn totp_setup(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    let store = totp_store(&state)?;
+    if store
+        .totp(caller.user.id)
+        .await
+        .map_err(internal)?
+        .is_some_and(|r| r.enabled)
+    {
+        return Err(ApiError::Conflict(
+            "two-factor login is already on; turn it off first".to_owned(),
+        ));
+    }
+    let secret = crate::totp::new_secret().map_err(internal)?;
+    store
+        .put_pending_totp(
+            caller.user.id,
+            &qd_app::ports::SecretValue::new(secret.clone()),
+        )
+        .await
+        .map_err(|e| ApiError::Conflict(e.0))?;
+    state
+        .audit
+        .record(&caller.actor(), "auth.totp_setup", json!({}))
+        .await
+        .map_err(internal)?;
+    let uri = crate::totp::otpauth_uri("QuantDesk", &caller.user.username, &secret);
+    Ok(Json(json!({ "secret": secret, "uri": uri })))
+}
+
+#[derive(Deserialize)]
+struct TotpCode {
+    code: String,
+}
+
+/// Checks a code against the stored secret and consumes its time step.
+async fn check_code(
+    state: &ApiState,
+    user: qd_domain::ids::UserId,
+    code: &str,
+) -> Result<qd_app::ports::TotpRecord, ApiError> {
+    let store = totp_store(state)?;
+    let record = store
+        .totp(user)
+        .await
+        .map_err(internal)?
+        .ok_or_else(|| ApiError::Conflict("no authenticator is set up".to_owned()))?;
+    let step = crate::totp::verify(record.secret.expose(), code, state.clock.now())
+        .ok_or_else(|| ApiError::BadRequest("wrong authenticator code".to_owned()))?;
+    if !store.use_totp_step(user, step).await.map_err(internal)? {
+        return Err(ApiError::BadRequest(
+            "that code was already used; wait for the next one".to_owned(),
+        ));
+    }
+    Ok(record)
+}
+
+async fn totp_enable(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<TotpCode>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    let record = check_code(&state, caller.user.id, &body.code).await?;
+    if record.enabled {
+        return Err(ApiError::Conflict("already on".to_owned()));
+    }
+    totp_store(&state)?
+        .enable_totp(caller.user.id)
+        .await
+        .map_err(internal)?;
+    state
+        .audit
+        .record(&caller.actor(), "auth.totp_enabled", json!({}))
+        .await
+        .map_err(internal)?;
+    Ok(Json(json!({ "enabled": true })))
+}
+
+async fn totp_disable(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Json(body): Json<TotpCode>,
+) -> Result<Json<Value>, ApiError> {
+    caller.require_step_up(state.clock.now())?;
+    check_code(&state, caller.user.id, &body.code).await?;
+    totp_store(&state)?
+        .remove_totp(caller.user.id)
+        .await
+        .map_err(internal)?;
+    state
+        .audit
+        .record(&caller.actor(), "auth.totp_disabled", json!({}))
+        .await
+        .map_err(internal)?;
+    Ok(Json(json!({ "enabled": false })))
+}
+
+/// A session's public id: the start of its token hash.
+fn session_id(token_hash: &str) -> String {
+    token_hash.chars().take(12).collect()
+}
+
+async fn sessions_list(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Json<Value>, ApiError> {
+    let sessions = state
+        .auth
+        .sessions_for(caller.user.id, state.clock.now())
+        .await
+        .map_err(internal)?;
+    Ok(Json(Value::Array(
+        sessions
+            .iter()
+            .map(|s| {
+                json!({
+                    "id": session_id(&s.token_hash),
+                    "created_at": s.created_at,
+                    "expires_at": s.expires_at,
+                    "current": s.token_hash == caller.session.token_hash,
+                })
+            })
+            .collect(),
+    )))
+}
+
+/// "Log out everywhere": every session of the caller, this one included.
+async fn sessions_revoke_all(
+    State(state): State<ApiState>,
+    caller: Caller,
+) -> Result<Response, ApiError> {
+    let removed = state
+        .auth
+        .delete_user_sessions(caller.user.id)
+        .await
+        .map_err(internal)?;
+    state
+        .audit
+        .record(
+            &caller.actor(),
+            "auth.logout_everywhere",
+            json!({ "sessions": removed }),
+        )
+        .await
+        .map_err(internal)?;
+    let mut response = Json(json!({ "revoked": removed })).into_response();
+    response.headers_mut().insert(
+        header::SET_COOKIE,
+        HeaderValue::from_str(&auth::clear_cookie(state.settings.secure_cookies))
+            .map_err(internal)?,
+    );
+    Ok(response)
+}
+
+async fn session_revoke(
+    State(state): State<ApiState>,
+    caller: Caller,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let sessions = state
+        .auth
+        .sessions_for(caller.user.id, state.clock.now())
+        .await
+        .map_err(internal)?;
+    let target = sessions
+        .iter()
+        .find(|s| session_id(&s.token_hash) == id)
+        .ok_or(ApiError::NotFound)?;
+    state
+        .auth
+        .delete_session(&target.token_hash)
+        .await
+        .map_err(internal)?;
+    state
+        .audit
+        .record(
+            &caller.actor(),
+            "auth.session_revoked",
+            json!({ "session": id }),
+        )
+        .await
+        .map_err(internal)?;
+    Ok(Json(json!({ "revoked": id })))
 }
 
 // ---------- status ----------

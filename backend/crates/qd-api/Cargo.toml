@@ -13,6 +13,7 @@ chrono.workspace = true
 futures-util.workspace = true
 getrandom.workspace = true
 hex.workspace = true
+hmac.workspace = true
 qd-app.workspace = true
 qd-domain.workspace = true
 # The catalog of strategy logic versions (pure, no I/O).
@@ -20,6 +21,7 @@ qd-strategy.workspace = true
 rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha1.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true

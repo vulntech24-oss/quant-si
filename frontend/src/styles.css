@@ -106,3 +106,5 @@ button.ghost:hover { background: var(--neutral-bg); color: var(--ink); }
 .price-chart .decision-line { stroke: var(--muted, #888); stroke-dasharray: 2 3; }
 .price-chart .equity { fill: none; stroke: #0969da; stroke-width: 2; }
 .price-chart .drawdown { fill: var(--short, #cf222e); opacity: 0.35; }
+.secret-key { font-size: 1.1rem; letter-spacing: 0.08em; user-select: all; }
+.wrap-anywhere { overflow-wrap: anywhere; }

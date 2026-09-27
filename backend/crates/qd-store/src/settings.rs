@@ -249,3 +249,84 @@ impl SecretReader for PgSecrets {
         .transpose()
     }
 }
+
+fn totp_aad(user: qd_domain::ids::UserId) -> String {
+    format!("totp:{user}")
+}
+
+#[async_trait]
+impl qd_app::ports::TotpStore for PgSecrets {
+    async fn totp(
+        &self,
+        user: qd_domain::ids::UserId,
+    ) -> Result<Option<qd_app::ports::TotpRecord>, StoreError> {
+        let row =
+            sqlx::query("SELECT ciphertext, enabled, last_step FROM user_totp WHERE user_id = $1")
+                .bind(user.as_uuid())
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(store_error)?;
+        row.map(|r| {
+            let blob: Vec<u8> = r.try_get("ciphertext").map_err(store_error)?;
+            Ok(qd_app::ports::TotpRecord {
+                secret: SecretValue::new(self.open(&totp_aad(user), &blob)?),
+                enabled: r.try_get("enabled").map_err(store_error)?,
+                last_step: r.try_get("last_step").map_err(store_error)?,
+            })
+        })
+        .transpose()
+    }
+
+    async fn put_pending_totp(
+        &self,
+        user: qd_domain::ids::UserId,
+        secret: &SecretValue,
+    ) -> Result<(), StoreError> {
+        let blob = self.seal(&totp_aad(user), secret.expose())?;
+        sqlx::query(
+            "INSERT INTO user_totp (user_id, ciphertext, enabled, last_step) VALUES ($1, $2, false, 0) \
+             ON CONFLICT (user_id) DO UPDATE SET ciphertext = $2, enabled = false, last_step = 0, updated_at = now()",
+        )
+        .bind(user.as_uuid())
+        .bind(blob)
+        .execute(&self.pool)
+        .await
+        .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn enable_totp(&self, user: qd_domain::ids::UserId) -> Result<(), StoreError> {
+        sqlx::query("UPDATE user_totp SET enabled = true, updated_at = now() WHERE user_id = $1")
+            .bind(user.as_uuid())
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn remove_totp(&self, user: qd_domain::ids::UserId) -> Result<(), StoreError> {
+        sqlx::query("DELETE FROM user_totp WHERE user_id = $1")
+            .bind(user.as_uuid())
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?;
+        Ok(())
+    }
+
+    async fn use_totp_step(
+        &self,
+        user: qd_domain::ids::UserId,
+        step: i64,
+    ) -> Result<bool, StoreError> {
+        let updated = sqlx::query(
+            "UPDATE user_totp SET last_step = $2, updated_at = now() WHERE user_id = $1 AND last_step < $2",
+        )
+        .bind(user.as_uuid())
+        .bind(step)
+        .execute(&self.pool)
+        .await
+        .map_err(store_error)?
+        .rows_affected();
+        Ok(updated == 1)
+    }
+}

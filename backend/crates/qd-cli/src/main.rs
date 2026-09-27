@@ -147,6 +147,12 @@ enum UserCommand {
         #[arg(long, value_enum)]
         role: UserRole,
     },
+    /// Remove a user's two-factor login (lost authenticator) and end all of
+    /// their sessions. Run on the server; audited.
+    ResetTotp {
+        #[arg(long)]
+        username: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -339,6 +345,33 @@ async fn run(cli: Cli) -> Result<(), String> {
                 .await
                 .map_err(|e| e.to_string())?;
             print(&record)
+        }
+        Command::User(UserCommand::ResetTotp { username }) => {
+            use qd_app::ports::{AuthStore, TotpStore};
+            let user = stores
+                .auth
+                .user_by_name(&username)
+                .await
+                .map_err(|e| e.to_string())?
+                .ok_or_else(|| format!("no user {username}"))?;
+            // Removing a row needs no master key.
+            let totp = qd_store::settings::PgSecrets::new(pool.clone(), None, stores.audit.clone());
+            totp.remove_totp(user.id).await.map_err(|e| e.to_string())?;
+            let sessions = stores
+                .auth
+                .delete_user_sessions(user.id)
+                .await
+                .map_err(|e| e.to_string())?;
+            stores
+                .audit
+                .record(
+                    actor,
+                    "auth.totp_reset",
+                    serde_json::json!({ "username": username, "sessions_ended": sessions }),
+                )
+                .await
+                .map_err(|e| e.to_string())?;
+            print(&serde_json::json!({ "totp_removed": true, "sessions_ended": sessions }))
         }
         Command::User(UserCommand::Create { username, role }) => {
             let mut password = String::new();

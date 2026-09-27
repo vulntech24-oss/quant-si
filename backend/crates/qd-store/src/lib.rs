@@ -808,6 +808,40 @@ impl AuthStore for PgAuth {
         .transpose()
     }
 
+    async fn sessions_for(
+        &self,
+        user: UserId,
+        now: DateTime<Utc>,
+    ) -> Result<Vec<qd_app::ports::SessionInfo>, StoreError> {
+        let rows = sqlx::query(
+            "SELECT token_hash, created_at, expires_at FROM sessions \
+             WHERE user_id = $1 AND expires_at > $2 ORDER BY created_at DESC",
+        )
+        .bind(user.as_uuid())
+        .bind(now)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(store_error)?;
+        rows.iter()
+            .map(|r| {
+                Ok(qd_app::ports::SessionInfo {
+                    token_hash: r.try_get("token_hash").map_err(store_error)?,
+                    created_at: r.try_get("created_at").map_err(store_error)?,
+                    expires_at: r.try_get("expires_at").map_err(store_error)?,
+                })
+            })
+            .collect()
+    }
+
+    async fn delete_user_sessions(&self, user: UserId) -> Result<u64, StoreError> {
+        Ok(sqlx::query("DELETE FROM sessions WHERE user_id = $1")
+            .bind(user.as_uuid())
+            .execute(&self.pool)
+            .await
+            .map_err(store_error)?
+            .rows_affected())
+    }
+
     async fn step_up(&self, token_hash: &str, until: DateTime<Utc>) -> Result<(), StoreError> {
         sqlx::query("UPDATE sessions SET stepped_up_until = $2 WHERE token_hash = $1")
             .bind(token_hash)
