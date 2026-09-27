@@ -95,13 +95,16 @@ backend/                     Cargo workspace (ADR 0002)
     src/restore.rs           rebuild gateway/positions/book from the journal; fail closed
     src/evidence.rs          evidence records (INV-11), evidence tables, stored evidence source
     src/review.rs            predicted-vs-realized review, calibration, paper-review evidence
+    src/secrets.rs           catalog of secrets the owner can enter in the web UI
   crates/qd-ai/              advisory AI (INV-04): Advisor, checklist-v1, orchestrator, scorecard;
                              depends on nothing that can act on trading state (tested)
   crates/qd-broker-paper/    PaperBroker (daily-bar fill rules, restorable), PaperRunner
   crates/qd-backtest/        run_backtest (loop over the session), research runner, metrics,
                              validation (walk-forward/OOS/holdout), montecarlo, validator
   crates/qd-store/           PostgreSQL adapters (journal, halts, market data, registry, audit, accounts)
+    src/settings.rs          settings versions; encrypted secrets (XChaCha20-Poly1305)
   crates/qd-server/          config (secrets from env), startup (INV-07), /health, /ready; bin qd-server
+    src/runtime.rs           effective settings (files + web UI), per-run services, SettingsAdmin (ADR 0013)
   crates/qd-cli/             bin `qd`: migrate, accounts, users, instruments, bars, strategy, halts, backtest
   crates/qd-api/             HTTP API under /api (ADR 0008)
     src/auth.rs              argon2id, session cookie, Caller extractor, step-up, login throttle
@@ -143,6 +146,9 @@ Create a crate only when it has real code.
 - Formulas include the contract multiplier and FX (ADR 0003).
 - Tick rounding is conservative for the trade; quantities round down.
 - Fakes are named `Fake*`/`Mock*`, live in test support or behind `dev-fakes`.
+- Secrets are write-only through the API: never add a route or DTO that returns a value;
+  only server-side adapters get `SecretReader`. Live trading, environment, account and
+  database are never editable from the UI (ADR 0013).
 - AI advice is shadow-only: `qd-ai` may depend only on `qd-app` and `qd-domain`, and
   its only write is an `ai_advice` journal entry (ADR 0011).
 - Promotions cite recorded evidence that the registry checks: a passed validation up to

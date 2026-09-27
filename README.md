@@ -20,6 +20,7 @@ TypeScript frontend.
 | Evidence-gated promotions; review and calibration | Built |
 | Advisory AI (shadow mode) with a deterministic checklist advisor | Built |
 | HTTP API, owner authentication, frontend | Built |
+| Settings page: all settings and API keys from the web UI (keys encrypted, write-only) | Built |
 | Docker image, compose stack with TLS, backups, metrics, alerts | Built |
 | Zerodha Kite adapter (market data, live orders) | **Not built**: provider docs unreachable from the build environment |
 | Crypto venue, AI provider adapters (OpenAI, Gemini, xAI) | **Not built**: same reason; venue and providers are open owner decisions |

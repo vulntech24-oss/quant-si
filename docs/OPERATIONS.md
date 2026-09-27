@@ -42,6 +42,27 @@ docker compose restart qd-server
 - Edit the configuration by mounting your own `deploy/quantdesk.toml` (see
   the commented `volumes` entry in `compose.yml`).
 
+## 2a. Settings page (no file editing)
+
+Open **Settings** in the web UI:
+
+- **API keys and credentials** (Zerodha Kite, OpenAI, Gemini, xAI, crypto):
+  paste a value and press Save.
+  - Keys are encrypted on the server and never shown again; the page only
+    shows whether a key is set.
+  - Saving or deleting asks for your password.
+  - The master key that encrypts them is created automatically in the
+    `qdstate` volume. Back it up (`docker compose cp qd-server:/var/lib/quantdesk/master.key .`)
+    and keep it apart from the database backups.
+- **Paper trading, risk limits, advisory AI, validation and review criteria**:
+  edit the fields and press Save.
+  - Each change is validated, needs your password, applies from the next
+    run without a restart, and is kept in history with who changed what.
+  - "Reset to file default" undoes your overrides.
+- **Not on the page, on purpose:** live trading on or off, the environment,
+  the account and the database. They stay in the server configuration, so no
+  browser session can turn on real money.
+
 ## 3. Instruments and data
 
 - Add instrument specs with `qd instrument add <spec.toml>`. See

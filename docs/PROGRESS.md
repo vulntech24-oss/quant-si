@@ -415,6 +415,43 @@ Decisions and assumptions: ADR 0012.
 New invariant tests: `invariant_06_an_unreadable_kill_switch_is_a_critical_alert_and_halts`
 (and the account checks in `paper_runs_refuse_live_accounts_and_concurrent_runs`).
 
+## Settings page and encrypted secrets (2026-09-27)
+
+Built at the owner's request: every setting and API key is editable in the
+web UI, and no TOML editing is needed.
+
+- `qd-server::runtime`: files are the defaults and UI saves override them.
+  Paper, risk, AI, validation and review settings are read on every run (no
+  restart). Saves are validated, need a step-up, and are audited; history is
+  append-only.
+- Encrypted, write-only secrets:
+  - catalog: Kite key, secret and access token; OpenAI, Gemini and xAI keys;
+    crypto key and secret;
+  - XChaCha20-Poly1305 with the master key from `QD_MASTER_KEY` or generated
+    in `data_dir` (0600);
+  - no API route returns a value.
+- Live trading, the environment, the account and the database stay
+  server-only (INV-14).
+- The advisory-AI budget now counts today's journaled advice.
+- Frontend **Settings** page; compose volume `qdstate` for the master key.
+
+Decisions: ADR 0013.
+
+### Verified (2026-09-27, all passing)
+
+- fmt, clippy (all features), `cargo deny check`; frontend typecheck, 9
+  tests, build.
+- `cargo test --workspace`: 192 tests; the `live-orders` run passes. New:
+  - `invariant_15_secrets_are_write_only_encrypted_and_audited_by_name`;
+  - settings step-up/CSRF/role tests;
+  - runtime tests: override, audit, reset, refusal of invalid values (a
+    non-zero paper stage multiplier included), append-only history, paper
+    on/off, schedule, master-key file 0600 and reuse.
+- Smoke run against a real server:
+  - master key generated with mode 0600;
+  - enabling AI in Settings allowed an AI run immediately;
+  - a saved Kite key was never returned by the API and never logged.
+
 ## Open issues
 
 - Spec §7–§20 missing from `docs/QUANTDESK_BUILD_SPEC.md`. Phase 2 used only
